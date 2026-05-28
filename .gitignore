@@ -1,0 +1,32 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+
+# Virtual environments
+.venv/
+.venv-*/
+venv/
+env/
+
+# Build artifacts
+build/
+dist/
+
+# Installer and packaging leftovers
+*.egg-info/
+pip-wheel-metadata/
+
+# Local logs and temp files
+*.log
+exe_stdout.txt
+exe_stderr.txt
+
+# OS files
+.DS_Store
+Thumbs.db

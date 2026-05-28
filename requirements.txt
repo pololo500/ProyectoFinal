@@ -1,0 +1,9 @@
+opencv-python
+mediapipe
+sounddevice
+silero-vad
+faster-whisper
+spacy
+scrubadub
+numpy
+Pillow

@@ -1,0 +1,28 @@
+{
+  "greeting": {
+    "examples": [
+      "hola",
+      "buenos dias",
+      "buenas tardes",
+      "que tal"
+    ],
+    "response": "Hola, estoy escuchando."
+  },
+  "play": {
+    "examples": [
+      "quiero jugar",
+      "abrir juego",
+      "empezar juego",
+      "vamos a jugar"
+    ],
+    "response": "Modo juego detectado."
+  },
+  "help": {
+    "examples": [
+      "necesito ayuda",
+      "ayudame",
+      "puedes ayudarme"
+    ],
+    "response": "Puedo procesar audio, video y detectar intenciones básicas."
+  }
+}
