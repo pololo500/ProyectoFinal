@@ -1,28 +1,227 @@
 {
   "greeting": {
+    "pilar": "general",
     "examples": [
       "hola",
       "buenos dias",
       "buenas tardes",
-      "que tal"
+      "que tal",
+      "hey",
+      "holi"
     ],
-    "response": "Hola, estoy escuchando."
+    "response": "¡Hola! Qué lindo que estés acá. ¿Querés jugar o charlar conmigo?",
+    "emotions": ["feliz", "neutral"],
+    "emotion_threshold": 0.10
   },
-  "play": {
+  "farewell": {
+    "pilar": "general",
     "examples": [
-      "quiero jugar",
-      "abrir juego",
-      "empezar juego",
-      "vamos a jugar"
+      "chau",
+      "nos vemos",
+      "hasta luego",
+      "me voy",
+      "adios"
     ],
-    "response": "Modo juego detectado."
+    "response": "¡Chau! Fue muy divertido estar con vos. ¡Nos vemos pronto!",
+    "emotions": [],
+    "emotion_threshold": 0.0
   },
-  "help": {
+  "emotion_sad": {
+    "pilar": "emocional",
+    "priority": 10,
     "examples": [
-      "necesito ayuda",
+      "estoy triste",
+      "me siento mal",
+      "no estoy bien",
+      "estoy llorando",
+      "me duele",
+      "no me gusta nada",
+      "quiero llorar"
+    ],
+    "response": "Entiendo que te sentís así. Está bien estar triste a veces. ¿Querés que respiremos juntos para sentirnos mejor?",
+    "emotions": ["triste"],
+    "emotion_threshold": 0.12
+  },
+  "emotion_angry": {
+    "pilar": "emocional",
+    "priority": 10,
+    "examples": [
+      "estoy enojado",
+      "estoy enojada",
+      "no quiero nada",
+      "dejame",
+      "andate",
+      "no me gusta",
+      "me enoja"
+    ],
+    "response": "Veo que estás enojado. Está bien sentirse así. ¿Querés que hagamos respiraciones juntos? Inspirá profundo conmigo... uno... dos... tres... y soltá despacito.",
+    "emotions": ["enojado"],
+    "emotion_threshold": 0.12
+  },
+  "emotion_happy": {
+    "pilar": "emocional",
+    "examples": [
+      "estoy feliz",
+      "estoy contento",
+      "estoy contenta",
+      "que lindo",
+      "me encanta",
+      "que divertido"
+    ],
+    "response": "¡Qué bueno que estés tan feliz! Me pone contento verte así. ¿Querés que hagamos algo divertido juntos?",
+    "emotions": ["feliz"],
+    "emotion_threshold": 0.14
+  },
+  "crisis_cry": {
+    "pilar": "emocional",
+    "priority": 20,
+    "examples": [
+      "quiero a mama",
+      "quiero a mi mama",
+      "quiero a papa",
+      "quiero a mi papa",
+      "no puedo mas",
+      "tengo miedo",
+      "me quiero ir",
+      "no quiero estar solo"
+    ],
+    "response": "Estoy acá con vos, no estás solo. ¿Querés que llamemos a mamá o a papá? También podemos respirar juntos para sentirnos más tranquilos.",
+    "emotions": [],
+    "emotion_threshold": 0.0
+  },
+  "regulation_breathing": {
+    "pilar": "emocional",
+    "examples": [
+      "quiero respirar",
+      "respiremos",
+      "me quiero calmar",
+      "ayudame a calmarme",
+      "estoy nervioso",
+      "estoy nerviosa"
+    ],
+    "response": "¡Dale! Vamos a respirar juntos. Inspirá profundo por la nariz como si olieras una flor... uno, dos, tres. Ahora soltá el aire despacito como si apagaras una velita... uno, dos, tres, cuatro. ¡Muy bien! ¿Otra vez?"
+  },
+  "yoga_request": {
+    "pilar": "emocional",
+    "examples": [
+      "hagamos yoga",
+      "quiero hacer yoga",
+      "quiero moverme",
+      "quiero estirarme",
+      "hagamos ejercicio"
+    ],
+    "response": "¡Vamos a hacer yoga! Poné los pies juntos y levantá los brazos como si fueras un árbol grande y fuerte. Ahora quedate quietito como una estatua... ¡Muy bien, lo estás haciendo genial!"
+  },
+  "play_veo_veo": {
+    "pilar": "cognitivo",
+    "examples": [
+      "juguemos veo veo",
+      "veo veo",
+      "quiero jugar veo veo",
+      "dale veo veo",
+      "juguemos a veo veo"
+    ],
+    "response": "¡Dale, juguemos al Veo-veo! Veo veo... una cosita... ¿De qué color será?",
+    "game_type": "veo_veo"
+  },
+  "play_piedra_papel": {
+    "pilar": "cognitivo",
+    "examples": [
+      "piedra papel o tijera",
+      "juguemos piedra papel tijera",
+      "dale piedra papel",
+      "quiero jugar piedra papel o tijera"
+    ],
+    "response": "¡Dale! A la cuenta de tres elegí: piedra, papel o tijera. ¿Listo? ¡Uno, dos, tres!",
+    "game_type": "piedra_papel_tijera"
+  },
+  "question_curiosity": {
+    "pilar": "cognitivo",
+    "examples": [
+      "por que",
+      "que es eso",
+      "como se llama",
+      "que significa",
+      "contame",
+      "decime algo",
+      "que es",
+      "como funciona"
+    ],
+    "response": "¡Qué buena pregunta! Me encanta que seas tan curioso. Pensemos juntos... ¿Vos qué pensás que puede ser?"
+  },
+  "song_request": {
+    "pilar": "cognitivo",
+    "examples": [
+      "cantame una cancion",
+      "quiero musica",
+      "pone una cancion",
+      "cantame algo",
+      "quiero escuchar musica",
+      "pone musica"
+    ],
+    "response": "¡Me encanta cantar! La la la... ¿Cuál es tu canción favorita? Podemos escucharla juntos."
+  },
+  "routine_ack": {
+    "pilar": "autonomia",
+    "examples": [
+      "ya termine",
+      "listo",
+      "ya lo hice",
+      "ya me lave",
+      "ya comi",
+      "ya me vesti",
+      "termine"
+    ],
+    "response": "¡Muy bien! ¡Lo hiciste solito! Eso es genial, estoy muy orgulloso de vos. ¡Chocá los cinco!",
+    "routine_action": "acknowledge"
+  },
+  "routine_resist": {
+    "pilar": "autonomia",
+    "examples": [
+      "no quiero ir",
+      "un ratito mas",
+      "despues",
+      "todavia no",
+      "no quiero hacer eso",
+      "cinco minutos mas"
+    ],
+    "response": "Entiendo que querés seguir un ratito más. ¿Qué te parece si hacemos una cosa? Jugamos un poquito más y después hacemos lo que toca. ¿Dale?"
+  },
+  "help_request": {
+    "pilar": "autonomia",
+    "examples": [
+      "no puedo",
       "ayudame",
+      "no se como",
+      "es muy dificil",
+      "no me sale",
       "puedes ayudarme"
     ],
-    "response": "Puedo procesar audio, video y detectar intenciones básicas."
+    "response": "¡Claro que te ayudo! Vamos despacio, paso a paso. Primero contame, ¿qué estás intentando hacer?"
+  },
+  "autonomy_decision": {
+    "pilar": "autonomia",
+    "examples": [
+      "quiero este",
+      "elijo este",
+      "prefiero",
+      "me gusta mas este",
+      "quiero el otro",
+      "ese no ese si"
+    ],
+    "response": "¡Qué bien que elegiste vos solito! Me gusta mucho cuando decidís por vos mismo. ¡Sos un campeón!"
+  },
+  "call_parent": {
+    "pilar": "vincular",
+    "priority": 15,
+    "examples": [
+      "llama a mama",
+      "llama a papa",
+      "quiero hablar con mama",
+      "quiero hablar con papa",
+      "decile a mama",
+      "decile a papa"
+    ],
+    "response": "Entendido, voy a avisarle a mamá o papá que querés hablar. Mientras tanto, estoy acá con vos."
   }
 }

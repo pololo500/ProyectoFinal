@@ -7,3 +7,4 @@ spacy
 scrubadub
 numpy
 Pillow
+piper-tts

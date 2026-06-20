@@ -70,6 +70,31 @@ def _queue_message_with_semaphore(
             message_semaphore.release()
 
 
+def _queue_critical_message(
+    message_queue: queue.Queue[WorkerMessage],
+    message_semaphore: threading.Semaphore | None,
+    kind: str,
+    payload: Any,
+    timeout: float = 10.0,
+) -> None:
+    """Put a high-priority message that must not be silently dropped (e.g. transcripts)."""
+    if message_semaphore is not None:
+        acquired = message_semaphore.acquire(timeout=timeout)
+        if not acquired:
+            # Last resort: try without semaphore tracking
+            try:
+                message_queue.put(WorkerMessage(kind=kind, payload=payload), timeout=timeout)
+            except queue.Full:
+                pass
+            return
+
+    try:
+        message_queue.put(WorkerMessage(kind=kind, payload=payload), timeout=timeout)
+    except queue.Full:
+        if message_semaphore is not None:
+            message_semaphore.release()
+
+
 def discover_cameras(max_devices: int = 8) -> list[tuple[int, str]]:
     return [(index, f"Cámara {index}") for index in range(max_devices)]
 
@@ -105,6 +130,14 @@ class IntentDispatcher:
         # Current observed emotion context (label, score), updated externally
         # Example: {"label": "feliz", "score": 0.82}
         self.current_emotion: dict[str, Any] | None = None
+        # Pre-compute spaCy docs for all intent examples to avoid
+        # reprocessing on every dispatch call (significant CPU save).
+        self._example_docs: dict[str, list[tuple[str, Any]]] = {}
+        for intent_name, intent_def in self.intents.items():
+            examples = intent_def.get("examples", [])
+            self._example_docs[intent_name] = [
+                (ex, self.nlp(ex)) for ex in examples
+            ]
 
     @classmethod
     def from_file(cls, path: Path) -> "IntentDispatcher":
@@ -153,12 +186,12 @@ class IntentDispatcher:
         emotion_context = emotion if emotion is not None else self.current_emotion
 
         for intent_name, intent_definition in self.intents.items():
-            examples = intent_definition.get("examples", [])
             response = intent_definition.get("response", "")
             required_emotions = intent_definition.get("emotions")
             emotion_threshold = float(intent_definition.get("emotion_threshold", 0.0))
-            for example in examples:
-                similarity = self._similarity(source_doc, self.nlp(example))
+            cached_examples = self._example_docs.get(intent_name, [])
+            for _example_text, example_doc in cached_examples:
+                similarity = self._similarity(source_doc, example_doc)
                 # If the intent defines required emotions, ensure the current
                 # emotion matches at least one (OR logic) and meets the threshold.
                 if required_emotions:
@@ -281,6 +314,100 @@ class TextSanitizer:
         return findings, sanitized_text
 
 
+class EmotionReactor:
+    """Evalúa el contexto emocional y decide si interrumpir el flujo normal
+    de intenciones para activar un protocolo de crisis o regulación emocional.
+
+    Implementa #EPIC-005 CA#1 (reacción empática) y CA#2 (pausas adaptativas).
+    """
+
+    # Emociones que activan el protocolo de crisis y sus umbrales mínimos
+    CRISIS_EMOTIONS: dict[str, float] = {
+        "triste": 0.45,
+        "enojado": 0.50,
+    }
+
+    # Emociones que requieren silencio extendido para que el niño se exprese
+    EXTENDED_SILENCE_EMOTIONS: frozenset[str] = frozenset({"triste", "enojado"})
+
+    # Umbrales de silencio
+    NORMAL_SILENCE: float = 1.8
+    EXTENDED_SILENCE: float = 3.0
+
+    # Respuestas de crisis (fallback si no hay intención matcheada)
+    _CRISIS_RESPONSES: dict[str, str] = {
+        "triste": (
+            "Veo que estás triste. Está bien sentirse así. "
+            "Estoy acá con vos. ¿Querés que respiremos juntos?"
+        ),
+        "enojado": (
+            "Entiendo que estás enojado. Está bien sentirse así a veces. "
+            "¿Querés que hagamos respiraciones juntos para calmarnos?"
+        ),
+    }
+
+    def evaluate(
+        self,
+        emotion_context: dict[str, Any] | None,
+        intent_result: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Evalúa si se debe activar protocolo de crisis.
+
+        Si la emoción indica crisis y la intención detectada no es ya una
+        intención emocional, reemplaza el resultado con una respuesta de
+        contención.
+
+        Returns:
+            intent_result modificado si hay crisis, o el original.
+        """
+        if not emotion_context:
+            return intent_result
+
+        label = str(emotion_context.get("label", "")).lower()
+        score = float(emotion_context.get("score", 0.0))
+
+        # Verificar si la emoción alcanza el umbral de crisis
+        threshold = self.CRISIS_EMOTIONS.get(label)
+        if threshold is None or score < threshold:
+            return intent_result
+
+        # Si la intención ya es emocional, no sobrescribir
+        intent_name = intent_result.get("intent_name", "")
+        emotional_intents = {
+            "emotion_sad", "emotion_angry", "emotion_happy",
+            "crisis_cry", "regulation_breathing", "yoga_request",
+        }
+        if intent_name in emotional_intents:
+            # Marcar como crisis pero mantener la intención original
+            intent_result["is_crisis"] = True
+            return intent_result
+
+        # Override: forzar respuesta de crisis
+        crisis_intent = "emotion_angry" if label == "enojado" else "emotion_sad"
+        return {
+            "intent_name": crisis_intent,
+            "confidence": score,
+            "response": self._CRISIS_RESPONSES.get(label, self._CRISIS_RESPONSES["triste"]),
+            "pilar": "emocional",
+            "is_crisis": True,
+        }
+
+    def get_silence_threshold(self, emotion_context: dict[str, Any] | None) -> float:
+        """Retorna el umbral de silencio adaptado a la emoción.
+
+        Cuando el niño está triste o enojado, se extiende el tiempo de
+        espera para que pueda terminar de expresarse a su ritmo
+        (#EPIC-005 CA#2).
+        """
+        if not emotion_context:
+            return self.NORMAL_SILENCE
+
+        label = str(emotion_context.get("label", "")).lower()
+        if label in self.EXTENDED_SILENCE_EMOTIONS:
+            return self.EXTENDED_SILENCE
+        return self.NORMAL_SILENCE
+
+
 class CameraWorker:
     EMOTION_FEATURE_WEIGHTS: dict[str, dict[str, float]] = {
         "feliz": {
@@ -326,9 +453,11 @@ class CameraWorker:
         self.message_queue = message_queue
         self.message_semaphore = message_semaphore
         self._stop_event = threading.Event()
+        self.models_loaded_event = threading.Event()
         self._thread: threading.Thread | None = None
         # Capture at a reduced frame rate to lower CPU usage (frames per second)
-        self.frame_rate = 5
+        # 3 fps is optimal for RPi 5: balances responsiveness vs CPU load
+        self.frame_rate = 3
 
     def start(self) -> None:
         self._thread = threading.Thread(target=self._run, name="CameraWorker", daemon=True)
@@ -351,10 +480,17 @@ class CameraWorker:
         last_emotion_label = ""
 
         try:
-            capture_backend = getattr(cv2, "CAP_DSHOW", 0)
+            # Auto-detect capture backend: DirectShow on Windows, V4L2 on Linux/RPi
+            if sys.platform.startswith("win"):
+                capture_backend = getattr(cv2, "CAP_DSHOW", 0)
+            else:
+                capture_backend = getattr(cv2, "CAP_V4L2", 0)
             capture = cv2.VideoCapture(self.camera_index, capture_backend)
             if not capture.isOpened():
                 raise RuntimeError(f"No se pudo abrir la cámara {self.camera_index}")
+            # Force lower resolution to reduce USB bandwidth and MediaPipe CPU load
+            capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+            capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
             # Ruta clasica de MediaPipe (API solutions).
             if hasattr(mp, "solutions") and hasattr(mp.solutions, "face_mesh"):
@@ -365,7 +501,7 @@ class CameraWorker:
                 face_mesh = mp_face_mesh.FaceMesh(
                     static_image_mode=False,
                     max_num_faces=1,
-                    refine_landmarks=True,
+                    refine_landmarks=False,
                     min_detection_confidence=0.5,
                     min_tracking_confidence=0.5,
                 )
@@ -392,8 +528,9 @@ class CameraWorker:
                 self.message_queue,
                 self.message_semaphore,
                 "status",
-                f"Estado: cámara {self.camera_index} activa",
+                {"camera": f"{self.camera_index} activa"},
             )
+            self.models_loaded_event.set()
             # Throttle processing to configured frame rate
             frame_interval = 1.0 / float(getattr(self, "frame_rate", 5))
             last_frame_ts = 0.0
@@ -441,7 +578,7 @@ class CameraWorker:
                         now = time.monotonic()
                         emotion_label = emotion_payload.get("label", "desconocida")
                         emotion_score = float(emotion_payload.get("score", 0.0))
-                        if (now - last_emotion_log_ts) >= 1.0 or emotion_label != last_emotion_label:
+                        if (now - last_emotion_log_ts) >= 3.0 or emotion_label != last_emotion_label:
                             _queue_message_with_semaphore(
                                 self.message_queue,
                                 self.message_semaphore,
@@ -455,17 +592,30 @@ class CameraWorker:
                                 self.message_queue,
                                 self.message_semaphore,
                                 "status",
-                                f"Estado: cámara {self.camera_index} activa | emoción: {emotion_label} ({emotion_score:.2f})",
+                                {
+                                    "camera": f"{self.camera_index} activa",
+                                    "emotion": f"{emotion_label} ({emotion_score:.2f})",
+                                },
                             )
                             last_emotion_log_ts = now
                             last_emotion_label = emotion_label
                 else:
                     self._push_frame(frame)
 
+                # Yield CPU briefly to ensure audio threads get processing time
+                time.sleep(0.005)
+
         except Exception as exc:
+            self.models_loaded_event.set()
             _queue_message_with_semaphore(self.message_queue, self.message_semaphore, "log", f"Error en cámara: {exc}")
-            _queue_message_with_semaphore(self.message_queue, self.message_semaphore, "status", "Estado: error en cámara")
+            _queue_message_with_semaphore(
+                self.message_queue,
+                self.message_semaphore,
+                "status",
+                {"camera": "error"},
+            )
         finally:
+            self.models_loaded_event.set()
             if face_mesh is not None:
                 face_mesh.close()
             if tasks_landmarker is not None:
@@ -535,7 +685,9 @@ class CameraWorker:
         timestamp_ms = int(time.monotonic() * 1000)
         result = tasks_landmarker.detect_for_video(mp_image, timestamp_ms)
 
-        annotated = frame.copy()
+        # Reuse the frame buffer directly to avoid an expensive copy.
+        # The caller does not use `frame` after this function returns.
+        annotated = frame
         emotion_payload: dict[str, Any] | None = None
 
         face_landmarks = getattr(result, "face_landmarks", None) or []
@@ -630,14 +782,34 @@ class AudioWorker:
         message_queue: queue.Queue[WorkerMessage],
         message_semaphore: threading.Semaphore | None,
         intent_dispatcher: IntentDispatcher,
+        camera_ready_event: threading.Event | None = None,
+        speech_worker: Any = None,
+        telemetry: Any = None,
+        vocabulary_tracker: Any = None,
+        routine_scheduler: Any = None,
     ) -> None:
         self.microphone_device_index = microphone_device_index
         self.message_queue = message_queue
         self.message_semaphore = message_semaphore
         self.intent_dispatcher = intent_dispatcher
+        self.camera_ready_event = camera_ready_event
+        self.speech_worker = speech_worker
         self.sanitizer = TextSanitizer()
+        self.emotion_reactor = EmotionReactor()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+
+        # New subsystems for pillar coverage
+        self.telemetry = telemetry
+        self.vocabulary_tracker = vocabulary_tracker
+        self.routine_scheduler = routine_scheduler
+
+        # Game engine for multi-turn interactive games (#EPIC-006)
+        try:
+            from game_engine import GameEngine
+            self.game_engine: Any = GameEngine()
+        except ImportError:
+            self.game_engine = None
 
     def start(self) -> None:
         self._thread = threading.Thread(target=self._run, name="AudioWorker", daemon=True)
@@ -652,21 +824,33 @@ class AudioWorker:
         sample_rate = 16000
         block_duration_seconds = 0.5
         block_size = int(sample_rate * block_duration_seconds)
-        silence_threshold_seconds = 2.5
-        circular_buffer: deque[np.ndarray] = deque(maxlen=int(sample_rate * 10))
+        # Base silence threshold for toddlers (2-4 years): they produce
+        # shorter utterances with longer pauses between words.
+        # This is dynamically adjusted by EmotionReactor based on detected emotion.
+        silence_threshold_seconds = self.emotion_reactor.NORMAL_SILENCE
+        circular_buffer: deque[np.ndarray] = deque(maxlen=int(sample_rate * 6))
         current_segment: list[np.ndarray] = []
         silence_seconds = 0.0
         speech_active = False
 
+        # Wait for camera models to finish loading before loading Whisper
+        # to avoid CPU contention from concurrent heavy model initialization.
+        if self.camera_ready_event is not None:
+            _queue_message_with_semaphore(
+                self.message_queue, self.message_semaphore, "log",
+                "AudioWorker: esperando a que la cámara termine de cargar modelos...",
+            )
+            self.camera_ready_event.wait(timeout=30)
+
         whisper_model = self._load_whisper_model()
         vad = self._load_vad(sample_rate)
-        audio_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=64)
+        audio_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=32)
 
         def callback(indata, frames, time_info, status) -> None:  # noqa: ANN001
             if status:
                 _queue_message_with_semaphore(self.message_queue, self.message_semaphore, "log", f"Audio callback: {status}")
             try:
-                audio_block = np.copy(indata[:, 0]).astype(np.float32)
+                audio_block = indata[:, 0].copy()
                 audio_queue.put_nowait(audio_block)
             except queue.Full:
                 pass
@@ -684,7 +868,10 @@ class AudioWorker:
                     self.message_queue,
                     self.message_semaphore,
                     "status",
-                    f"Estado: micrófono {self.microphone_device_index} activo",
+                    {
+                        "mic": f"{self.microphone_device_index} activo",
+                        "volume": 0,
+                    },
                 )
                 _queue_message_with_semaphore(self.message_queue, self.message_semaphore, "log", "silero-vad: escuchando...")
 
@@ -695,7 +882,32 @@ class AudioWorker:
                         continue
 
                     circular_buffer.append(audio_block)
+                    
+                    # Calculate volume (0-100%) using RMS, safely handling any unexpected NaN/Inf
+                    try:
+                        rms = float(np.sqrt(np.mean(audio_block ** 2)))
+                        if np.isnan(rms) or np.isinf(rms):
+                            volume_pct = 0
+                        else:
+                            volume_pct = min(100, int(rms * 300))
+                    except Exception:
+                        volume_pct = 0
+                        
+                    _queue_message_with_semaphore(
+                        self.message_queue,
+                        self.message_semaphore,
+                        "status",
+                        {
+                            "mic": f"{self.microphone_device_index} activo",
+                            "volume": volume_pct,
+                        },
+                    )
+
                     speech_detected = vad.has_speech(audio_block)
+
+                    # Adaptive silence threshold based on current emotion (#EPIC-005 CA#2)
+                    emotion_context = getattr(self.intent_dispatcher, "current_emotion", None)
+                    silence_threshold_seconds = self.emotion_reactor.get_silence_threshold(emotion_context)
 
                     if speech_detected:
                         if not speech_active:
@@ -705,7 +917,7 @@ class AudioWorker:
                                 self.message_queue,
                                 self.message_semaphore,
                                 "log",
-                                "silero-vad: escuchando...",
+                                f"silero-vad: escuchando... (umbral silencio: {silence_threshold_seconds:.1f}s)",
                             )
                         else:
                             current_segment.append(audio_block)
@@ -725,50 +937,180 @@ class AudioWorker:
                             silence_seconds = 0.0
                             current_segment = []
                             circular_buffer.clear()
-                            self._handle_segment(segment_audio, whisper_model)
+                            self._handle_segment(segment_audio, whisper_model, audio_queue)
 
         except Exception as exc:
             _queue_message_with_semaphore(self.message_queue, self.message_semaphore, "log", f"Error en micrófono: {exc}")
-            _queue_message_with_semaphore(self.message_queue, self.message_semaphore, "status", "Estado: error en micrófono")
+            _queue_message_with_semaphore(
+                self.message_queue,
+                self.message_semaphore,
+                "status",
+                {"mic": "error"},
+            )
 
-    def _handle_segment(self, audio_segment: np.ndarray, whisper_model: Any) -> None:
+    def _handle_segment(self, audio_segment: np.ndarray, whisper_model: Any, audio_queue: queue.Queue) -> None:
         if audio_segment.size == 0:
             return
 
-        try:
-            raw_text = self._transcribe(whisper_model, audio_segment)
-            sanitized_payload = self.sanitizer.sanitize(raw_text)
-            # Pass the last known emotion context to the dispatcher (if any)
-            emotion_context = getattr(self.intent_dispatcher, "current_emotion", None)
-            intent_payload = self.intent_dispatcher.dispatch(sanitized_payload["sanitized_text"], emotion=emotion_context)
+        segment_start = time.monotonic()
 
-            _queue_message_with_semaphore(
+        try:
+            # 1. Transcribe
+            raw_text = self._transcribe(whisper_model, audio_segment)
+            if not raw_text.strip():
+                return
+
+            # 2. Sanitize (PII removal)
+            sanitized_payload = self.sanitizer.sanitize(raw_text)
+            sanitized_text = sanitized_payload.get("sanitized_text", "")
+
+            # 3. Vocabulary tracking (#EPIC-003 — linguistic development)
+            new_words: list[str] = []
+            if self.vocabulary_tracker is not None and sanitized_text:
+                try:
+                    new_words = self.vocabulary_tracker.process_transcript(sanitized_text)
+                    if new_words:
+                        _queue_message_with_semaphore(
+                            self.message_queue, self.message_semaphore, "log",
+                            f"Vocabulario: {len(new_words)} palabras nuevas detectadas: {', '.join(new_words[:5])}",
+                        )
+                except Exception:
+                    pass
+
+            # 4. Emotion context
+            emotion_context = getattr(self.intent_dispatcher, "current_emotion", None)
+
+            # 5. Intent dispatch (NLU via spaCy semantic similarity)
+            intent_payload = self.intent_dispatcher.dispatch(sanitized_text, emotion=emotion_context)
+
+            # 6. Emotion reactor — crisis detection (#EPIC-005 CA#1)
+            intent_payload = self.emotion_reactor.evaluate(emotion_context, intent_payload)
+            is_crisis = intent_payload.get("is_crisis", False)
+
+            # 7. Game engine — multi-turn games (#EPIC-006)
+            if self.game_engine is not None:
+                intent_payload = self.game_engine.process_or_passthrough(sanitized_text, intent_payload)
+
+            # 8. Routine acknowledgment (#EPIC-007)
+            intent_name = intent_payload.get("intent_name", "")
+            if intent_name == "routine_ack" and self.routine_scheduler is not None:
+                try:
+                    ack_msg = self.routine_scheduler.acknowledge_routine("any")
+                    if ack_msg:
+                        intent_payload["response"] = ack_msg
+                except Exception:
+                    pass
+
+            # 9. Determine pilar for telemetry
+            pilar = intent_payload.get("pilar", "general")
+
+            # 10. Send transcript message to UI
+            _queue_critical_message(
                 self.message_queue,
                 self.message_semaphore,
                 "transcript",
                 {
                     "raw_text": raw_text,
                     "sanitized": sanitized_payload,
-                    "emotion": getattr(self.intent_dispatcher, "current_emotion", None),
+                    "emotion": emotion_context,
                     "intent": intent_payload,
+                    "new_words": new_words,
                 },
             )
+
+            # 11. Telemetry logging (#EPIC-004)
+            duration_s = time.monotonic() - segment_start
+            if self.telemetry is not None:
+                try:
+                    self.telemetry.log_interaction(
+                        pilar=pilar,
+                        intent_name=intent_name,
+                        emotion=emotion_context.get("label") if emotion_context else None,
+                        emotion_score=float(emotion_context.get("score", 0.0)) if emotion_context else 0.0,
+                        duration_s=duration_s,
+                    )
+                    if is_crisis and emotion_context:
+                        self.telemetry.log_crisis_event(
+                            emotion=emotion_context.get("label", "unknown"),
+                            emotion_score=float(emotion_context.get("score", 0.0)),
+                            response=intent_payload.get("response", ""),
+                        )
+                    if new_words and self.vocabulary_tracker is not None:
+                        stats = self.vocabulary_tracker.get_stats()
+                        self.telemetry.log_vocabulary_update(
+                            new_words=new_words,
+                            total_words=stats.get("total_words", 0),
+                        )
+                except Exception:
+                    pass
+
+            # 12. TTS — speak the response and block until playback finishes.
+            response_text = str(intent_payload.get("response", "")).strip()
+            if response_text and self.speech_worker is not None:
+                self.speech_worker.speak_and_wait(response_text)
+
         except Exception as exc:
             _queue_message_with_semaphore(self.message_queue, self.message_semaphore, "log", f"Error en transcripción o NLU: {exc}")
+        finally:
+            # Flush stale audio accumulated during processing + playback
+            while True:
+                try:
+                    audio_queue.get_nowait()
+                except queue.Empty:
+                    break
+
+    # Contextual prompt that primes Whisper for Argentine Spanish toddler speech.
+    # This is NOT an instruction — it conditions the decoder to favour this
+    # vocabulary and style when resolving ambiguous phonemes.
+    _WHISPER_INITIAL_PROMPT: str = (
+        "Hola, quiero jugar. Mamá, mirá. Papá, vení. "
+        "Dame eso. No quiero. Sí, dale. Agua. Leche. "
+        "Nene, nena, juguete, pelota, auto, muñeca, perro, gato."
+    )
 
     def _load_whisper_model(self):
         try:
             from faster_whisper import WhisperModel
 
+            # 'base' model: ~500MB RAM (int8) — significant accuracy improvement
+            # over 'tiny' for children's irregular pronunciation and high-pitched
+            # voices.  Still fits comfortably on RPi 5 (4-8GB).
             return WhisperModel("base", device="cpu", compute_type="int8")
         except Exception:
             return None
+
+    @staticmethod
+    def _normalize_audio(audio: np.ndarray) -> np.ndarray:
+        """Normalize audio volume so soft child voices get amplified to a
+        consistent level before transcription.  Avoids clipping."""
+        peak = np.max(np.abs(audio))
+        if peak < 1e-6:
+            return audio  # silence — nothing to normalize
+        # Target peak at 0.9 to leave headroom
+        return (audio * (0.9 / peak)).astype(np.float32)
 
     def _transcribe(self, whisper_model: Any, audio_segment: np.ndarray) -> str:
         if whisper_model is None:
             return ""
 
-        segments, _info = whisper_model.transcribe(audio_segment, language="es", vad_filter=False)
+        # Normalize volume: toddlers speak at very inconsistent levels
+        audio_segment = self._normalize_audio(audio_segment)
+
+        segments, _info = whisper_model.transcribe(
+            audio_segment,
+            language="es",
+            vad_filter=False,
+            # Beam search explores more hypotheses, critical for ambiguous
+            # child pronunciation (e.g. "ete" → "este", "aba" → "agua")
+            beam_size=5,
+            # Contextual prompt primes decoder for toddler vocabulary
+            initial_prompt=self._WHISPER_INITIAL_PROMPT,
+            # Raise no-speech threshold to reject hallucinations on noise/silence
+            no_speech_threshold=0.7,
+            # Lower log-prob threshold to accept less confident but valid
+            # transcriptions (children's speech is inherently less clear)
+            log_prob_threshold=-0.8,
+        )
         text_parts = []
         for segment in segments:
             text_parts.append(segment.text.strip())
@@ -779,12 +1121,22 @@ class AudioWorker:
 
 
 class SpeechWorker:
-    def __init__(self, output_device_index: int | None = None) -> None:
+    def __init__(
+        self,
+        output_device_index: int | None = None,
+        message_queue: queue.Queue[WorkerMessage] | None = None,
+        message_semaphore: threading.Semaphore | None = None,
+    ) -> None:
         self._queue: queue.Queue[str] = queue.Queue(maxsize=32)
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._is_windows = sys.platform.startswith("win")
         self._output_device_index = output_device_index
+        self._message_queue = message_queue
+        self._message_semaphore = message_semaphore
+        self._piper_voice: Any = None
+        self._idle_event = threading.Event()
+        self._idle_event.set()  # Not speaking initially
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -813,24 +1165,157 @@ class SpeechWorker:
     def set_output_device(self, output_device_index: int | None) -> None:
         self._output_device_index = output_device_index
 
+    def speak_and_wait(self, text: str, timeout: float = 30.0) -> None:
+        """Queue text for speaking and block until playback finishes."""
+        speech_text = (text or "").strip()
+        if not speech_text:
+            return
+        self._idle_event.clear()
+        try:
+            self._queue.put_nowait(speech_text)
+        except queue.Full:
+            self._idle_event.set()
+            return
+        self._idle_event.wait(timeout=timeout)
+
+    def _log(self, text: str) -> None:
+        """Log to UI message queue if available, otherwise print."""
+        print(f"[SpeechWorker] {text}", flush=True)
+        if self._message_queue is not None:
+            _queue_message_with_semaphore(
+                self._message_queue, self._message_semaphore, "log", f"[TTS] {text}"
+            )
+
+    def _play_wav_via_output_stream(self, audio_array: np.ndarray, sample_rate: int) -> None:
+        """Play audio using a dedicated OutputStream to avoid conflicts with AudioWorker's InputStream.
+
+        sd.play() uses the *default* PortAudio output stream which can collide
+        with an already-open InputStream on some backends.  Opening our own
+        OutputStream with an explicit device avoids this."""
+        if audio_array.ndim == 1:
+            audio_array = audio_array.reshape(-1, 1)
+        # Normalise int types to float32 for OutputStream compatibility
+        if audio_array.dtype != np.float32:
+            info = np.iinfo(audio_array.dtype)
+            audio_array = audio_array.astype(np.float32) / float(info.max)
+        finished = threading.Event()
+        pos = [0]  # mutable counter shared with callback
+
+        def _callback(outdata: np.ndarray, frames: int, _time_info: Any, _status: Any) -> None:
+            start = pos[0]
+            end = start + frames
+            chunk = audio_array[start:end]
+            if len(chunk) < frames:
+                outdata[:len(chunk)] = chunk
+                outdata[len(chunk):] = 0
+                finished.set()
+                raise sd.CallbackStop()
+            else:
+                outdata[:] = chunk
+            pos[0] = end
+
+        channels = audio_array.shape[1] if audio_array.ndim > 1 else 1
+        with sd.OutputStream(
+            samplerate=sample_rate,
+            channels=channels,
+            dtype="float32",
+            device=self._output_device_index,
+            callback=_callback,
+        ):
+            finished.wait(timeout=len(audio_array) / sample_rate + 5.0)
+
     def _run(self) -> None:
+        # Try to load piper neural TTS (best quality, cross-platform, edge-optimized)
+        self._try_load_piper()
+        if self._piper_voice is not None:
+            self._log("piper-tts neural cargado correctamente")
+        else:
+            self._log("piper-tts no disponible, usando TTS de plataforma")
+
         while not self._stop_event.is_set():
             try:
                 text = self._queue.get(timeout=0.25)
             except queue.Empty:
+                self._idle_event.set()
                 continue
 
             if self._stop_event.is_set() or not text:
-                continue
-
-            if not self._is_windows:
+                self._idle_event.set()
                 continue
 
             try:
-                self._speak_windows(text)
-            except Exception:
-                # If TTS fails once, keep the worker alive but skip the utterance.
-                continue
+                self._log(f"Sintetizando: {text}")
+                if self._piper_voice is not None:
+                    self._speak_piper(text)
+                elif self._is_windows:
+                    self._speak_windows(text)
+                else:
+                    self._speak_linux(text)
+                self._log("Reproducción completada")
+            except Exception as exc:
+                self._log(f"Error TTS: {exc}")
+
+            # Signal idle when queue is drained after playback
+            if self._queue.empty():
+                self._idle_event.set()
+
+    def _try_load_piper(self) -> None:
+        """Try to initialise piper-tts neural TTS for natural-sounding speech."""
+        try:
+            from piper.voice import PiperVoice
+        except ImportError:
+            try:
+                from piper import PiperVoice  # type: ignore[attr-defined]
+            except (ImportError, AttributeError):
+                return
+
+        try:
+            model_path = self._ensure_piper_model()
+            self._piper_voice = PiperVoice.load(str(model_path))
+        except Exception as exc:
+            self._log(f"Error cargando modelo piper: {exc}")
+            self._piper_voice = None
+
+    @staticmethod
+    def _ensure_piper_model() -> Path:
+        """Return path to the piper ONNX model, downloading it on first use."""
+        model_name = "es_MX-ald-medium"
+        cache_dir = Path.home() / ".edge_ai_models" / "piper"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+
+        model_file = cache_dir / f"{model_name}.onnx"
+        config_file = cache_dir / f"{model_name}.onnx.json"
+
+        if model_file.exists() and config_file.exists():
+            return model_file
+
+        base_url = (
+            "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
+            f"es/es_MX/ald/medium/{model_name}"
+        )
+
+        for suffix, target in [(".onnx", model_file), (".onnx.json", config_file)]:
+            if not target.exists():
+                urllib.request.urlretrieve(f"{base_url}{suffix}", target)
+
+        return model_file
+
+    def _speak_piper(self, text: str) -> None:
+        """Synthesize speech with piper neural TTS v1.4+ -> direct float32 -> sounddevice."""
+        audio_chunks: list[np.ndarray] = []
+        sample_rate: int = 22050  # default; updated from first chunk
+
+        for chunk in self._piper_voice.synthesize(text):
+            audio_chunks.append(chunk.audio_float_array)
+            sample_rate = chunk.sample_rate
+
+        if not audio_chunks:
+            self._log("Piper no generó audio para el texto dado")
+            return
+
+        audio_array = np.concatenate(audio_chunks).astype(np.float32)
+        # audio_float_array is already in [-1.0, 1.0] range
+        self._play_wav_via_output_stream(audio_array, sample_rate)
 
     def _speak_windows(self, text: str) -> None:
         encoded_text = base64.b64encode(text.encode("utf-8")).decode("ascii")
@@ -884,8 +1369,43 @@ class SpeechWorker:
             if channel_count > 1:
                 audio_array = audio_array.reshape(-1, channel_count)
 
-            sd.play(audio_array, samplerate=sample_rate, device=self._output_device_index)
-            sd.wait()
+            self._play_wav_via_output_stream(audio_array, sample_rate)
+        finally:
+            try:
+                Path(wav_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+
+    def _speak_linux(self, text: str) -> None:
+        """TTS via espeak-ng (pre-installed on Raspberry Pi OS) -> WAV -> sounddevice."""
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as wav_file:
+            wav_path = wav_file.name
+
+        try:
+            subprocess.run(
+                ["espeak-ng", "-v", "es", "-s", "140", "-w", wav_path, text],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+            with wave.open(wav_path, "rb") as wav_reader:
+                frame_count = wav_reader.getnframes()
+                sample_rate = wav_reader.getframerate()
+                sample_width = wav_reader.getsampwidth()
+                channel_count = wav_reader.getnchannels()
+                audio_data = wav_reader.readframes(frame_count)
+
+            dtype_map = {1: np.int8, 2: np.int16, 4: np.int32}
+            dtype = dtype_map.get(sample_width)
+            if dtype is None:
+                return
+
+            audio_array = np.frombuffer(audio_data, dtype=dtype)
+            if channel_count > 1:
+                audio_array = audio_array.reshape(-1, channel_count)
+
+            self._play_wav_via_output_stream(audio_array, sample_rate)
         finally:
             try:
                 Path(wav_path).unlink(missing_ok=True)

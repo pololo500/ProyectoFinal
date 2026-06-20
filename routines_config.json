@@ -1,0 +1,59 @@
+{
+  "routines": [
+    {
+      "id": "morning_wash",
+      "name": "Lavarse las manos",
+      "time": "08:00",
+      "reminder_message": "¡Es hora de lavarnos las manos! ¿Vamos juntos al baño?",
+      "transition_from": "juego",
+      "transition_to": "higiene",
+      "success_message": "¡Muy bien! ¡Te lavaste las manos solito! ¡Sos un campeón!",
+      "pre_reminder_minutes": 3,
+      "enabled": true
+    },
+    {
+      "id": "breakfast",
+      "name": "Desayunar",
+      "time": "08:30",
+      "reminder_message": "¡Es hora del desayuno! ¿Qué querés desayunar hoy?",
+      "transition_from": "higiene",
+      "transition_to": "comida",
+      "success_message": "¡Genial! ¡Desayunaste todo! Ahora tenés mucha energía para jugar.",
+      "pre_reminder_minutes": 5,
+      "enabled": true
+    },
+    {
+      "id": "snack_time",
+      "name": "Merienda",
+      "time": "16:00",
+      "reminder_message": "¡Hora de la merienda! Vamos a comer algo rico.",
+      "transition_from": "juego",
+      "transition_to": "comida",
+      "success_message": "¡Qué rica merienda! ¡Muy bien!",
+      "pre_reminder_minutes": 5,
+      "enabled": true
+    },
+    {
+      "id": "cleanup",
+      "name": "Guardar los juguetes",
+      "time": "18:00",
+      "reminder_message": "¡Es hora de guardar los juguetes! ¿Me ayudás a ordenar?",
+      "transition_from": "juego",
+      "transition_to": "orden",
+      "success_message": "¡Excelente! ¡Guardaste todos los juguetes! ¡Qué ordenado!",
+      "pre_reminder_minutes": 5,
+      "enabled": true
+    },
+    {
+      "id": "bedtime",
+      "name": "Hora de dormir",
+      "time": "20:30",
+      "reminder_message": "Ya casi es hora de ir a dormir. ¿Querés que te cuente algo antes de dormir?",
+      "transition_from": "actividad",
+      "transition_to": "descanso",
+      "success_message": "¡Buenas noches! Que descanses bien. ¡Nos vemos mañana!",
+      "pre_reminder_minutes": 10,
+      "enabled": true
+    }
+  ]
+}
