@@ -1,0 +1,19 @@
+<resources>
+    <dimen name="fab_margin">16dp</dimen>
+    <dimen name="fragment_horizontal_margin">0dp</dimen>
+    <dimen name="card_corner_radius">16dp</dimen>
+    <dimen name="card_elevation">2dp</dimen>
+    <dimen name="card_padding">16dp</dimen>
+    <dimen name="card_margin">8dp</dimen>
+    <dimen name="section_margin_top">24dp</dimen>
+    <dimen name="section_margin_horizontal">16dp</dimen>
+    <dimen name="icon_size_large">48dp</dimen>
+    <dimen name="icon_size_medium">32dp</dimen>
+    <dimen name="icon_size_small">24dp</dimen>
+    <dimen name="metric_value_size">28sp</dimen>
+    <dimen name="section_title_size">18sp</dimen>
+    <dimen name="card_title_size">16sp</dimen>
+    <dimen name="card_subtitle_size">13sp</dimen>
+    <dimen name="routine_item_height">72dp</dimen>
+    <dimen name="slider_padding">24dp</dimen>
+</resources>

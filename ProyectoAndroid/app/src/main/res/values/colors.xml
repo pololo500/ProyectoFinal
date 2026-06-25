@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary: Soft Lavender -->
+    <color name="primary_light">#FF7E6BC4</color>
+    <color name="primary">#FF6750A4</color>
+    <color name="primary_dark">#FF4F378B</color>
+    <color name="on_primary">#FFFFFFFF</color>
+
+    <!-- Secondary: Warm Coral -->
+    <color name="secondary_light">#FFFFB4AB</color>
+    <color name="secondary">#FFEF8A7E</color>
+    <color name="secondary_dark">#FFD4574E</color>
+    <color name="on_secondary">#FFFFFFFF</color>
+
+    <!-- Tertiary: Soft Teal -->
+    <color name="tertiary">#FF4ECDC4</color>
+    <color name="tertiary_dark">#FF2DB5AC</color>
+    <color name="on_tertiary">#FFFFFFFF</color>
+
+    <!-- Background & Surface -->
+    <color name="background_light">#FFF8F5FC</color>
+    <color name="surface_light">#FFFFFFFF</color>
+    <color name="on_background_light">#FF1C1B1F</color>
+    <color name="on_surface_light">#FF1C1B1F</color>
+
+    <!-- Dark theme backgrounds -->
+    <color name="background_dark">#FF1C1B1F</color>
+    <color name="surface_dark">#FF2B2930</color>
+    <color name="on_background_dark">#FFE6E1E5</color>
+    <color name="on_surface_dark">#FFE6E1E5</color>
+
+    <!-- Accent colors for cards/chips -->
+    <color name="card_connection_online">#FF4CAF50</color>
+    <color name="card_connection_offline">#FFBDBDBD</color>
+    <color name="card_emotion_happy">#FFFFCA28</color>
+    <color name="card_emotion_calm">#FF81D4FA</color>
+    <color name="card_emotion_alert">#FFFF8A65</color>
+    <color name="card_celebrate">#FFFFAB40</color>
+
+    <!-- Pastel backgrounds for cards -->
+    <color name="card_bg_lavender">#FFF3E5F5</color>
+    <color name="card_bg_peach">#FFFFF3E0</color>
+    <color name="card_bg_mint">#FFE0F2F1</color>
+    <color name="card_bg_sky">#FFE3F2FD</color>
+    <color name="card_bg_rose">#FFFCE4EC</color>
+
+    <!-- Utility -->
+    <color name="divider">#1F000000</color>
+    <color name="text_hint">#FF9E9E9E</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Keep legacy references for compatibility -->
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+</resources>

@@ -26,6 +26,14 @@ except ImportError as exc:  # pragma: no cover - runtime dependency check.
     raise RuntimeError("opencv-python es requerido para la PoC") from exc
 
 try:
+    import sys
+    from unittest.mock import MagicMock
+    sys.modules['matplotlib'] = MagicMock()
+    sys.modules['matplotlib.pyplot'] = MagicMock()
+except Exception:
+    pass
+
+try:
     import mediapipe as mp
 except ImportError as exc:  # pragma: no cover - runtime dependency check.
     raise RuntimeError("mediapipe es requerido para la PoC") from exc

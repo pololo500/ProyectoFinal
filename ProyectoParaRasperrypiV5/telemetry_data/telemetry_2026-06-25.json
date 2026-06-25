@@ -1,0 +1,92 @@
+{
+  "date": "2026-06-25",
+  "session_start": "2026-06-25T16:55:02.645244",
+  "summary": {
+    "total_interactions": 5,
+    "total_duration_s": 28.806101099820808,
+    "pillar_counts": {
+      "general": 5
+    },
+    "crisis_count": 0,
+    "games_played": 0,
+    "routines_completed": 0,
+    "new_words_today": 6
+  },
+  "events": [
+    {
+      "type": "interaction",
+      "timestamp": "2026-06-25T16:55:57.081582",
+      "pilar": "general",
+      "intent": "greeting",
+      "emotion": "neutral",
+      "emotion_score": 0.924,
+      "duration_s": 26.23
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-06-25T16:55:57.081895",
+      "new_words_count": 1,
+      "total_known_words": 82
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-06-25T16:56:22.542631",
+      "pilar": "general",
+      "intent": "crisis_cry",
+      "emotion": "neutral",
+      "emotion_score": 0.934,
+      "duration_s": 0.41
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-06-25T16:56:22.542936",
+      "new_words_count": 1,
+      "total_known_words": 83
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-06-25T16:56:37.017890",
+      "pilar": "general",
+      "intent": "question_curiosity",
+      "emotion": "neutral",
+      "emotion_score": 0.909,
+      "duration_s": 0.58
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-06-25T16:56:37.018264",
+      "new_words_count": 1,
+      "total_known_words": 84
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-06-25T16:57:05.130026",
+      "pilar": "general",
+      "intent": "farewell",
+      "emotion": "neutral",
+      "emotion_score": 0.947,
+      "duration_s": 0.38
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-06-25T16:57:05.130562",
+      "new_words_count": 1,
+      "total_known_words": 85
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-06-25T16:57:17.231603",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "neutral",
+      "emotion_score": 0.98,
+      "duration_s": 1.2
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-06-25T16:57:17.231882",
+      "new_words_count": 2,
+      "total_known_words": 87
+    }
+  ]
+}

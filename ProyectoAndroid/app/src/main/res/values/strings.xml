@@ -1,0 +1,124 @@
+<resources>
+    <string name="app_name">MiCompañero</string>
+    <string name="navigation_drawer_open">Abrir menú de navegación</string>
+    <string name="navigation_drawer_close">Cerrar menú de navegación</string>
+    <string name="nav_header_title">MiCompañero</string>
+    <string name="nav_header_subtitle">App para padres</string>
+    <string name="nav_header_desc">Encabezado de navegación</string>
+    <string name="action_settings">Configuración</string>
+
+    <!-- Menu items -->
+    <string name="menu_dashboard">Inicio</string>
+    <string name="menu_metrics">Métricas</string>
+    <string name="menu_routines">Rutinas</string>
+    <string name="menu_config">Configuración</string>
+    <string name="menu_medical">Agenda Médica</string>
+
+    <!-- Dashboard -->
+    <string name="dashboard_connection_title">Estado del Peluche</string>
+    <string name="dashboard_connection_status_online">Conectado</string>
+    <string name="dashboard_connection_status_offline">Desconectado</string>
+    <string name="dashboard_connection_subtitle">Vinculación vía Wi-Fi</string>
+    <string name="dashboard_today_summary">Resumen del Día</string>
+    <string name="dashboard_interactions">Interacciones</string>
+    <string name="dashboard_playtime">Tiempo de juego</string>
+    <string name="dashboard_mood">Estado emocional</string>
+    <string name="dashboard_mood_value">Tranquilo 😊</string>
+    <string name="dashboard_interactions_value">12</string>
+    <string name="dashboard_playtime_value">45 min</string>
+    <string name="dashboard_celebrate_title">¡Celebrar Logro!</string>
+    <string name="dashboard_celebrate_subtitle">Envía una señal al peluche para festejar un logro de tu hijo/a</string>
+    <string name="dashboard_quick_actions">Acciones Rápidas</string>
+    <string name="dashboard_alerts_title">Alertas Recientes</string>
+    <string name="dashboard_no_alerts">No hay alertas nuevas</string>
+    <string name="dashboard_alert_vocab">Vocabulario limitado detectado</string>
+    <string name="dashboard_alert_emotion">Episodio de desregulación detectado</string>
+
+    <!-- Metrics -->
+    <string name="metrics_title">Panel de Métricas</string>
+    <string name="metrics_period_today">Hoy</string>
+    <string name="metrics_period_week">Semana</string>
+    <string name="metrics_period_month">Mes</string>
+    <string name="metrics_interaction_chart">Interacciones Diarias</string>
+    <string name="metrics_emotion_chart">Estado Emocional</string>
+    <string name="metrics_vocabulary_title">Progreso de Vocabulario</string>
+    <string name="metrics_vocabulary_words">palabras nuevas esta semana</string>
+    <string name="metrics_vocabulary_value">8</string>
+    <string name="metrics_cognitive_title">Desarrollo Cognitivo</string>
+    <string name="metrics_emotional_title">Desarrollo Emocional</string>
+    <string name="metrics_social_title">Desarrollo Vincular</string>
+    <string name="metrics_alerts_history">Historial de Alertas</string>
+    <string name="metrics_no_data">Aún no hay datos suficientes</string>
+    <string name="metrics_chart_placeholder">Gráfico disponible próximamente</string>
+
+    <!-- Routines -->
+    <string name="routines_title">Rutinas del Día</string>
+    <string name="routines_add">Agregar Rutina</string>
+    <string name="routines_empty">No hay rutinas configuradas.\nTocá + para agregar una.</string>
+    <string name="routines_morning">Mañana</string>
+    <string name="routines_afternoon">Tarde</string>
+    <string name="routines_evening">Noche</string>
+    <string name="routines_sample_breakfast">Desayuno</string>
+    <string name="routines_sample_breakfast_time">08:00</string>
+    <string name="routines_sample_play">Tiempo de juego</string>
+    <string name="routines_sample_play_time">10:00</string>
+    <string name="routines_sample_lunch">Almuerzo</string>
+    <string name="routines_sample_lunch_time">12:00</string>
+    <string name="routines_sample_nap">Siesta</string>
+    <string name="routines_sample_nap_time">14:00</string>
+    <string name="routines_sample_snack">Merienda</string>
+    <string name="routines_sample_snack_time">16:30</string>
+    <string name="routines_sample_bath">Baño</string>
+    <string name="routines_sample_bath_time">19:00</string>
+    <string name="routines_sample_sleep">Hora de dormir</string>
+    <string name="routines_sample_sleep_time">20:30</string>
+
+    <!-- Config -->
+    <string name="config_title">Configuración</string>
+    <string name="config_sensory_title">Configuración Sensorial</string>
+    <string name="config_volume_label">Volumen Máximo</string>
+    <string name="config_brightness_label">Brillo de los Ojos</string>
+    <string name="config_night_mode">Modo Noche</string>
+    <string name="config_night_mode_subtitle">Reduce estímulos automáticamente al atardecer</string>
+    <string name="config_songs_title">Catálogo de Canciones</string>
+    <string name="config_songs_subtitle">Gestioná las canciones que el peluche puede reproducir</string>
+    <string name="config_songs_manage">Administrar canciones</string>
+    <string name="config_connection_title">Conexión</string>
+    <string name="config_connection_wifi">Red Wi-Fi</string>
+    <string name="config_connection_bluetooth">Bluetooth</string>
+    <string name="config_connection_pair">Vincular peluche</string>
+    <string name="config_about_title">Acerca de</string>
+    <string name="config_version">Versión 1.0.0</string>
+    <string name="config_overstimulation_title">Control de Sobreestimulación</string>
+    <string name="config_playtime_limit">Límite de tiempo de juego</string>
+    <string name="config_playtime_limit_subtitle">Máximo diario de interacción continua</string>
+
+    <!-- Medical -->
+    <string name="medical_title">Agenda Médica</string>
+    <string name="medical_vaccines_title">Calendario de Vacunación</string>
+    <string name="medical_appointments_title">Turnos Médicos</string>
+    <string name="medical_add_appointment">Agregar Turno</string>
+    <string name="medical_add_vaccine">Agregar Vacuna</string>
+    <string name="medical_no_appointments">No hay turnos programados</string>
+    <string name="medical_no_vaccines">No hay vacunas registradas</string>
+    <string name="medical_sample_vaccine_1">BCG</string>
+    <string name="medical_sample_vaccine_1_date">Al nacer ✓</string>
+    <string name="medical_sample_vaccine_2">Hepatitis B</string>
+    <string name="medical_sample_vaccine_2_date">Al nacer ✓</string>
+    <string name="medical_sample_vaccine_3">Neumococo</string>
+    <string name="medical_sample_vaccine_3_date">2 meses ✓</string>
+    <string name="medical_sample_vaccine_4">Quíntuple</string>
+    <string name="medical_sample_vaccine_4_date">4 meses - Pendiente</string>
+    <string name="medical_sample_appointment_1">Control pediátrico</string>
+    <string name="medical_sample_appointment_1_date">15 de julio, 10:00</string>
+    <string name="medical_sample_appointment_2">Fonoaudióloga</string>
+    <string name="medical_sample_appointment_2_date">22 de julio, 16:30</string>
+    <string name="medical_reminder_title">Recordatorios</string>
+    <string name="medical_reminder_subtitle">Recibí notificaciones antes de cada turno</string>
+
+    <!-- General -->
+    <string name="fab_content_description">Acción principal</string>
+    <string name="coming_soon">Próximamente</string>
+    <string name="btn_save">Guardar</string>
+    <string name="btn_cancel">Cancelar</string>
+</resources>

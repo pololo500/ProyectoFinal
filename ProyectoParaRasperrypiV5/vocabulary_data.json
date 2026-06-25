@@ -8,6 +8,7 @@
     "bueno",
     "campiona",
     "chame",
+    "chas",
     "chique",
     "chundo",
     "coclan",
@@ -19,6 +20,7 @@
     "dicera",
     "dije",
     "dijera",
+    "donde",
     "eh",
     "erre",
     "escolenta",
@@ -32,11 +34,14 @@
     "hablar",
     "hacer",
     "hijo",
+    "hola",
     "intentando",
+    "ito",
     "jajaja",
     "jugar",
     "llogaste",
     "mama",
+    "mejor",
     "mierda",
     "mira",
     "miras",
@@ -71,6 +76,7 @@
     "tan",
     "traduccion",
     "uy",
+    "va",
     "valios",
     "vamos",
     "vela",
@@ -487,11 +493,41 @@
       "word": "vida",
       "date": "2026-06-20",
       "timestamp": "2026-06-20T16:19:11.351217"
+    },
+    {
+      "word": "hola",
+      "date": "2026-06-25",
+      "timestamp": "2026-06-25T16:55:57.079492"
+    },
+    {
+      "word": "ito",
+      "date": "2026-06-25",
+      "timestamp": "2026-06-25T16:56:22.540722"
+    },
+    {
+      "word": "donde",
+      "date": "2026-06-25",
+      "timestamp": "2026-06-25T16:56:37.015972"
+    },
+    {
+      "word": "mejor",
+      "date": "2026-06-25",
+      "timestamp": "2026-06-25T16:57:05.128100"
+    },
+    {
+      "word": "va",
+      "date": "2026-06-25",
+      "timestamp": "2026-06-25T16:57:17.229886"
+    },
+    {
+      "word": "chas",
+      "date": "2026-06-25",
+      "timestamp": "2026-06-25T16:57:17.229891"
     }
   ],
   "stats": {
-    "total_words": 81,
-    "new_words_today": 81,
-    "history_count": 81
+    "total_words": 87,
+    "new_words_today": 6,
+    "history_count": 87
   }
 }

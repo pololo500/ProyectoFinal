@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/mobile_navigation"
+    app:startDestination="@+id/nav_dashboard">
+
+    <fragment
+        android:id="@+id/nav_dashboard"
+        android:name="com.example.aplicacionparacelular.ui.dashboard.DashboardFragment"
+        android:label="@string/menu_dashboard"
+        tools:layout="@layout/fragment_dashboard" />
+
+    <fragment
+        android:id="@+id/nav_metrics"
+        android:name="com.example.aplicacionparacelular.ui.metrics.MetricsFragment"
+        android:label="@string/menu_metrics"
+        tools:layout="@layout/fragment_metrics" />
+
+    <fragment
+        android:id="@+id/nav_routines"
+        android:name="com.example.aplicacionparacelular.ui.routines.RoutinesFragment"
+        android:label="@string/menu_routines"
+        tools:layout="@layout/fragment_routines" />
+
+    <fragment
+        android:id="@+id/nav_config"
+        android:name="com.example.aplicacionparacelular.ui.config.ConfigFragment"
+        android:label="@string/menu_config"
+        tools:layout="@layout/fragment_config" />
+
+    <fragment
+        android:id="@+id/nav_medical"
+        android:name="com.example.aplicacionparacelular.ui.medical.MedicalFragment"
+        android:label="@string/menu_medical"
+        tools:layout="@layout/fragment_medical" />
+</navigation>
