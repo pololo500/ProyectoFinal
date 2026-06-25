@@ -1,0 +1,497 @@
+{
+  "known_words": [
+    "agua",
+    "asi",
+    "batalla",
+    "bien",
+    "buena",
+    "bueno",
+    "campiona",
+    "chame",
+    "chique",
+    "chundo",
+    "coclan",
+    "color",
+    "conmigo",
+    "cosas",
+    "dejame",
+    "deje",
+    "dicera",
+    "dije",
+    "dijera",
+    "eh",
+    "erre",
+    "escolenta",
+    "escucha",
+    "escuchame",
+    "esito",
+    "espalda",
+    "estoy",
+    "feo",
+    "gracias",
+    "hablar",
+    "hacer",
+    "hijo",
+    "intentando",
+    "jajaja",
+    "jugar",
+    "llogaste",
+    "mama",
+    "mierda",
+    "mira",
+    "miras",
+    "mismo",
+    "muchas",
+    "mujer",
+    "paga",
+    "papa",
+    "pape",
+    "pasa",
+    "pel",
+    "pelicula",
+    "pesciente",
+    "peso",
+    "picera",
+    "piedra",
+    "piloz",
+    "pitoforo",
+    "puta",
+    "quede",
+    "quedes",
+    "quiero",
+    "raton",
+    "responde",
+    "rica",
+    "roto",
+    "sapas",
+    "seis",
+    "sienta",
+    "son",
+    "soy",
+    "tan",
+    "traduccion",
+    "uy",
+    "valios",
+    "vamos",
+    "vela",
+    "veni",
+    "veo",
+    "verde",
+    "vida",
+    "vos",
+    "voy",
+    "voz"
+  ],
+  "history": [
+    {
+      "word": "jajaja",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T14:41:20.124723"
+    },
+    {
+      "word": "miras",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:09:33.866841"
+    },
+    {
+      "word": "asi",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:09:33.867216"
+    },
+    {
+      "word": "soy",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:09:33.867222"
+    },
+    {
+      "word": "puta",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:09:33.867227"
+    },
+    {
+      "word": "uy",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:09:55.229574"
+    },
+    {
+      "word": "chame",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:09:55.229582"
+    },
+    {
+      "word": "color",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:09:55.229587"
+    },
+    {
+      "word": "roto",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:09:55.229591"
+    },
+    {
+      "word": "quedes",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:10:10.777765"
+    },
+    {
+      "word": "hablar",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:10:10.777773"
+    },
+    {
+      "word": "conmigo",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:10:10.777778"
+    },
+    {
+      "word": "quiero",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:10:27.716971"
+    },
+    {
+      "word": "jugar",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:10:27.716980"
+    },
+    {
+      "word": "vos",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:10:27.716984"
+    },
+    {
+      "word": "voz",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:10:42.662599"
+    },
+    {
+      "word": "picera",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:11:00.368717"
+    },
+    {
+      "word": "dije",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:11:00.368726"
+    },
+    {
+      "word": "sienta",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:11:18.272764"
+    },
+    {
+      "word": "gracias",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:11:58.151344"
+    },
+    {
+      "word": "chique",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:12:14.667019"
+    },
+    {
+      "word": "esito",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:12:14.667028"
+    },
+    {
+      "word": "traduccion",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:12:14.667033"
+    },
+    {
+      "word": "hijo",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:12:14.667037"
+    },
+    {
+      "word": "escuchame",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:12:31.994578"
+    },
+    {
+      "word": "son",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:12:31.994585"
+    },
+    {
+      "word": "valios",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:12:31.994590"
+    },
+    {
+      "word": "mama",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:12:44.462284"
+    },
+    {
+      "word": "bien",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:12:44.462292"
+    },
+    {
+      "word": "feo",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:12:44.462296"
+    },
+    {
+      "word": "estoy",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:12:44.462301"
+    },
+    {
+      "word": "intentando",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:12:44.462305"
+    },
+    {
+      "word": "hacer",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:12:44.462308"
+    },
+    {
+      "word": "vamos",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:12:59.033547"
+    },
+    {
+      "word": "pelicula",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:12:59.033557"
+    },
+    {
+      "word": "quede",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:13:16.811720"
+    },
+    {
+      "word": "chundo",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:13:16.811728"
+    },
+    {
+      "word": "piloz",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:13:32.156571"
+    },
+    {
+      "word": "pasa",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:13:47.700461"
+    },
+    {
+      "word": "escucha",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:13:47.700473"
+    },
+    {
+      "word": "mismo",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:13:47.700478"
+    },
+    {
+      "word": "campiona",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:14:20.071493"
+    },
+    {
+      "word": "llogaste",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:14:20.071501"
+    },
+    {
+      "word": "mujer",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:14:20.071506"
+    },
+    {
+      "word": "deje",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:14:32.979062"
+    },
+    {
+      "word": "rica",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:14:32.979071"
+    },
+    {
+      "word": "peso",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:14:32.979076"
+    },
+    {
+      "word": "coclan",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:14:32.979080"
+    },
+    {
+      "word": "muchas",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:14:32.979084"
+    },
+    {
+      "word": "cosas",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:14:32.979088"
+    },
+    {
+      "word": "tan",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:14:32.979091"
+    },
+    {
+      "word": "vela",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:14:32.979095"
+    },
+    {
+      "word": "voy",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:14:57.761853"
+    },
+    {
+      "word": "veo",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:14:57.761862"
+    },
+    {
+      "word": "mierda",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:15:15.819763"
+    },
+    {
+      "word": "espalda",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:15:33.794599"
+    },
+    {
+      "word": "raton",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:15:51.391746"
+    },
+    {
+      "word": "agua",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:16:06.495891"
+    },
+    {
+      "word": "verde",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:16:06.495899"
+    },
+    {
+      "word": "erre",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:16:06.495904"
+    },
+    {
+      "word": "pitoforo",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:16:20.951327"
+    },
+    {
+      "word": "sapas",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:17:05.150824"
+    },
+    {
+      "word": "pesciente",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:17:05.150832"
+    },
+    {
+      "word": "batalla",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:17:05.150837"
+    },
+    {
+      "word": "dejame",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:17:05.150842"
+    },
+    {
+      "word": "mira",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:17:15.662915"
+    },
+    {
+      "word": "responde",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:17:15.662924"
+    },
+    {
+      "word": "paga",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:17:15.662928"
+    },
+    {
+      "word": "buena",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:17:15.662933"
+    },
+    {
+      "word": "eh",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:17:15.662937"
+    },
+    {
+      "word": "bueno",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:17:15.662940"
+    },
+    {
+      "word": "piedra",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:17:28.708414"
+    },
+    {
+      "word": "papa",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:17:28.708423"
+    },
+    {
+      "word": "dijera",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:17:28.708427"
+    },
+    {
+      "word": "dicera",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:17:38.619150"
+    },
+    {
+      "word": "seis",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:17:49.179479"
+    },
+    {
+      "word": "veni",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:18:02.158517"
+    },
+    {
+      "word": "pel",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:18:13.165776"
+    },
+    {
+      "word": "pape",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:18:23.828762"
+    },
+    {
+      "word": "escolenta",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:19:00.285459"
+    },
+    {
+      "word": "vida",
+      "date": "2026-06-20",
+      "timestamp": "2026-06-20T16:19:11.351217"
+    }
+  ],
+  "stats": {
+    "total_words": 81,
+    "new_words_today": 81,
+    "history_count": 81
+  }
+}
