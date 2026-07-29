@@ -48,6 +48,8 @@ try:
 except ImportError as exc:  # pragma: no cover - runtime dependency check.
     raise RuntimeError("spacy es requerido para la PoC") from exc
 
+from debug_logger import get_debug_logger
+
 
 @dataclass(frozen=True)
 class WorkerMessage:
@@ -115,7 +117,9 @@ def discover_microphones() -> list[tuple[int, str]]:
                 label = f'{index}: {device.get("name", "Micrófono")}'
                 devices.append((index, label))
     except Exception:
-        return []
+        pass
+    if not devices:
+        devices.append((-1, "Sin micrófono (Solo visión / ojos / rutinas)"))
     return devices
 
 
@@ -183,10 +187,14 @@ class IntentDispatcher:
             return spacy.blank("es")
 
     def dispatch(self, text: str, emotion: dict[str, Any] | None = None) -> dict[str, Any]:
+        _dlog = get_debug_logger()
         candidate_text = (text or "").strip()
         if not candidate_text:
             return {"intent_name": "unknown", "confidence": 0.0, "response": ""}
 
+        if _dlog:
+            _dlog.log_input("INTENT_DISPATCH", f"text=\"{candidate_text}\"")
+        _t0 = time.monotonic()
         source_doc = self.nlp(candidate_text)
         best_match = {"intent_name": "unknown", "confidence": 0.0, "response": ""}
 
@@ -219,6 +227,12 @@ class IntentDispatcher:
                         "response": response,
                     }
 
+        if _dlog:
+            _dlog.log_output(
+                "INTENT_DISPATCH",
+                f"intent={best_match['intent_name']} conf={best_match['confidence']:.3f}",
+                elapsed_ms=(time.monotonic() - _t0) * 1000,
+            )
         return best_match
 
     def _similarity(self, left_doc, right_doc) -> float:
@@ -247,6 +261,15 @@ class IntentDispatcher:
 
 
 class TextSanitizer:
+    def __init__(self) -> None:
+        # Pre-cargar scrubadub en init para evitar penalidad de 11s en primer uso.
+        self._scrubadub = None
+        try:
+            import scrubadub
+            self._scrubadub = scrubadub
+        except ImportError:
+            pass
+
     def sanitize(self, text: str) -> dict[str, Any]:
         original_text = text or ""
         findings: list[dict[str, Any]] = []
@@ -254,9 +277,9 @@ class TextSanitizer:
         replacement_terms: list[str] = []
 
         try:
-            import scrubadub
-
-            scrubber = scrubadub.Scrubber()
+            if self._scrubadub is None:
+                raise ImportError("scrubadub no disponible")
+            scrubber = self._scrubadub.Scrubber()
             filth_items = list(scrubber.iter_filth(original_text))
             if filth_items:
                 spans = []
@@ -515,6 +538,9 @@ class CameraWorker:
                 )
                 face_mesh_enabled = True
                 _queue_message_with_semaphore(self.message_queue, self.message_semaphore, "log", "MediaPipe FaceMesh habilitado")
+                _dlog = get_debug_logger()
+                if _dlog:
+                    _dlog.log_output("MEDIAPIPE", "FaceMesh cargado")
             else:
                 # Fallback obligatorio: MediaPipe Tasks Face Landmarker.
                 tasks_landmarker = self._create_tasks_face_landmarker()
@@ -539,6 +565,9 @@ class CameraWorker:
                 {"camera": f"{self.camera_index} activa"},
             )
             self.models_loaded_event.set()
+            _cam_dlog = get_debug_logger()
+            if _cam_dlog:
+                _cam_dlog.log_output("CAMERA", "Modelos de cámara listos, captura iniciada")
             # Throttle processing to configured frame rate
             frame_interval = 1.0 / float(getattr(self, "frame_rate", 5))
             last_frame_ts = 0.0
@@ -852,6 +881,9 @@ class AudioWorker:
 
         whisper_model = self._load_whisper_model()
         vad = self._load_vad(sample_rate)
+        _dlog = get_debug_logger()
+        if _dlog:
+            _dlog.log_output("AUDIO_INIT", "AudioWorker modelos cargados (Whisper + VAD)")
         audio_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=32)
 
         def callback(indata, frames, time_info, status) -> None:  # noqa: ANN001
@@ -862,6 +894,23 @@ class AudioWorker:
                 audio_queue.put_nowait(audio_block)
             except queue.Full:
                 pass
+
+        if self.microphone_device_index == -1 or self.microphone_device_index is None:
+            _queue_message_with_semaphore(
+                self.message_queue,
+                self.message_semaphore,
+                "log",
+                "AudioWorker: deshabilitado (sin micrófono). Modo solo visión activo.",
+            )
+            _queue_message_with_semaphore(
+                self.message_queue,
+                self.message_semaphore,
+                "status",
+                {"mic": "deshabilitado", "volume": 0},
+            )
+            while not self._stop_event.is_set():
+                time.sleep(0.5)
+            return
 
         try:
             with sd.InputStream(
@@ -960,17 +1009,31 @@ class AudioWorker:
         if audio_segment.size == 0:
             return
 
+        _dlog = get_debug_logger()
         segment_start = time.monotonic()
+        segment_duration_s = len(audio_segment) / 16000.0
+        if _dlog:
+            _dlog.log_input("SEGMENT", f"Audio segment ({segment_duration_s:.1f}s, {len(audio_segment)} samples)")
 
         try:
             # 1. Transcribe
+            _t_transcribe = time.monotonic()
+            if _dlog:
+                _dlog.log_input("TRANSCRIPTION", f"Audio ({segment_duration_s:.1f}s)")
             raw_text = self._transcribe(whisper_model, audio_segment)
+            if _dlog:
+                _dlog.log_output("TRANSCRIPTION", f"\"{raw_text}\"", elapsed_ms=(time.monotonic() - _t_transcribe) * 1000)
             if not raw_text.strip():
                 return
 
             # 2. Sanitize (PII removal)
+            _t_sanitize = time.monotonic()
+            if _dlog:
+                _dlog.log_input("SANITIZATION", f"text=\"{raw_text}\"")
             sanitized_payload = self.sanitizer.sanitize(raw_text)
             sanitized_text = sanitized_payload.get("sanitized_text", "")
+            if _dlog:
+                _dlog.log_output("SANITIZATION", f"\"{sanitized_text}\"", elapsed_ms=(time.monotonic() - _t_sanitize) * 1000)
 
             # 3. Vocabulary tracking (#EPIC-003 — linguistic development)
             new_words: list[str] = []
@@ -989,11 +1052,25 @@ class AudioWorker:
             emotion_context = getattr(self.intent_dispatcher, "current_emotion", None)
 
             # 5. Intent dispatch (NLU via spaCy semantic similarity)
+            _t_intent = time.monotonic()
+            if _dlog:
+                _dlog.log_input("NLU", f"text=\"{sanitized_text}\", emotion={emotion_context}")
             intent_payload = self.intent_dispatcher.dispatch(sanitized_text, emotion=emotion_context)
+            if _dlog:
+                _dlog.log_output(
+                    "NLU",
+                    f"intent={intent_payload.get('intent_name', '?')} conf={intent_payload.get('confidence', 0):.3f}",
+                    elapsed_ms=(time.monotonic() - _t_intent) * 1000,
+                )
 
             # 6. Emotion reactor — crisis detection (#EPIC-005 CA#1)
+            _t_reactor = time.monotonic()
+            if _dlog:
+                _dlog.log_input("EMOTION_REACTOR", f"emotion={emotion_context}, intent={intent_payload.get('intent_name')}")
             intent_payload = self.emotion_reactor.evaluate(emotion_context, intent_payload)
             is_crisis = intent_payload.get("is_crisis", False)
+            if _dlog:
+                _dlog.log_output("EMOTION_REACTOR", f"is_crisis={is_crisis}", elapsed_ms=(time.monotonic() - _t_reactor) * 1000)
 
             # 7. Game engine — multi-turn games (#EPIC-006)
             if self.game_engine is not None:
@@ -1054,8 +1131,19 @@ class AudioWorker:
 
             # 12. TTS — speak the response and block until playback finishes.
             response_text = str(intent_payload.get("response", "")).strip()
+            # Truncar respuestas largas a ~25 palabras para mantener TTS < 4s.
+            # Respuestas de 50+ palabras causaban 10-13s de síntesis.
+            response_text = self._truncate_response(response_text, max_words=25)
             if response_text and self.speech_worker is not None:
+                _t_tts = time.monotonic()
+                if _dlog:
+                    _dlog.log_input("TTS", f"text=\"{response_text}\"")
                 self.speech_worker.speak_and_wait(response_text)
+                if _dlog:
+                    _dlog.log_output("TTS", "Reproducción completada", elapsed_ms=(time.monotonic() - _t_tts) * 1000)
+
+            if _dlog:
+                _dlog.log_output("SEGMENT", "Pipeline completo", elapsed_ms=(time.monotonic() - segment_start) * 1000)
 
         except Exception as exc:
             _queue_message_with_semaphore(self.message_queue, self.message_semaphore, "log", f"Error en transcripción o NLU: {exc}")
@@ -1067,24 +1155,59 @@ class AudioWorker:
                 except queue.Empty:
                     break
 
-    # Contextual prompt that primes Whisper for Argentine Spanish toddler speech.
-    # This is NOT an instruction — it conditions the decoder to favour this
-    # vocabulary and style when resolving ambiguous phonemes.
+    @staticmethod
+    def _truncate_response(text: str, max_words: int = 25) -> str:
+        """Trunca respuestas TTS largas para mantener latencia baja.
+
+        Corta en el último límite de oración dentro de *max_words* para
+        evitar cortes abruptos.  Si no encuentra un punto natural, corta
+        por palabras y agrega puntos suspensivos.
+        """
+        words = text.split()
+        if len(words) <= max_words:
+            return text
+
+        truncated = " ".join(words[:max_words])
+        # Intentar cortar en el último punto/signo de interrogación/exclamación
+        for sep in (".", "?", "!", "。"):
+            last_idx = truncated.rfind(sep)
+            if last_idx > 0:
+                return truncated[: last_idx + 1]
+        # Sin límite de oración encontrado — cortar y agregar puntos suspensivos
+        return truncated.rstrip(",;: ") + "."
+
+
+    # Contextual prompt that primes Whisper for Argentine Spanish.
+    # Neutral prompt — avoids biasing towards toddler vocabulary which caused
+    # hallucinations (e.g. injecting "mamá" into adult speech).  Uses common
+    # Argentine expressions to condition the decoder for rioplatense accent.
     _WHISPER_INITIAL_PROMPT: str = (
-        "Hola, quiero jugar. Mamá, mirá. Papá, vení. "
-        "Dame eso. No quiero. Sí, dale. Agua. Leche. "
-        "Nene, nena, juguete, pelota, auto, muñeca, perro, gato."
+        "Hola, buen día. ¿Cómo estás? Quiero jugar. "
+        "Sí, dale. No quiero. Dame eso. Mirá, vení. "
+        "Está bueno. Vamos a hacer algo divertido."
     )
 
     def _load_whisper_model(self):
+        _dlog = get_debug_logger()
+        if _dlog:
+            _dlog.log_input("WHISPER", "Cargando modelo medium (int8)...")
+        _t0 = time.monotonic()
         try:
             from faster_whisper import WhisperModel
 
-            # 'base' model: ~500MB RAM (int8) — significant accuracy improvement
-            # over 'tiny' for children's irregular pronunciation and high-pitched
-            # voices.  Still fits comfortably on RPi 5 (4-8GB).
-            return WhisperModel("base", device="cpu", compute_type="int8")
+            # 'medium' model: ~1.5GB RAM (int8) — 769M params, 10x more than
+            # 'base' (74M) and 3x more than 'small' (244M).  Best accuracy for
+            # Spanish vocabulary including uncommon words ("flamenco", "soleado").
+            # The 'small' model still garbled these as "lo amenco", "acasio", etc.
+            # Fits on RPi 5 with 8GB RAM.  Slower than small but combined with
+            # beam_size=1 keeps transcription in a usable range.
+            model = WhisperModel("medium", device="cpu", compute_type="int8")
+            if _dlog:
+                _dlog.log_output("WHISPER", "Modelo cargado", elapsed_ms=(time.monotonic() - _t0) * 1000)
+            return model
         except Exception:
+            if _dlog:
+                _dlog.log_output("WHISPER", "ERROR: No se pudo cargar")
             return None
 
     @staticmethod
@@ -1097,27 +1220,126 @@ class AudioWorker:
         # Target peak at 0.9 to leave headroom
         return (audio * (0.9 / peak)).astype(np.float32)
 
+    @staticmethod
+    def _pre_emphasis(audio: np.ndarray, coeff: float = 0.97) -> np.ndarray:
+        """Apply pre-emphasis filter to boost high-frequency consonant sounds.
+
+        Speech consonants (t, d, s, l, n, etc.) carry critical information in
+        high frequencies (2-8 kHz) that microphones often under-represent.
+        Pre-emphasis amplifies these frequencies relative to low-frequency vowel
+        energy, helping Whisper distinguish similar-sounding words like
+        'lindo' vs 'viendo' or 'soleado' vs 'soñado'.
+
+        y[n] = x[n] - coeff * x[n-1]
+        coeff=0.97 is the standard value used in classic ASR systems.
+        """
+        if len(audio) < 2:
+            return audio
+        emphasized = np.empty_like(audio)
+        emphasized[0] = audio[0]
+        emphasized[1:] = audio[1:] - coeff * audio[:-1]
+        return emphasized.astype(np.float32)
+
+    @staticmethod
+    def _noise_gate(audio: np.ndarray, threshold_db: float = -40.0) -> np.ndarray:
+        """Simple noise gate: suppress samples below a dB threshold.
+
+        Background noise (fans, AC, electrical hum) below the gate threshold
+        is attenuated, giving Whisper a cleaner signal.  -40 dB is gentle
+        enough to preserve soft speech but removes ambient floor noise.
+        """
+        # Convert dB threshold to linear amplitude
+        linear_threshold = 10.0 ** (threshold_db / 20.0)
+        # Compute short-time energy using a small sliding window (20ms at 16kHz = 320 samples)
+        window_size = 320
+        if len(audio) < window_size:
+            return audio
+
+        result = audio.copy()
+        # Compute RMS energy per window
+        n_windows = len(audio) // window_size
+        for i in range(n_windows):
+            start = i * window_size
+            end = start + window_size
+            window_rms = np.sqrt(np.mean(audio[start:end] ** 2))
+            if window_rms < linear_threshold:
+                # Soft attenuation (multiply by 0.1 instead of zero to avoid artifacts)
+                result[start:end] *= 0.1
+        # Handle remaining samples
+        if n_windows * window_size < len(audio):
+            tail_start = n_windows * window_size
+            tail_rms = np.sqrt(np.mean(audio[tail_start:] ** 2))
+            if tail_rms < linear_threshold:
+                result[tail_start:] *= 0.1
+
+        return result.astype(np.float32)
+
+    @staticmethod
+    def _pad_audio(audio: np.ndarray, sample_rate: int = 16000, min_duration_s: float = 1.5) -> np.ndarray:
+        """Pad very short audio segments with silence to a minimum duration.
+
+        Whisper's encoder processes 30-second mel spectrogram windows.  Very
+        short segments (<1s) produce sparse spectrograms that confuse the
+        decoder, causing hallucinations or garbled output.  Padding with
+        silence to at least 1.5s gives the model enough context.
+        """
+        min_samples = int(sample_rate * min_duration_s)
+        if len(audio) >= min_samples:
+            return audio
+        # Pad symmetrically (silence before and after) so speech is centered
+        total_pad = min_samples - len(audio)
+        pad_before = total_pad // 2
+        pad_after = total_pad - pad_before
+        return np.concatenate([
+            np.zeros(pad_before, dtype=np.float32),
+            audio,
+            np.zeros(pad_after, dtype=np.float32),
+        ])
+
+    def _preprocess_audio(self, audio: np.ndarray) -> np.ndarray:
+        """Full audio preprocessing pipeline before transcription.
+
+        Order matters:
+        1. Noise gate first (removes ambient noise floor)
+        2. Pre-emphasis (boosts consonant frequencies for clarity)
+        3. Normalize (consistent volume level)
+        4. Pad (ensure minimum duration for Whisper)
+        """
+        audio = self._noise_gate(audio, threshold_db=-40.0)
+        audio = self._pre_emphasis(audio, coeff=0.97)
+        audio = self._normalize_audio(audio)
+        audio = self._pad_audio(audio, sample_rate=16000, min_duration_s=1.5)
+        return audio
+
     def _transcribe(self, whisper_model: Any, audio_segment: np.ndarray) -> str:
         if whisper_model is None:
             return ""
 
-        # Normalize volume: toddlers speak at very inconsistent levels
-        audio_segment = self._normalize_audio(audio_segment)
+        # Full audio preprocessing pipeline: noise gate → pre-emphasis → normalize → pad
+        audio_segment = self._preprocess_audio(audio_segment)
 
         segments, _info = whisper_model.transcribe(
             audio_segment,
             language="es",
-            vad_filter=False,
-            # Beam search explores more hypotheses, critical for ambiguous
-            # child pronunciation (e.g. "ete" → "este", "aba" → "agua")
-            beam_size=5,
-            # Contextual prompt primes decoder for toddler vocabulary
+            # Whisper's internal VAD pre-filters silent chunks before decoding,
+            # reducing hallucinations on residual silence within segments.
+            vad_filter=True,
+            # Greedy decoding (beam_size=1) is 2-4x faster and produces fewer
+            # hallucinations for clear adult speech.  beam_size=5 was causing
+            # low-confidence hypotheses biased by the initial_prompt to win.
+            beam_size=1,
+            # Neutral contextual prompt for Argentine Spanish
             initial_prompt=self._WHISPER_INITIAL_PROMPT,
-            # Raise no-speech threshold to reject hallucinations on noise/silence
+            # Reject hallucinations on noise/silence
             no_speech_threshold=0.7,
-            # Lower log-prob threshold to accept less confident but valid
-            # transcriptions (children's speech is inherently less clear)
+            # Log-prob threshold: -0.5 was too strict with larger models,
+            # causing valid speech to be rejected as empty strings.
+            # -0.8 is a balanced compromise — rejects clear garbage but
+            # accepts legitimate low-confidence transcriptions.
             log_prob_threshold=-0.8,
+            # Skip timestamp prediction — saves decoder compute and lets it
+            # focus entirely on text accuracy for short segments
+            without_timestamps=True,
         )
         text_parts = []
         for segment in segments:
@@ -1194,18 +1416,74 @@ class SpeechWorker:
                 self._message_queue, self._message_semaphore, "log", f"[TTS] {text}"
             )
 
+    @staticmethod
+    def _resample_audio(audio_array: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
+        """Resample audio using numpy linear interpolation (no scipy needed).
+
+        Works for both mono (N,1) and multi-channel (N,C) arrays.
+        """
+        if orig_sr == target_sr:
+            return audio_array
+        ratio = target_sr / orig_sr
+        orig_len = audio_array.shape[0]
+        new_len = int(orig_len * ratio)
+        if new_len == 0:
+            return audio_array
+        old_indices = np.arange(orig_len)
+        new_indices = np.linspace(0, orig_len - 1, new_len)
+        if audio_array.ndim == 1:
+            return np.interp(new_indices, old_indices, audio_array).astype(np.float32)
+        # Multi-channel: interpolate each channel independently
+        channels = audio_array.shape[1]
+        resampled = np.empty((new_len, channels), dtype=np.float32)
+        for ch in range(channels):
+            resampled[:, ch] = np.interp(new_indices, old_indices, audio_array[:, ch])
+        return resampled
+
+    def _find_supported_samplerate(self, sample_rate: int, channels: int) -> int:
+        """Return the requested sample_rate if the device supports it, otherwise
+        find the best ALSA-compatible alternative.  Falls back to 48000 Hz."""
+        candidates = [sample_rate, 48000, 44100, 22050, 16000, 8000]
+        for sr in candidates:
+            try:
+                sd.check_output_settings(
+                    device=self._output_device_index,
+                    samplerate=float(sr),
+                    channels=channels,
+                    dtype="float32",
+                )
+                return sr
+            except Exception:
+                continue
+        # Ultimate fallback — let PortAudio pick its default
+        return 48000
+
     def _play_wav_via_output_stream(self, audio_array: np.ndarray, sample_rate: int) -> None:
         """Play audio using a dedicated OutputStream to avoid conflicts with AudioWorker's InputStream.
 
         sd.play() uses the *default* PortAudio output stream which can collide
         with an already-open InputStream on some backends.  Opening our own
-        OutputStream with an explicit device avoids this."""
+        OutputStream with an explicit device avoids this.
+
+        If the requested sample_rate is not supported by the output device
+        (common on Raspberry Pi ALSA where only 48000/44100 are valid), the
+        audio is resampled to a compatible rate using numpy interpolation."""
         if audio_array.ndim == 1:
             audio_array = audio_array.reshape(-1, 1)
         # Normalise int types to float32 for OutputStream compatibility
         if audio_array.dtype != np.float32:
             info = np.iinfo(audio_array.dtype)
             audio_array = audio_array.astype(np.float32) / float(info.max)
+
+        channels = audio_array.shape[1] if audio_array.ndim > 1 else 1
+
+        # --- Resample if the device does not support the original rate ---
+        device_sr = self._find_supported_samplerate(sample_rate, channels)
+        if device_sr != sample_rate:
+            self._log(f"Resampleando audio de {sample_rate} Hz → {device_sr} Hz (compatibilidad ALSA)")
+            audio_array = self._resample_audio(audio_array, sample_rate, device_sr)
+            sample_rate = device_sr
+
         finished = threading.Event()
         pos = [0]  # mutable counter shared with callback
 
@@ -1222,7 +1500,6 @@ class SpeechWorker:
                 outdata[:] = chunk
             pos[0] = end
 
-        channels = audio_array.shape[1] if audio_array.ndim > 1 else 1
         with sd.OutputStream(
             samplerate=sample_rate,
             channels=channels,
@@ -1253,12 +1530,18 @@ class SpeechWorker:
 
             try:
                 self._log(f"Sintetizando: {text}")
+                _dlog = get_debug_logger()
+                _t_synth = time.monotonic()
+                if _dlog:
+                    _dlog.log_input("TTS_SYNTH", f"engine={'piper' if self._piper_voice else ('sapi' if self._is_windows else 'espeak')}, text=\"{text}\"")
                 if self._piper_voice is not None:
                     self._speak_piper(text)
                 elif self._is_windows:
                     self._speak_windows(text)
                 else:
                     self._speak_linux(text)
+                if _dlog:
+                    _dlog.log_output("TTS_SYNTH", "Síntesis + reproducción completada", elapsed_ms=(time.monotonic() - _t_synth) * 1000)
                 self._log("Reproducción completada")
             except Exception as exc:
                 self._log(f"Error TTS: {exc}")
@@ -1332,9 +1615,10 @@ class SpeechWorker:
 
         try:
             escaped_text = saxutils.escape(text)
+            safe_wav_path = wav_path.replace("'", "''")
             script = (
                 "Add-Type -AssemblyName System.Speech;"
-                f"$out = '{wav_path.replace("'", "''")}';"
+                f"$out = '{safe_wav_path}';"
                 "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer;"
                 "$voices = @($s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -like 'es*' });"
                 "$preferredNames = @('Microsoft Helena Desktop', 'Microsoft Sabina Desktop', 'Helena', 'Sabina', 'Laura', 'Paloma');"

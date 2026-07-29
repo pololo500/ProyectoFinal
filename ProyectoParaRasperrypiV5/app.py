@@ -1,13 +1,50 @@
 from __future__ import annotations
 
+# ---------------------------------------------------------------------------
+# Suppress noisy but harmless warnings from dependencies.
+# Must be set BEFORE importing the libraries that emit them.
+# ---------------------------------------------------------------------------
+import os
+import warnings
+
+# --- C++ native warnings (MediaPipe / TensorFlow Lite) ---
+# MediaPipe uses absl-logging (W0000 format) and TFLite uses its own logger.
+# Level 3 = ERROR only, suppressing INFO and WARNING from both systems.
+os.environ.setdefault("GLOG_minloglevel", "3")        # absl/glog: suppress W0000 warnings
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")    # TFLite: suppress "Created XNNPACK delegate"
+
+# --- HuggingFace Hub ---
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")  # symlink cache on Windows
+
+# Suppress HF "unauthenticated requests" warning (emitted via Python warnings)
+warnings.filterwarnings("ignore", message=r".*unauthenticated.*HF Hub.*")
+warnings.filterwarnings("ignore", category=UserWarning, module=r"huggingface_hub")
+
+# --- spaCy ---
+# W007/W008: es_core_news_sm has no word vectors; similarity falls back
+# to tagger/parser which is fine for our intent matching use case.
+warnings.filterwarnings("ignore", message=r".*\[W007\].*")
+warnings.filterwarnings("ignore", message=r".*\[W008\].*")
+
+# --- absl-py programmatic fallback ---
+# If absl-py is installed (MediaPipe dependency), force ERROR-only verbosity.
+try:
+    from absl import logging as _absl_logging
+    _absl_logging.set_verbosity(_absl_logging.ERROR)
+except Exception:
+    pass
+
 import argparse
 import json
 import queue
 import sys
 import threading
+import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
+
+from debug_logger import get_debug_logger, init_debug_logger
 
 try:
     from PIL import Image, ImageTk
@@ -303,8 +340,7 @@ class EyeModeApp(tk.Tk):
         out_idx = self._get_selected_out_idx()
 
         if mic_idx is None:
-            self._setup_status_var.set("⚠ Necesitás al menos un micrófono para continuar")
-            return
+            mic_idx = -1
 
         # Destroy setup UI
         self._setup_frame.destroy()
@@ -682,8 +718,10 @@ class EdgeAiDesktopApp(tk.Tk):
 
     def _selected_microphone(self) -> int:
         if not self.microphone_options:
-            raise RuntimeError("No hay micrófonos disponibles")
+            return -1
         index = self.microphone_combo.current()
+        if index < 0 or index >= len(self.microphone_options):
+            return -1
         return self.microphone_options[index][0]
 
     def _selected_output_device(self) -> int | None:
@@ -792,6 +830,9 @@ class EdgeAiDesktopApp(tk.Tk):
         if self.camera_worker or self.audio_worker:
             return
 
+        _dlog = get_debug_logger()
+        _t0 = time.monotonic()
+
         try:
             camera_index = self._selected_camera()
             microphone_index = self._selected_microphone()
@@ -800,8 +841,17 @@ class EdgeAiDesktopApp(tk.Tk):
             messagebox.showerror("Hardware no disponible", str(exc))
             return
 
+        if _dlog:
+            _dlog.log_input(
+                "WORKERS",
+                f"Iniciando (camera={camera_index}, mic={microphone_index}, out={output_device_index})",
+            )
+
         try:
+            _nlu_t0 = time.monotonic()
             self.intent_dispatcher = IntentDispatcher.from_file(INTENT_RULES_PATH)
+            if _dlog:
+                _dlog.log_output("NLU_INIT", "IntentDispatcher cargado", elapsed_ms=(time.monotonic() - _nlu_t0) * 1000)
         except Exception as exc:
             messagebox.showerror("Error de NLU", f"No se pudo inicializar spaCy o las reglas de intención: {exc}")
             self.intent_dispatcher = None
@@ -847,6 +897,10 @@ class EdgeAiDesktopApp(tk.Tk):
         self.stop_button.configure(state="normal")
 
     def stop_workers(self) -> None:
+        _dlog = get_debug_logger()
+        if _dlog:
+            _dlog.log_input("WORKERS", "Deteniendo workers...")
+        _t0 = time.monotonic()
         if self.camera_worker:
             self.camera_worker.stop()
             self.camera_worker = None
@@ -867,12 +921,18 @@ class EdgeAiDesktopApp(tk.Tk):
         
         self.status_var.set("Estado: detenido")
         self._append_log("Workers detenidos correctamente")
+        if _dlog:
+            _dlog.log_output("WORKERS", "Workers detenidos", elapsed_ms=(time.monotonic() - _t0) * 1000)
 
     def _append_log(self, text: str) -> None:
         self.log_text.configure(state="normal")
         self.log_text.insert("end", f"{text}\n")
         self.log_text.see("end")
         self.log_text.configure(state="disabled")
+        # Escribir al archivo de debug log si está activo
+        _dlog = get_debug_logger()
+        if _dlog:
+            _dlog.log(text)
 
     def _update_status_text(self) -> None:
         status_parts = []
@@ -912,6 +972,7 @@ class EdgeAiDesktopApp(tk.Tk):
             self._append_log(f"Error al renderizar frame: {exc}")
 
     def _handle_worker_message(self, message: WorkerMessage) -> None:
+        _dlog = get_debug_logger()
         if message.kind == "log":
             self._append_log(str(message.payload))
         elif message.kind == "status":
@@ -934,6 +995,8 @@ class EdgeAiDesktopApp(tk.Tk):
             payload = message.payload or {}
             label = payload.get('label')
             score = float(payload.get('score', 0.0))
+            if _dlog:
+                _dlog.log_input("EMOTION", f"label={label}, score={score:.2f}")
             # Update intent dispatcher with latest emotion context so NLU
             # can consider it when matching intents. This keeps response
             # processing independent and immediate.
@@ -945,9 +1008,14 @@ class EdgeAiDesktopApp(tk.Tk):
                         self.intent_dispatcher.set_current_emotion(str(label), score)
             except Exception:
                 pass
+            if _dlog:
+                _dlog.log_output("EMOTION", f"Contexto emocional actualizado: {label}")
         elif message.kind == "transcript":
             payload = message.payload
-            self._append_log(f"Texto crudo transcrito: {payload.get('raw_text', '')}")
+            raw_text = payload.get('raw_text', '')
+            if _dlog:
+                _dlog.log_input("TRANSCRIPT_MSG", f"raw_text=\"{raw_text}\"")
+            self._append_log(f"Texto crudo transcrito: {raw_text}")
             self._append_log(f"Texto sanitizado: {json.dumps(payload.get('sanitized', {}), ensure_ascii=False)}")
             emotion_info = payload.get("emotion") or {}
             self._append_log(
@@ -970,6 +1038,13 @@ class EdgeAiDesktopApp(tk.Tk):
             # Show crisis flag
             if intent_info.get("is_crisis"):
                 self._append_log("⚠️ CRISIS EMOCIONAL DETECTADA — Protocolo de contención activado")
+            if _dlog:
+                _dlog.log_output(
+                    "TRANSCRIPT_MSG",
+                    f"intent={intent_info.get('intent_name', '?')} "
+                    f"conf={intent_info.get('confidence', 0):.3f} "
+                    f"response=\"{intent_info.get('response', '')}\"",
+                )
             # TTS is now handled directly by AudioWorker (speak_and_wait)
             # to ensure exclusive CPU usage during response processing.
 
@@ -1032,6 +1107,8 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.debug:
+        logger = init_debug_logger()
+        print(f"[DEBUG] Log file: {logger.log_path}", flush=True)
         app = EdgeAiDesktopApp()
     else:
         app = EyeModeApp()

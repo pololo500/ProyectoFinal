@@ -1,11 +1,22 @@
 {
   "known_words": [
+    "100",
+    "acasio",
     "agua",
+    "ah",
+    "ahora",
+    "algo",
+    "amenco",
     "asi",
+    "aunque",
+    "bastante",
     "batalla",
     "bien",
+    "bonita",
+    "buen",
     "buena",
     "bueno",
+    "buenos",
     "campiona",
     "chame",
     "chas",
@@ -15,55 +26,89 @@
     "color",
     "conmigo",
     "cosas",
+    "decir",
     "dejame",
     "deje",
+    "dia",
+    "dias",
     "dicera",
     "dije",
     "dijera",
+    "divertido",
     "donde",
     "eh",
+    "enojo",
+    "entendi",
+    "entiende",
     "erre",
+    "errodeas",
+    "errores",
     "escolenta",
     "escucha",
     "escuchame",
     "esito",
     "espalda",
+    "estar",
     "estoy",
     "feo",
+    "flamenco",
     "gracias",
+    "hablado",
+    "hablan",
     "hablar",
+    "hablen",
+    "hace",
     "hacer",
+    "hamburguesa",
     "hijo",
+    "hizo",
     "hola",
+    "igual",
     "intentando",
     "ito",
     "jajaja",
     "jugar",
+    "lito",
+    "lleguero",
     "llogaste",
+    "maguete",
     "mama",
+    "manco",
+    "manga",
     "mejor",
     "mierda",
     "mira",
     "miras",
     "mismo",
+    "mitico",
+    "mo",
     "muchas",
+    "mucho",
     "mujer",
+    "murencia",
     "paga",
+    "palas",
     "papa",
     "pape",
     "pasa",
     "pel",
     "pelicula",
+    "perfectamente",
+    "perfecto",
     "pesciente",
     "peso",
     "picera",
     "piedra",
     "piloz",
     "pitoforo",
+    "playa",
     "puta",
     "quede",
     "quedes",
+    "quiera",
     "quiero",
+    "rapido",
+    "raro",
     "raton",
     "responde",
     "rica",
@@ -72,9 +117,13 @@
     "seis",
     "sienta",
     "son",
+    "sonado",
     "soy",
     "tan",
+    "tengo",
+    "tiene",
     "traduccion",
+    "trao",
     "uy",
     "va",
     "valios",
@@ -82,8 +131,11 @@
     "vela",
     "veni",
     "veo",
+    "verdad",
     "verde",
+    "ves",
     "vida",
+    "viendo",
     "vos",
     "voy",
     "voz"
@@ -523,11 +575,271 @@
       "word": "chas",
       "date": "2026-06-25",
       "timestamp": "2026-06-25T16:57:17.229891"
+    },
+    {
+      "word": "mitico",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T14:45:13.740099"
+    },
+    {
+      "word": "estar",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T14:45:22.639810"
+    },
+    {
+      "word": "palas",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T14:45:22.639818"
+    },
+    {
+      "word": "maguete",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T14:45:22.639824"
+    },
+    {
+      "word": "dia",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T14:46:40.564635"
+    },
+    {
+      "word": "quiera",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T14:46:50.588884"
+    },
+    {
+      "word": "trao",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T14:47:09.721352"
+    },
+    {
+      "word": "hace",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T14:47:09.721361"
+    },
+    {
+      "word": "mucho",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T14:47:09.721366"
+    },
+    {
+      "word": "hablado",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T14:47:26.748322"
+    },
+    {
+      "word": "tengo",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T14:47:42.708041"
+    },
+    {
+      "word": "buenos",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:00:11.298901"
+    },
+    {
+      "word": "dias",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:00:11.298915"
+    },
+    {
+      "word": "lleguero",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:00:23.702140"
+    },
+    {
+      "word": "hamburguesa",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:00:38.830013"
+    },
+    {
+      "word": "viendo",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:00:59.348695"
+    },
+    {
+      "word": "sonado",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:00:59.348705"
+    },
+    {
+      "word": "tiene",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:37:53.759336"
+    },
+    {
+      "word": "murencia",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:37:53.759349"
+    },
+    {
+      "word": "algo",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:38:07.041369"
+    },
+    {
+      "word": "divertido",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:38:07.041377"
+    },
+    {
+      "word": "buen",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:47:37.409410"
+    },
+    {
+      "word": "ves",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:48:10.106923"
+    },
+    {
+      "word": "bonita",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:49:01.156455"
+    },
+    {
+      "word": "manga",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:49:15.401735"
+    },
+    {
+      "word": "manco",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:49:32.152196"
+    },
+    {
+      "word": "lito",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:55:36.318343"
+    },
+    {
+      "word": "verdad",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:55:36.318354"
+    },
+    {
+      "word": "amenco",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:56:27.253387"
+    },
+    {
+      "word": "flamenco",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:56:41.051914"
+    },
+    {
+      "word": "acasio",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:57:09.618487"
+    },
+    {
+      "word": "mo",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:58:42.540253"
+    },
+    {
+      "word": "errores",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:59:14.935984"
+    },
+    {
+      "word": "errodeas",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T15:59:14.935995"
+    },
+    {
+      "word": "playa",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:29:43.121801"
+    },
+    {
+      "word": "ahora",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:30:10.497335"
+    },
+    {
+      "word": "entiende",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:30:10.497345"
+    },
+    {
+      "word": "perfectamente",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:30:10.497350"
+    },
+    {
+      "word": "hablan",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:30:10.497355"
+    },
+    {
+      "word": "aunque",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:30:10.497359"
+    },
+    {
+      "word": "hablen",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:30:10.497363"
+    },
+    {
+      "word": "rapido",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:30:10.497367"
+    },
+    {
+      "word": "enojo",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:30:56.464515"
+    },
+    {
+      "word": "ah",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:31:33.267700"
+    },
+    {
+      "word": "entendi",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:31:33.267713"
+    },
+    {
+      "word": "decir",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:31:33.267721"
+    },
+    {
+      "word": "igual",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:31:33.267730"
+    },
+    {
+      "word": "hizo",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:31:33.267735"
+    },
+    {
+      "word": "raro",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:31:33.267740"
+    },
+    {
+      "word": "100",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:31:58.281962"
+    },
+    {
+      "word": "perfecto",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:31:58.281972"
+    },
+    {
+      "word": "bastante",
+      "date": "2026-07-29",
+      "timestamp": "2026-07-29T20:31:58.281977"
     }
   ],
   "stats": {
-    "total_words": 87,
-    "new_words_today": 6,
-    "history_count": 87
+    "total_words": 139,
+    "new_words_today": 52,
+    "history_count": 139
   }
 }

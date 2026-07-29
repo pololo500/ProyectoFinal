@@ -1,0 +1,534 @@
+{
+  "date": "2026-07-29",
+  "session_start": "2026-07-29T14:42:50.088574",
+  "summary": {
+    "total_interactions": 38,
+    "total_duration_s": 216.28435719999834,
+    "pillar_counts": {
+      "general": 28,
+      "cognitivo": 10
+    },
+    "crisis_count": 0,
+    "games_played": 0,
+    "routines_completed": 0,
+    "new_words_today": 52
+  },
+  "events": [
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T14:44:47.649912",
+      "pilar": "general",
+      "intent": "routine_resist",
+      "emotion": "enojado",
+      "emotion_score": 0.223,
+      "duration_s": 16.1
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T14:45:13.746203",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "neutral",
+      "emotion_score": 0.926,
+      "duration_s": 3.14
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T14:45:13.746629",
+      "new_words_count": 1,
+      "total_known_words": 88
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T14:45:22.646329",
+      "pilar": "general",
+      "intent": "crisis_cry",
+      "emotion": "neutral",
+      "emotion_score": 0.926,
+      "duration_s": 4.56
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T14:45:22.646770",
+      "new_words_count": 3,
+      "total_known_words": 91
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T14:46:40.570067",
+      "pilar": "general",
+      "intent": "greeting",
+      "emotion": "neutral",
+      "emotion_score": 0.95,
+      "duration_s": 0.97
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T14:46:40.570493",
+      "new_words_count": 1,
+      "total_known_words": 92
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T14:46:50.594006",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "neutral",
+      "emotion_score": 0.92,
+      "duration_s": 0.99
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T14:46:50.594437",
+      "new_words_count": 1,
+      "total_known_words": 93
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T14:47:09.727494",
+      "pilar": "general",
+      "intent": "farewell",
+      "emotion": "neutral",
+      "emotion_score": 0.954,
+      "duration_s": 1.11
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T14:47:09.727940",
+      "new_words_count": 3,
+      "total_known_words": 96
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T14:47:26.755377",
+      "pilar": "general",
+      "intent": "crisis_cry",
+      "emotion": "neutral",
+      "emotion_score": 0.966,
+      "duration_s": 1.12
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T14:47:26.755991",
+      "new_words_count": 1,
+      "total_known_words": 97
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T14:47:42.713533",
+      "pilar": "general",
+      "intent": "greeting",
+      "emotion": "neutral",
+      "emotion_score": 0.918,
+      "duration_s": 1.04
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T14:47:42.713973",
+      "new_words_count": 1,
+      "total_known_words": 98
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:00:11.309521",
+      "pilar": "general",
+      "intent": "greeting",
+      "emotion": "neutral",
+      "emotion_score": 0.94,
+      "duration_s": 1.18
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:00:11.310080",
+      "new_words_count": 2,
+      "total_known_words": 100
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:00:23.708418",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "enojado",
+      "emotion_score": 0.37,
+      "duration_s": 3.53
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:00:23.708960",
+      "new_words_count": 1,
+      "total_known_words": 101
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:00:38.835830",
+      "pilar": "general",
+      "intent": "regulation_breathing",
+      "emotion": "neutral",
+      "emotion_score": 0.907,
+      "duration_s": 1.14
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:00:38.836321",
+      "new_words_count": 1,
+      "total_known_words": 102
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:00:59.354874",
+      "pilar": "general",
+      "intent": "greeting",
+      "emotion": "neutral",
+      "emotion_score": 0.89,
+      "duration_s": 4.1
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:00:59.355384",
+      "new_words_count": 2,
+      "total_known_words": 104
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:37:38.142534",
+      "pilar": "general",
+      "intent": "crisis_cry",
+      "emotion": "neutral",
+      "emotion_score": 0.97,
+      "duration_s": 2.1
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:37:53.875897",
+      "pilar": "general",
+      "intent": "greeting",
+      "emotion": "neutral",
+      "emotion_score": 0.965,
+      "duration_s": 1.31
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:37:53.891177",
+      "new_words_count": 2,
+      "total_known_words": 106
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:38:07.156587",
+      "pilar": "general",
+      "intent": "question_curiosity",
+      "emotion": "neutral",
+      "emotion_score": 0.958,
+      "duration_s": 2.03
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:38:07.170965",
+      "new_words_count": 2,
+      "total_known_words": 108
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:47:37.542402",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "enojado",
+      "emotion_score": 0.241,
+      "duration_s": 1.29
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:47:37.557409",
+      "new_words_count": 1,
+      "total_known_words": 109
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:47:51.940865",
+      "pilar": "general",
+      "intent": "greeting",
+      "emotion": "neutral",
+      "emotion_score": 0.923,
+      "duration_s": 1.19
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:48:10.242525",
+      "pilar": "general",
+      "intent": "greeting",
+      "emotion": "neutral",
+      "emotion_score": 0.98,
+      "duration_s": 4.26
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:48:10.258062",
+      "new_words_count": 1,
+      "total_known_words": 110
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:48:26.791803",
+      "pilar": "general",
+      "intent": "routine_resist",
+      "emotion": "neutral",
+      "emotion_score": 0.903,
+      "duration_s": 3.3
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:48:45.738381",
+      "pilar": "cognitivo",
+      "intent": "play_veo_veo",
+      "emotion": "neutral",
+      "emotion_score": 0.909,
+      "duration_s": 1.23
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:49:01.276514",
+      "pilar": "cognitivo",
+      "intent": "game_veo_veo",
+      "emotion": "neutral",
+      "emotion_score": 0.896,
+      "duration_s": 3.25
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:49:01.291716",
+      "new_words_count": 1,
+      "total_known_words": 111
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:49:15.516007",
+      "pilar": "cognitivo",
+      "intent": "game_veo_veo",
+      "emotion": "neutral",
+      "emotion_score": 0.984,
+      "duration_s": 3.49
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:49:15.531545",
+      "new_words_count": 1,
+      "total_known_words": 112
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:49:32.268261",
+      "pilar": "cognitivo",
+      "intent": "game_veo_veo",
+      "emotion": "neutral",
+      "emotion_score": 0.982,
+      "duration_s": 5.22
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:49:32.283972",
+      "new_words_count": 1,
+      "total_known_words": 113
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:55:36.436784",
+      "pilar": "general",
+      "intent": "greeting",
+      "emotion": "neutral",
+      "emotion_score": 0.88,
+      "duration_s": 3.57
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:55:36.452665",
+      "new_words_count": 2,
+      "total_known_words": 115
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:56:08.286598",
+      "pilar": "cognitivo",
+      "intent": "play_veo_veo",
+      "emotion": "neutral",
+      "emotion_score": 0.926,
+      "duration_s": 3.36
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:56:27.372012",
+      "pilar": "cognitivo",
+      "intent": "game_veo_veo",
+      "emotion": "neutral",
+      "emotion_score": 0.889,
+      "duration_s": 9.44
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:56:27.387143",
+      "new_words_count": 1,
+      "total_known_words": 116
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:56:41.175447",
+      "pilar": "cognitivo",
+      "intent": "game_veo_veo",
+      "emotion": "neutral",
+      "emotion_score": 0.963,
+      "duration_s": 3.17
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:56:41.190145",
+      "new_words_count": 1,
+      "total_known_words": 117
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:57:09.733314",
+      "pilar": "cognitivo",
+      "intent": "game_veo_veo",
+      "emotion": "neutral",
+      "emotion_score": 0.924,
+      "duration_s": 8.22
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:57:09.748813",
+      "new_words_count": 1,
+      "total_known_words": 118
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:58:25.741607",
+      "pilar": "cognitivo",
+      "intent": "game_veo_veo",
+      "emotion": "neutral",
+      "emotion_score": 0.946,
+      "duration_s": 3.17
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:58:42.686476",
+      "pilar": "cognitivo",
+      "intent": "game_unknown",
+      "emotion": "neutral",
+      "emotion_score": 0.924,
+      "duration_s": 5.6
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:58:42.705050",
+      "new_words_count": 1,
+      "total_known_words": 119
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T15:59:15.052682",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "neutral",
+      "emotion_score": 0.89,
+      "duration_s": 3.47
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T15:59:15.069219",
+      "new_words_count": 2,
+      "total_known_words": 121
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T20:29:21.781606",
+      "pilar": "general",
+      "intent": "greeting",
+      "emotion": "neutral",
+      "emotion_score": 0.976,
+      "duration_s": 10.01
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T20:29:43.239137",
+      "pilar": "general",
+      "intent": "crisis_cry",
+      "emotion": "enojado",
+      "emotion_score": 0.214,
+      "duration_s": 9.35
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T20:29:43.254596",
+      "new_words_count": 1,
+      "total_known_words": 122
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T20:30:10.615117",
+      "pilar": "general",
+      "intent": "greeting",
+      "emotion": "neutral",
+      "emotion_score": 0.911,
+      "duration_s": 10.21
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T20:30:10.631186",
+      "new_words_count": 7,
+      "total_known_words": 129
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T20:30:56.582890",
+      "pilar": "general",
+      "intent": "crisis_cry",
+      "emotion": "neutral",
+      "emotion_score": 0.854,
+      "duration_s": 26.15
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T20:30:56.599472",
+      "new_words_count": 1,
+      "total_known_words": 130
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T20:31:33.392879",
+      "pilar": "general",
+      "intent": "greeting",
+      "emotion": "neutral",
+      "emotion_score": 0.924,
+      "duration_s": 9.97
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T20:31:33.408876",
+      "new_words_count": 6,
+      "total_known_words": 136
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T20:31:58.421769",
+      "pilar": "general",
+      "intent": "question_curiosity",
+      "emotion": "neutral",
+      "emotion_score": 0.956,
+      "duration_s": 11.99
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-07-29T20:31:58.436830",
+      "new_words_count": 3,
+      "total_known_words": 139
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-07-29T20:32:48.417215",
+      "pilar": "general",
+      "intent": "greeting",
+      "emotion": "neutral",
+      "emotion_score": 0.898,
+      "duration_s": 30.93
+    }
+  ]
+}
