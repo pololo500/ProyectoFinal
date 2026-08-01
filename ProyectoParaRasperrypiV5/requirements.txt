@@ -8,3 +8,4 @@ scrubadub
 numpy
 Pillow
 piper-tts
+llama-cpp-python

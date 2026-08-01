@@ -11,7 +11,8 @@ Este proyecto es el "cerebro" local para un sistema embebido interactivo. Todo e
 - **Audio (Captura):** `sounddevice` (I/O) y `silero-vad` (detección de silencios y actividad de voz).
 - **Audio (Procesamiento):** `faster-whisper` (transcripción STT, modelo `base` con `compute_type="int8"`, `beam_size=5`, `initial_prompt` contextual para habla infantil argentina).
 - **Audio (Síntesis/TTS):** `piper-tts` (TTS neural local con voz lo más humana posible, modelo `es_MX-ald-medium`). Si piper no está disponible, fallback a `System.Speech` (Windows) o `espeak-ng` (Linux).
-- **Procesamiento de Lenguaje (NLU):** `spacy` (modelo `es_core_news_sm` para similitud semántica, docs de ejemplos pre-cacheados).
+- **Procesamiento de Lenguaje (NLU):** `spacy` (modelo `es_core_news_md` para similitud semántica con 20k vectores de palabras, docs de ejemplos pre-cacheados).
+- **LLM de Fallback:** `llama-cpp-python` con modelo `internlm2.5-1.8B-chat` Q4_K_M (~1.2 GB RAM). Genera respuestas empáticas en español argentino cuando el intent es `unknown`. Se carga secuencialmente al inicio después de Whisper y VAD. Si no está disponible, la app funciona sin él (graceful degradation).
 - **Saneamiento de Datos:** `scrubadub` (eliminación de PII).
 - **Interfaz (Solo para PoC):** `tkinter` o `PyQt` (a elección del agente para la prueba de concepto).
 

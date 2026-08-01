@@ -1,0 +1,402 @@
+{
+  "date": "2026-08-01",
+  "session_start": "2026-08-01T13:32:52.201261",
+  "summary": {
+    "total_interactions": 28,
+    "total_duration_s": 247.93899999998393,
+    "pillar_counts": {
+      "general": 23,
+      "cognitivo": 5
+    },
+    "crisis_count": 0,
+    "games_played": 0,
+    "routines_completed": 0,
+    "new_words_today": 62
+  },
+  "events": [
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:34:55.830513",
+      "pilar": "general",
+      "intent": "autonomy_decision",
+      "emotion": "neutral",
+      "emotion_score": 0.974,
+      "duration_s": 5.27
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:35:20.926015",
+      "pilar": "general",
+      "intent": "question_curiosity",
+      "emotion": "neutral",
+      "emotion_score": 0.907,
+      "duration_s": 9.0
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:39:27.248085",
+      "pilar": "general",
+      "intent": "question_curiosity",
+      "emotion": "neutral",
+      "emotion_score": 0.905,
+      "duration_s": 5.34
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:39:27.248085",
+      "new_words_count": 6,
+      "total_known_words": 145
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:40:07.677218",
+      "pilar": "general",
+      "intent": "farewell",
+      "emotion": "neutral",
+      "emotion_score": 0.893,
+      "duration_s": 16.78
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:40:07.678336",
+      "new_words_count": 2,
+      "total_known_words": 147
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:40:43.452100",
+      "pilar": "general",
+      "intent": "crisis_cry",
+      "emotion": "neutral",
+      "emotion_score": 0.875,
+      "duration_s": 5.12
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:41:34.573252",
+      "pilar": "general",
+      "intent": "help_request",
+      "emotion": "feliz",
+      "emotion_score": 0.85,
+      "duration_s": 5.25
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:41:34.574235",
+      "new_words_count": 2,
+      "total_known_words": 149
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:41:56.083144",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "feliz",
+      "emotion_score": 0.256,
+      "duration_s": 8.31
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:42:29.376402",
+      "pilar": "general",
+      "intent": "crisis_cry",
+      "emotion": "feliz",
+      "emotion_score": 0.961,
+      "duration_s": 5.09
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:42:29.377402",
+      "new_words_count": 2,
+      "total_known_words": 151
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:46:16.761372",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "neutral",
+      "emotion_score": 0.842,
+      "duration_s": 18.55
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:46:45.544542",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "enojado",
+      "emotion_score": 0.339,
+      "duration_s": 6.92
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:46:45.545542",
+      "new_words_count": 1,
+      "total_known_words": 152
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:47:13.242316",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "enojado",
+      "emotion_score": 0.248,
+      "duration_s": 7.0
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:47:13.242316",
+      "new_words_count": 1,
+      "total_known_words": 153
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:47:33.130149",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "neutral",
+      "emotion_score": 0.937,
+      "duration_s": 6.95
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:47:33.130149",
+      "new_words_count": 2,
+      "total_known_words": 155
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:48:04.904422",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "feliz",
+      "emotion_score": 0.431,
+      "duration_s": 7.31
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:48:04.904422",
+      "new_words_count": 4,
+      "total_known_words": 159
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:48:45.717197",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "neutral",
+      "emotion_score": 0.934,
+      "duration_s": 7.12
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:48:45.718205",
+      "new_words_count": 3,
+      "total_known_words": 162
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:49:13.539113",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "feliz",
+      "emotion_score": 0.935,
+      "duration_s": 11.49
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:49:13.539113",
+      "new_words_count": 2,
+      "total_known_words": 164
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:53:12.230526",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "feliz",
+      "emotion_score": 0.905,
+      "duration_s": 5.55
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:53:12.230526",
+      "new_words_count": 5,
+      "total_known_words": 169
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:53:39.428489",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "enojado",
+      "emotion_score": 0.174,
+      "duration_s": 5.23
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:53:39.428489",
+      "new_words_count": 3,
+      "total_known_words": 172
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:55:19.684233",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "enojado",
+      "emotion_score": 0.342,
+      "duration_s": 8.23
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:55:19.685257",
+      "new_words_count": 2,
+      "total_known_words": 174
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:55:32.805207",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "enojado",
+      "emotion_score": 0.337,
+      "duration_s": 5.34
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:55:32.805207",
+      "new_words_count": 1,
+      "total_known_words": 175
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:57:24.742661",
+      "pilar": "cognitivo",
+      "intent": "play_veo_veo",
+      "emotion": "neutral",
+      "emotion_score": 0.866,
+      "duration_s": 5.0
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:57:24.742661",
+      "new_words_count": 1,
+      "total_known_words": 176
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:58:01.013751",
+      "pilar": "cognitivo",
+      "intent": "game_veo_veo",
+      "emotion": "enojado",
+      "emotion_score": 0.232,
+      "duration_s": 17.16
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:58:01.014854",
+      "new_words_count": 4,
+      "total_known_words": 180
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:58:19.972394",
+      "pilar": "cognitivo",
+      "intent": "game_veo_veo",
+      "emotion": "feliz",
+      "emotion_score": 0.268,
+      "duration_s": 5.19
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:58:19.972394",
+      "new_words_count": 1,
+      "total_known_words": 181
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:58:40.005174",
+      "pilar": "cognitivo",
+      "intent": "game_veo_veo",
+      "emotion": "feliz",
+      "emotion_score": 0.534,
+      "duration_s": 8.72
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:58:40.006175",
+      "new_words_count": 1,
+      "total_known_words": 182
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:59:02.900485",
+      "pilar": "cognitivo",
+      "intent": "game_unknown",
+      "emotion": "feliz",
+      "emotion_score": 0.451,
+      "duration_s": 5.61
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:59:02.901485",
+      "new_words_count": 5,
+      "total_known_words": 187
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T13:59:29.765136",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "neutral",
+      "emotion_score": 0.828,
+      "duration_s": 10.05
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T13:59:29.766137",
+      "new_words_count": 8,
+      "total_known_words": 195
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T14:00:05.487029",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "enojado",
+      "emotion_score": 0.201,
+      "duration_s": 20.3
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T14:00:05.488038",
+      "new_words_count": 4,
+      "total_known_words": 199
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T14:00:27.874124",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "neutral",
+      "emotion_score": 0.972,
+      "duration_s": 8.19
+    },
+    {
+      "type": "vocabulary",
+      "timestamp": "2026-08-01T14:00:27.874632",
+      "new_words_count": 2,
+      "total_known_words": 201
+    },
+    {
+      "type": "interaction",
+      "timestamp": "2026-08-01T14:00:58.961322",
+      "pilar": "general",
+      "intent": "unknown",
+      "emotion": "neutral",
+      "emotion_score": 0.85,
+      "duration_s": 17.86
+    }
+  ]
+}

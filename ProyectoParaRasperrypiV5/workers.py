@@ -181,10 +181,21 @@ class IntentDispatcher:
             self.current_emotion = {"label": label, "score": float(score or 0.0)}
 
     def _load_spacy_model(self):
-        try:
-            return spacy.load("es_core_news_sm")
-        except Exception:
-            return spacy.blank("es")
+        # Prioritize es_core_news_md (20k word vectors for high-accuracy semantic matching).
+        # Falls back to es_core_news_sm, then blank('es') if not found.
+        for model_name in ("es_core_news_md", "es_core_news_sm"):
+            try:
+                return spacy.load(model_name)
+            except Exception:
+                continue
+        return spacy.blank("es")
+
+    # Minimum confidence to accept an intent match.  Matches below this
+    # threshold are returned as "unknown" so the fallback LLM can handle them.
+    # 0.45 is calibrated for es_core_news_md: low enough for exact keyword
+    # matches ("hola" → greeting) but high enough to reject spurious semantic
+    # similarities ("el gato fue a la luna" → play @ 0.31).
+    MIN_CONFIDENCE: float = 0.45
 
     def dispatch(self, text: str, emotion: dict[str, Any] | None = None) -> dict[str, Any]:
         _dlog = get_debug_logger()
@@ -226,6 +237,16 @@ class IntentDispatcher:
                         "confidence": float(similarity),
                         "response": response,
                     }
+
+        # Reject low-confidence matches — let the fallback LLM handle them
+        if best_match["confidence"] < self.MIN_CONFIDENCE:
+            if _dlog:
+                _dlog.log_output(
+                    "INTENT_DISPATCH",
+                    f"rejected={best_match['intent_name']} conf={best_match['confidence']:.3f} < {self.MIN_CONFIDENCE} → unknown",
+                    elapsed_ms=(time.monotonic() - _t0) * 1000,
+                )
+            return {"intent_name": "unknown", "confidence": best_match["confidence"], "response": ""}
 
         if _dlog:
             _dlog.log_output(
@@ -824,6 +845,7 @@ class AudioWorker:
         telemetry: Any = None,
         vocabulary_tracker: Any = None,
         routine_scheduler: Any = None,
+        fallback_llm: Any = None,
     ) -> None:
         self.microphone_device_index = microphone_device_index
         self.message_queue = message_queue
@@ -840,6 +862,9 @@ class AudioWorker:
         self.telemetry = telemetry
         self.vocabulary_tracker = vocabulary_tracker
         self.routine_scheduler = routine_scheduler
+
+        # Fallback LLM for unknown intents (#EPIC-LLM)
+        self.fallback_llm = fallback_llm
 
         # Game engine for multi-turn interactive games (#EPIC-006)
         try:
@@ -881,9 +906,25 @@ class AudioWorker:
 
         whisper_model = self._load_whisper_model()
         vad = self._load_vad(sample_rate)
+
+        # Load fallback LLM sequentially after Whisper + VAD
+        if self.fallback_llm is not None:
+            _queue_message_with_semaphore(
+                self.message_queue, self.message_semaphore, "log",
+                "AudioWorker: cargando LLM de fallback...",
+            )
+            try:
+                self.fallback_llm.load()
+            except Exception as exc:
+                _queue_message_with_semaphore(
+                    self.message_queue, self.message_semaphore, "log",
+                    f"AudioWorker: LLM de fallback no disponible: {exc}",
+                )
+
         _dlog = get_debug_logger()
         if _dlog:
-            _dlog.log_output("AUDIO_INIT", "AudioWorker modelos cargados (Whisper + VAD)")
+            llm_status = "disponible" if (self.fallback_llm and self.fallback_llm.is_available) else "no disponible"
+            _dlog.log_output("AUDIO_INIT", f"AudioWorker modelos cargados (Whisper + VAD + LLM={llm_status})")
         audio_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=32)
 
         def callback(indata, frames, time_info, status) -> None:  # noqa: ANN001
@@ -1085,6 +1126,24 @@ class AudioWorker:
                         intent_payload["response"] = ack_msg
                 except Exception:
                     pass
+
+            # 8.5. Fallback LLM — generate empathetic response for unknown intents
+            intent_name = intent_payload.get("intent_name", "")
+            if intent_name == "unknown" and self.fallback_llm is not None and self.fallback_llm.is_available:
+                _t_llm = time.monotonic()
+                if _dlog:
+                    _dlog.log_input("LLM_FALLBACK", f"text=\"{sanitized_text}\"")
+                llm_response = self.fallback_llm.generate(sanitized_text, emotion_context)
+                if llm_response:
+                    intent_payload["intent_name"] = "llm_fallback"
+                    intent_payload["response"] = llm_response
+                    intent_payload["pilar"] = "general"
+                if _dlog:
+                    _dlog.log_output(
+                        "LLM_FALLBACK",
+                        f"response=\"{llm_response}\"" if llm_response else "sin respuesta",
+                        elapsed_ms=(time.monotonic() - _t_llm) * 1000,
+                    )
 
             # 9. Determine pilar for telemetry
             pilar = intent_payload.get("pilar", "general")

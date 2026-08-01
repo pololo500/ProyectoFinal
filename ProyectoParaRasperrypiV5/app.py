@@ -54,6 +54,11 @@ except ImportError:  # Optional dependency for frame rendering in Tkinter.
 
 from workers import AudioWorker, CameraWorker, IntentDispatcher, SpeechWorker, WorkerMessage, discover_cameras, discover_microphones, discover_output_devices
 
+try:
+    from fallback_llm import FallbackLLM
+except ImportError:
+    FallbackLLM = None  # type: ignore[misc,assignment]
+
 
 APP_DIR = Path(__file__).resolve().parent
 INTENT_RULES_PATH = APP_DIR / "intent_rules.json"
@@ -411,6 +416,7 @@ class EyeModeApp(tk.Tk):
             telemetry=self.telemetry,
             vocabulary_tracker=self.vocabulary_tracker,
             routine_scheduler=self.routine_scheduler,
+            fallback_llm=FallbackLLM() if FallbackLLM is not None else None,
         )
 
         self.camera_worker.start()
@@ -889,6 +895,7 @@ class EdgeAiDesktopApp(tk.Tk):
             telemetry=self.telemetry,
             vocabulary_tracker=self.vocabulary_tracker,
             routine_scheduler=self.routine_scheduler,
+            fallback_llm=FallbackLLM() if FallbackLLM is not None else None,
         )
 
         self.camera_worker.start()
