@@ -23,8 +23,8 @@ from debug_logger import get_debug_logger
 # Modelo y descarga
 # ---------------------------------------------------------------------------
 
-_MODEL_REPO = "bartowski/internlm2_5-1_8b-chat-GGUF"
-_MODEL_FILENAME = "internlm2_5-1_8b-chat-Q4_K_M.gguf"
+_MODEL_REPO = "bartowski/Llama-3.2-3B-Instruct-GGUF"
+_MODEL_FILENAME = "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
 _MODEL_URL = (
     f"https://huggingface.co/{_MODEL_REPO}/resolve/main/{_MODEL_FILENAME}"
 )
@@ -35,12 +35,13 @@ _CACHE_DIR = Path.home() / ".edge_ai_models" / "llm"
 # ---------------------------------------------------------------------------
 
 _SYSTEM_PROMPT = (
-    "Sos Pipi, un robot amigo muy cariñoso que habla con nenes y chicos de 3 a 7 años en español rioplatense (argentino). "
-    "Usás siempre 'vos', 'mirá', 'dale', 'che', 'qué lindo', 'buenísimo', 'uy'. "
-    "Tus respuestas son muy cortas, cálidas y de máximo 25 palabras (1 o 2 oraciones). "
-    "El mensaje del nene puede tener palabras cortadas o errores del micrófono; entendelo con amor y nunca lo corrijas. "
-    "Hablás de cosas simples y juegos, sin explicaciones técnicas ni palabras difíciles. "
-    "No uses ningún emoji ni texto entre asteriscos."
+    "Tu nombre es TEO. Sos un robot de peluche mágico y cariñoso que habla con nenes de 3 a 7 años. "
+    "Hablá siempre en primera persona y dirigite directamente al nene (usando 'vos', 'mirá', 'dale'). "
+    "NUNCA hables del nene en tercera persona. NUNCA menciones 'el nene', 'el usuario' ni 'el LLM'. "
+    "Si te preguntan cómo te llamás, respondé simplemente 'Me llamo TEO' y nada más.\n"
+    "Tus respuestas deben ser MUY CORTAS (máximo 20 palabras, 1 o 2 oraciones breves). "
+    "Si escuchás algo que no se entiende bien, seguile la corriente con alegría o hacele una pregunta sencilla. "
+    "No uses emojis, ni comillas, ni asteriscos."
 )
 
 
@@ -57,6 +58,11 @@ class FallbackLLM:
     def __init__(self) -> None:
         self._llm: Any = None
         self._loaded = False
+        self._history: list[dict[str, str]] = []
+
+    def clear_history(self) -> None:
+        """Borra el historial de conversación actual."""
+        self._history.clear()
 
     # ------------------------------------------------------------------
     # Carga del modelo (eager, llamada explícita durante startup)
@@ -135,7 +141,7 @@ class FallbackLLM:
             return ""
 
         _dlog = get_debug_logger()
-        user_prompt = self._build_user_prompt(text, emotion)
+        messages = self._build_messages(text, emotion, self._history)
 
         if _dlog:
             _dlog.log_input("LLM_GENERATE", f"text=\"{text}\"")
@@ -143,10 +149,7 @@ class FallbackLLM:
         _t0 = time.monotonic()
         try:
             result = self._llm.create_chat_completion(
-                messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt},
-                ],
+                messages=messages,
                 max_tokens=80,
                 temperature=0.70,
                 top_p=0.9,
@@ -163,6 +166,14 @@ class FallbackLLM:
             )
 
             response_text = self._clean_response(raw_text)
+
+            # Guardar la interacción en el historial
+            if response_text:
+                self._history.append({"role": "user", "content": text})
+                self._history.append({"role": "assistant", "content": response_text})
+                # Mantener solo las últimas 4 interacciones (2 turnos) para no sobrepasar el contexto
+                if len(self._history) > 4:
+                    self._history = self._history[-4:]
 
             if _dlog:
                 _dlog.log_output(
@@ -230,25 +241,27 @@ class FallbackLLM:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _build_user_prompt(text: str, emotion: dict[str, Any] | None) -> str:
-        """Arma el prompt de usuario con contexto emocional y tolerancia a fallas."""
-        emotion_hint = ""
+    def _build_messages(text: str, emotion: dict[str, Any] | None, history: list[dict[str, str]]) -> list[dict[str, str]]:
+        """Arma los mensajes para el LLM con el sistema actualizado y el historial."""
+        system_content = _SYSTEM_PROMPT
+        
         if emotion:
             label = str(emotion.get("label", "")).lower()
             score = float(emotion.get("score", 0.0))
             if label == "triste" and score >= 0.35:
-                emotion_hint = "(El nene parece triste) "
+                system_content += "\nContexto: El nene parece estar triste. Respondé con mucha contención y dulzura."
             elif label == "enojado" and score >= 0.40:
-                emotion_hint = "(El nene parece enojado) "
+                system_content += "\nContexto: El nene parece estar frustrado o enojado. Respondé con calma y paciencia."
             elif label == "feliz" and score >= 0.30:
-                emotion_hint = "(El nene está contento) "
+                system_content += "\nContexto: El nene está contento. Respondé con entusiasmo y alegría."
             elif label == "sorprendido":
-                emotion_hint = "(El nene parece sorprendido) "
+                system_content += "\nContexto: El nene está sorprendido."
 
-        return (
-            f"{emotion_hint}El nene dijo: \"{text}\"\n"
-            f"Respondé en 1 o 2 oraciones cortas (máximo 25 palabras), con cariño y en español argentino:"
-        )
+        messages = [{"role": "system", "content": system_content}]
+        messages.extend(history)
+        messages.append({"role": "user", "content": text})
+        
+        return messages
 
     # ------------------------------------------------------------------
     # Descarga del modelo GGUF

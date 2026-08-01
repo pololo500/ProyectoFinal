@@ -1300,38 +1300,231 @@ class AudioWorker:
         return emphasized.astype(np.float32)
 
     @staticmethod
-    def _noise_gate(audio: np.ndarray, threshold_db: float = -40.0) -> np.ndarray:
-        """Simple noise gate: suppress samples below a dB threshold.
+    def _estimate_noise_floor(audio: np.ndarray, sample_rate: int = 16000) -> float:
+        """Estimate the RMS noise floor from the quietest portions of the audio.
 
-        Background noise (fans, AC, electrical hum) below the gate threshold
-        is attenuated, giving Whisper a cleaner signal.  -40 dB is gentle
-        enough to preserve soft speech but removes ambient floor noise.
+        Instead of using a fixed dB threshold, we analyze the actual audio to
+        find the ambient noise level.  This adapts automatically to different
+        environments (quiet room vs noisy classroom).
+
+        Strategy: divide audio into short windows, sort by energy, and take
+        the median of the bottom 20% as the noise floor estimate.  This is
+        robust against speech segments inflating the estimate.
         """
-        # Convert dB threshold to linear amplitude
-        linear_threshold = 10.0 ** (threshold_db / 20.0)
-        # Compute short-time energy using a small sliding window (20ms at 16kHz = 320 samples)
+        window_size = int(sample_rate * 0.02)  # 20ms windows
+        if len(audio) < window_size * 5:
+            # Too short to estimate — use conservative default
+            return 10.0 ** (-40.0 / 20.0)
+
+        n_windows = len(audio) // window_size
+        rms_values = np.empty(n_windows, dtype=np.float32)
+        for i in range(n_windows):
+            start = i * window_size
+            end = start + window_size
+            rms_values[i] = np.sqrt(np.mean(audio[start:end] ** 2))
+
+        # Sort and take median of bottom 20% (quietest windows = noise)
+        rms_values.sort()
+        bottom_count = max(1, n_windows // 5)
+        noise_floor = float(np.median(rms_values[:bottom_count]))
+
+        # Clamp to reasonable range: at least -60dB, at most -25dB
+        min_floor = 10.0 ** (-60.0 / 20.0)  # 0.001
+        max_floor = 10.0 ** (-25.0 / 20.0)  # 0.056
+        return max(min_floor, min(noise_floor, max_floor))
+
+    @staticmethod
+    def _noise_gate(audio: np.ndarray, threshold_db: float = -40.0,
+                    noise_floor: float | None = None) -> np.ndarray:
+        """Improved noise gate with soft-knee curve.
+
+        Instead of hard attenuation (×0.1), uses a smooth gain curve that
+        transitions gradually from full attenuation to unity gain over a
+        6dB "knee" range.  This prevents audible artifacts at gate
+        open/close transitions and preserves soft consonants.
+
+        If noise_floor is provided (from _estimate_noise_floor), the gate
+        threshold is set relative to it (2× noise floor) instead of using
+        the fixed dB value.
+        """
+        if noise_floor is not None:
+            # Set threshold at 2× the estimated noise floor
+            linear_threshold = noise_floor * 2.0
+        else:
+            linear_threshold = 10.0 ** (threshold_db / 20.0)
+
+        # Soft-knee range: 6dB below threshold to threshold
+        knee_low = linear_threshold * 0.5  # -6dB below threshold
+
+        # 20ms windows at 16kHz = 320 samples
         window_size = 320
         if len(audio) < window_size:
             return audio
 
         result = audio.copy()
-        # Compute RMS energy per window
         n_windows = len(audio) // window_size
+
         for i in range(n_windows):
             start = i * window_size
             end = start + window_size
             window_rms = np.sqrt(np.mean(audio[start:end] ** 2))
-            if window_rms < linear_threshold:
-                # Soft attenuation (multiply by 0.1 instead of zero to avoid artifacts)
-                result[start:end] *= 0.1
-        # Handle remaining samples
-        if n_windows * window_size < len(audio):
-            tail_start = n_windows * window_size
+
+            if window_rms < knee_low:
+                # Well below threshold — heavy attenuation
+                result[start:end] *= 0.05
+            elif window_rms < linear_threshold:
+                # In the knee region — smooth transition (cosine interpolation)
+                # Maps [knee_low, threshold] → [0.05, 1.0]
+                t = (window_rms - knee_low) / (linear_threshold - knee_low)
+                # Smooth step using cosine curve (avoids discontinuities)
+                gain = 0.05 + 0.95 * (0.5 - 0.5 * np.cos(np.pi * t))
+                result[start:end] *= gain
+            # else: above threshold — keep original (gain=1.0)
+
+        # Handle tail samples
+        tail_start = n_windows * window_size
+        if tail_start < len(audio):
             tail_rms = np.sqrt(np.mean(audio[tail_start:] ** 2))
-            if tail_rms < linear_threshold:
-                result[tail_start:] *= 0.1
+            if tail_rms < knee_low:
+                result[tail_start:] *= 0.05
+            elif tail_rms < linear_threshold:
+                t = (tail_rms - knee_low) / (linear_threshold - knee_low)
+                gain = 0.05 + 0.95 * (0.5 - 0.5 * np.cos(np.pi * t))
+                result[tail_start:] *= gain
 
         return result.astype(np.float32)
+
+    @staticmethod
+    def _bandpass_voice_filter(audio: np.ndarray, sample_rate: int = 16000,
+                               low_hz: float = 80.0, high_hz: float = 3400.0) -> np.ndarray:
+        """FFT-based bandpass filter to isolate human voice frequencies.
+
+        Zeroes out frequency bins outside [low_hz, high_hz], removing:
+        - Sub-bass rumble, vibrations, HVAC hum (< 80 Hz)
+        - High-frequency noise, hiss, electronics (> 3400 Hz)
+
+        The 80-3400 Hz range covers the fundamental frequency and first
+        formants of both adult and child voices.  Uses a smooth roll-off
+        (raised cosine taper over 50 Hz) at the edges to avoid ringing
+        artifacts from sharp spectral cuts.
+        """
+        if len(audio) < 64:
+            return audio
+
+        n = len(audio)
+        spectrum = np.fft.rfft(audio)
+        freqs = np.fft.rfftfreq(n, d=1.0 / sample_rate)
+
+        # Build gain mask with smooth roll-off edges (50 Hz taper)
+        taper_width = 50.0  # Hz
+        gain_mask = np.ones(len(freqs), dtype=np.float32)
+
+        for i, f in enumerate(freqs):
+            if f < low_hz - taper_width:
+                gain_mask[i] = 0.0
+            elif f < low_hz:
+                # Smooth ramp up (raised cosine)
+                t = (f - (low_hz - taper_width)) / taper_width
+                gain_mask[i] = 0.5 - 0.5 * np.cos(np.pi * t)
+            elif f > high_hz + taper_width:
+                gain_mask[i] = 0.0
+            elif f > high_hz:
+                # Smooth ramp down
+                t = (f - high_hz) / taper_width
+                gain_mask[i] = 0.5 + 0.5 * np.cos(np.pi * t)
+
+        spectrum *= gain_mask
+        return np.fft.irfft(spectrum, n=n).astype(np.float32)
+
+    @staticmethod
+    def _spectral_denoise(audio: np.ndarray, sample_rate: int = 16000,
+                          noise_estimate_ms: float = 300.0,
+                          oversubtraction: float = 2.0,
+                          spectral_floor: float = 0.02) -> np.ndarray:
+        """Spectral subtraction noise reduction (Boll 1979).
+
+        This is the core noise reduction method.  It works by:
+        1. Computing the Short-Time Fourier Transform (STFT) of the audio
+        2. Estimating the noise spectrum from the first ~300ms of the segment
+           (which is typically silence/ambient noise before the child speaks)
+        3. Subtracting the noise magnitude spectrum from each frame
+        4. Reconstructing clean audio via inverse STFT (overlap-add)
+
+        Effective against stationary noise (fans, AC, electrical hum, distant
+        conversations).  Less effective against non-stationary noise (someone
+        speaking right next to the mic at similar volume).
+
+        Parameters:
+            audio: Input audio (mono, float32)
+            sample_rate: Sample rate in Hz
+            noise_estimate_ms: Duration of initial audio to use as noise profile
+            oversubtraction: How aggressively to subtract noise (1.0=exact, 2.0=aggressive)
+            spectral_floor: Minimum spectral magnitude to prevent "musical noise" artifacts
+        """
+        if len(audio) < 1024:
+            return audio
+
+        # STFT parameters
+        frame_size = 512  # 32ms at 16kHz — good time-frequency resolution for speech
+        hop_size = frame_size // 2  # 50% overlap for smooth reconstruction
+        window = np.hanning(frame_size).astype(np.float32)
+
+        # Pad audio to ensure complete frames
+        n_frames = (len(audio) - frame_size) // hop_size + 1
+        if n_frames < 2:
+            return audio
+
+        # STFT: decompose audio into overlapping windowed frames
+        frames_fft = []
+        for i in range(n_frames):
+            start = i * hop_size
+            frame = audio[start:start + frame_size] * window
+            frames_fft.append(np.fft.rfft(frame))
+
+        # Estimate noise spectrum from initial frames
+        noise_frames_count = max(1, int((noise_estimate_ms / 1000.0) * sample_rate / hop_size))
+        noise_frames_count = min(noise_frames_count, n_frames // 3)  # Never use more than 1/3
+
+        # Average magnitude spectrum of noise frames
+        noise_spectrum = np.mean(
+            [np.abs(frames_fft[i]) for i in range(noise_frames_count)],
+            axis=0,
+        )
+
+        # Spectral subtraction with flooring
+        clean_frames = []
+        for frame_fft in frames_fft:
+            magnitude = np.abs(frame_fft)
+            phase = np.angle(frame_fft)
+
+            # Subtract noise magnitude (with over-subtraction factor)
+            clean_magnitude = magnitude - oversubtraction * noise_spectrum
+
+            # Spectral floor: prevent negative magnitudes and "musical noise"
+            # by clamping to a fraction of the original magnitude
+            floor = spectral_floor * magnitude
+            clean_magnitude = np.maximum(clean_magnitude, floor)
+
+            # Reconstruct complex spectrum with original phase
+            clean_fft = clean_magnitude * np.exp(1j * phase)
+            clean_frames.append(np.fft.irfft(clean_fft, n=frame_size))
+
+        # Overlap-add reconstruction
+        output_length = (n_frames - 1) * hop_size + frame_size
+        output = np.zeros(output_length, dtype=np.float32)
+        window_sum = np.zeros(output_length, dtype=np.float32)
+
+        for i, frame in enumerate(clean_frames):
+            start = i * hop_size
+            output[start:start + frame_size] += frame.astype(np.float32) * window
+            window_sum[start:start + frame_size] += window ** 2
+
+        # Normalize by window sum to compensate for overlap
+        nonzero = window_sum > 1e-8
+        output[nonzero] /= window_sum[nonzero]
+
+        # Trim to original length
+        return output[:len(audio)].astype(np.float32)
 
     @staticmethod
     def _pad_audio(audio: np.ndarray, sample_rate: int = 16000, min_duration_s: float = 1.5) -> np.ndarray:
@@ -1358,15 +1551,30 @@ class AudioWorker:
     def _preprocess_audio(self, audio: np.ndarray) -> np.ndarray:
         """Full audio preprocessing pipeline before transcription.
 
-        Order matters:
-        1. Noise gate first (removes ambient noise floor)
-        2. Pre-emphasis (boosts consonant frequencies for clarity)
-        3. Normalize (consistent volume level)
-        4. Pad (ensure minimum duration for Whisper)
+        Order matters — each stage builds on the previous:
+        1. Bandpass filter (80-3400 Hz): Remove frequencies outside voice range
+        2. Spectral subtraction: Remove estimated background noise profile
+        3. Noise gate (dynamic floor): Silence residual noise in pauses
+        4. Pre-emphasis: Boost consonant frequencies for clarity
+        5. Normalize: Consistent volume level
+        6. Pad: Ensure minimum duration for Whisper
         """
-        audio = self._noise_gate(audio, threshold_db=-40.0)
+        # 1. Bandpass — eliminate sub-bass rumble and high-freq hiss
+        audio = self._bandpass_voice_filter(audio, sample_rate=16000,
+                                            low_hz=80.0, high_hz=3400.0)
+        # 2. Spectral subtraction — remove stationary background noise
+        audio = self._spectral_denoise(audio, sample_rate=16000,
+                                       noise_estimate_ms=300.0,
+                                       oversubtraction=2.0,
+                                       spectral_floor=0.02)
+        # 3. Noise gate with dynamically estimated floor
+        noise_floor = self._estimate_noise_floor(audio, sample_rate=16000)
+        audio = self._noise_gate(audio, noise_floor=noise_floor)
+        # 4. Pre-emphasis — boost consonants
         audio = self._pre_emphasis(audio, coeff=0.97)
+        # 5. Normalize — consistent level
         audio = self._normalize_audio(audio)
+        # 6. Pad — minimum duration for Whisper
         audio = self._pad_audio(audio, sample_rate=16000, min_duration_s=1.5)
         return audio
 
@@ -1374,7 +1582,17 @@ class AudioWorker:
         if whisper_model is None:
             return ""
 
-        # Full audio preprocessing pipeline: noise gate → pre-emphasis → normalize → pad
+        # Early exit: if the raw audio is essentially silence at capture,
+        # skip all processing and Whisper entirely.  This catches segments
+        # where the VAD triggered on electrical noise but the mic captured
+        # nothing meaningful.  We check BEFORE preprocessing because our
+        # noise gate can sometimes attenuate quiet speech too aggressively.
+        raw_rms = float(np.sqrt(np.mean(audio_segment ** 2)))
+        if raw_rms < 0.005:
+            return ""
+
+        # Full audio preprocessing pipeline:
+        # bandpass → spectral denoise → noise gate → pre-emphasis → normalize → pad
         audio_segment = self._preprocess_audio(audio_segment)
 
         segments, _info = whisper_model.transcribe(
@@ -1389,13 +1607,21 @@ class AudioWorker:
             beam_size=1,
             # Neutral contextual prompt for Argentine Spanish
             initial_prompt=self._WHISPER_INITIAL_PROMPT,
-            # Reject hallucinations on noise/silence
-            no_speech_threshold=0.7,
+            # Reject hallucinations on noise/silence — raised from 0.7 to 0.75
+            # to be more aggressive in noisy environments after spectral cleanup
+            no_speech_threshold=0.75,
             # Log-prob threshold: -0.5 was too strict with larger models,
             # causing valid speech to be rejected as empty strings.
             # -0.8 is a balanced compromise — rejects clear garbage but
             # accepts legitimate low-confidence transcriptions.
             log_prob_threshold=-0.8,
+            # Reject repetitive hallucinations ("ruido ruido ruido...")
+            # caused by stationary noise feeding the decoder in a loop.
+            compression_ratio_threshold=2.0,
+            # Prevent previous transcription errors from biasing the next
+            # segment — critical in noisy environments where one bad
+            # transcription can cascade into many.
+            condition_on_previous_text=False,
             # Skip timestamp prediction — saves decoder compute and lets it
             # focus entirely on text accuracy for short segments
             without_timestamps=True,
