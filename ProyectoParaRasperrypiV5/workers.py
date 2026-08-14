@@ -219,17 +219,19 @@ class IntentDispatcher:
             cached_examples = self._example_docs.get(intent_name, [])
             for _example_text, example_doc in cached_examples:
                 similarity = self._similarity(source_doc, example_doc)
-                # If the intent defines required emotions, ensure the current
-                # emotion matches at least one (OR logic) and meets the threshold.
-                if required_emotions:
-                    if not emotion_context:
-                        # no emotion info -> skip this intent
-                        continue
-                    label = str(emotion_context.get("label", "")).lower()
-                    score = float(emotion_context.get("score", 0.0))
-                    matches_emotion = any(label == req.lower() and score >= emotion_threshold for req in required_emotions)
-                    if not matches_emotion:
-                        continue
+                # --- DESHABILITADO: el filtro por emociones no funciona bien ---
+                # Si se reactiva, verificar que las emociones detectadas sean
+                # confiables antes de usarlas para filtrar intents.
+                # if required_emotions:
+                #     if not emotion_context:
+                #         # no emotion info -> skip this intent
+                #         continue
+                #     label = str(emotion_context.get("label", "")).lower()
+                #     score = float(emotion_context.get("score", 0.0))
+                #     matches_emotion = any(label == req.lower() and score >= emotion_threshold for req in required_emotions)
+                #     if not matches_emotion:
+                #         continue
+                # --- FIN DESHABILITADO ---
 
                 if similarity > best_match["confidence"]:
                     best_match = {
@@ -1336,20 +1338,24 @@ class AudioWorker:
     @staticmethod
     def _noise_gate(audio: np.ndarray, threshold_db: float = -40.0,
                     noise_floor: float | None = None) -> np.ndarray:
-        """Improved noise gate with soft-knee curve.
+        """Gentle noise gate with soft-knee curve.
 
-        Instead of hard attenuation (×0.1), uses a smooth gain curve that
-        transitions gradually from full attenuation to unity gain over a
-        6dB "knee" range.  This prevents audible artifacts at gate
-        open/close transitions and preserves soft consonants.
+        Uses a smooth gain curve that transitions gradually from a mild
+        attenuation to unity gain over a 6dB "knee" range.  The minimum
+        gain is 0.2 (not silence) to preserve soft consonants and avoid
+        destroying speech content that Whisper needs.
 
         If noise_floor is provided (from _estimate_noise_floor), the gate
-        threshold is set relative to it (2× noise floor) instead of using
-        the fixed dB value.
+        threshold is set relative to it (1.5× noise floor) instead of
+        using the fixed dB value.
         """
+        # Minimum gain: 0.2 instead of 0.05 — keeps quiet speech audible
+        min_gain = 0.2
+
         if noise_floor is not None:
-            # Set threshold at 2× the estimated noise floor
-            linear_threshold = noise_floor * 2.0
+            # Set threshold at 1.5× the estimated noise floor (was 2×)
+            # Less aggressive: only gate clearly-below-noise content
+            linear_threshold = noise_floor * 1.5
         else:
             linear_threshold = 10.0 ** (threshold_db / 20.0)
 
@@ -1370,14 +1376,14 @@ class AudioWorker:
             window_rms = np.sqrt(np.mean(audio[start:end] ** 2))
 
             if window_rms < knee_low:
-                # Well below threshold — heavy attenuation
-                result[start:end] *= 0.05
+                # Below threshold — mild attenuation (preserve content)
+                result[start:end] *= min_gain
             elif window_rms < linear_threshold:
                 # In the knee region — smooth transition (cosine interpolation)
-                # Maps [knee_low, threshold] → [0.05, 1.0]
+                # Maps [knee_low, threshold] → [min_gain, 1.0]
                 t = (window_rms - knee_low) / (linear_threshold - knee_low)
                 # Smooth step using cosine curve (avoids discontinuities)
-                gain = 0.05 + 0.95 * (0.5 - 0.5 * np.cos(np.pi * t))
+                gain = min_gain + (1.0 - min_gain) * (0.5 - 0.5 * np.cos(np.pi * t))
                 result[start:end] *= gain
             # else: above threshold — keep original (gain=1.0)
 
@@ -1386,27 +1392,29 @@ class AudioWorker:
         if tail_start < len(audio):
             tail_rms = np.sqrt(np.mean(audio[tail_start:] ** 2))
             if tail_rms < knee_low:
-                result[tail_start:] *= 0.05
+                result[tail_start:] *= min_gain
             elif tail_rms < linear_threshold:
                 t = (tail_rms - knee_low) / (linear_threshold - knee_low)
-                gain = 0.05 + 0.95 * (0.5 - 0.5 * np.cos(np.pi * t))
+                gain = min_gain + (1.0 - min_gain) * (0.5 - 0.5 * np.cos(np.pi * t))
                 result[tail_start:] *= gain
 
         return result.astype(np.float32)
 
     @staticmethod
     def _bandpass_voice_filter(audio: np.ndarray, sample_rate: int = 16000,
-                               low_hz: float = 80.0, high_hz: float = 3400.0) -> np.ndarray:
+                               low_hz: float = 80.0, high_hz: float = 7500.0) -> np.ndarray:
         """FFT-based bandpass filter to isolate human voice frequencies.
 
         Zeroes out frequency bins outside [low_hz, high_hz], removing:
         - Sub-bass rumble, vibrations, HVAC hum (< 80 Hz)
-        - High-frequency noise, hiss, electronics (> 3400 Hz)
+        - Ultra-high noise above speech range (> 7500 Hz)
 
-        The 80-3400 Hz range covers the fundamental frequency and first
-        formants of both adult and child voices.  Uses a smooth roll-off
-        (raised cosine taper over 50 Hz) at the edges to avoid ringing
-        artifacts from sharp spectral cuts.
+        The 80-7500 Hz range covers the full speech spectrum including:
+        - Fundamental frequency and formants (80-3400 Hz)
+        - Sibilant consonants: s, sh, ch, f, th (4000-8000 Hz)
+        These high-frequency consonants are critical for Whisper to
+        distinguish similar words.  Uses a smooth roll-off (raised cosine
+        taper over 50 Hz) at the edges to avoid ringing artifacts.
         """
         if len(audio) < 64:
             return audio
@@ -1552,27 +1560,38 @@ class AudioWorker:
         """Full audio preprocessing pipeline before transcription.
 
         Order matters — each stage builds on the previous:
-        1. Bandpass filter (80-3400 Hz): Remove frequencies outside voice range
-        2. Spectral subtraction: Remove estimated background noise profile
-        3. Noise gate (dynamic floor): Silence residual noise in pauses
+        1. Bandpass filter (80-7500 Hz): Remove frequencies outside speech range
+        2. Spectral subtraction: Gentle removal of stationary background noise
+        3. Noise gate (dynamic floor): Mild attenuation of residual noise
         4. Pre-emphasis: Boost consonant frequencies for clarity
         5. Normalize: Consistent volume level
         6. Pad: Ensure minimum duration for Whisper
+
+        IMPORTANT: This pipeline must be minimally invasive.  Whisper was
+        trained on full-bandwidth audio and handles moderate noise well.
+        Over-processing degrades transcription accuracy more than noise does.
+
+        NOTE: Steps 1-4 están deshabilitados porque degradaban la calidad
+        del audio más de lo que ayudaban.  Se conserva el código para
+        poder reactivarlos en el futuro si se mejoran los parámetros.
         """
-        # 1. Bandpass — eliminate sub-bass rumble and high-freq hiss
-        audio = self._bandpass_voice_filter(audio, sample_rate=16000,
-                                            low_hz=80.0, high_hz=3400.0)
-        # 2. Spectral subtraction — remove stationary background noise
-        audio = self._spectral_denoise(audio, sample_rate=16000,
-                                       noise_estimate_ms=300.0,
-                                       oversubtraction=2.0,
-                                       spectral_floor=0.02)
-        # 3. Noise gate with dynamically estimated floor
-        noise_floor = self._estimate_noise_floor(audio, sample_rate=16000)
-        audio = self._noise_gate(audio, noise_floor=noise_floor)
+        # --- DESHABILITADO: el procesamiento de ruido degrada el audio ---
+        # 1. Bandpass — eliminate sub-bass rumble and ultra-high noise
+        # audio = self._bandpass_voice_filter(audio, sample_rate=16000,
+        #                                     low_hz=80.0, high_hz=7500.0)
+        # 2. Spectral subtraction — gentle noise removal
+        # audio = self._spectral_denoise(audio, sample_rate=16000,
+        #                                noise_estimate_ms=300.0,
+        #                                oversubtraction=1.0,
+        #                                spectral_floor=0.08)
+        # 3. Noise gate — mild, preserves soft consonants (min_gain=0.2)
+        # noise_floor = self._estimate_noise_floor(audio, sample_rate=16000)
+        # audio = self._noise_gate(audio, noise_floor=noise_floor)
         # 4. Pre-emphasis — boost consonants
-        audio = self._pre_emphasis(audio, coeff=0.97)
-        # 5. Normalize — consistent level
+        # audio = self._pre_emphasis(audio, coeff=0.97)
+        # --- FIN DESHABILITADO ---
+
+        # 5. Normalize — consistent level (necesario para Whisper)
         audio = self._normalize_audio(audio)
         # 6. Pad — minimum duration for Whisper
         audio = self._pad_audio(audio, sample_rate=16000, min_duration_s=1.5)
@@ -1581,6 +1600,8 @@ class AudioWorker:
     def _transcribe(self, whisper_model: Any, audio_segment: np.ndarray) -> str:
         if whisper_model is None:
             return ""
+
+        _dlog = get_debug_logger()
 
         # Early exit: if the raw audio is essentially silence at capture,
         # skip all processing and Whisper entirely.  This catches segments
@@ -1591,9 +1612,16 @@ class AudioWorker:
         if raw_rms < 0.005:
             return ""
 
+        # Guardar copia del audio crudo ANTES del pipeline de procesamiento
+        # para debug (solo si modo debug está activo)
+        raw_audio_copy = audio_segment.copy() if _dlog else None
+
         # Full audio preprocessing pipeline:
         # bandpass → spectral denoise → noise gate → pre-emphasis → normalize → pad
         audio_segment = self._preprocess_audio(audio_segment)
+
+        # Guardar copia del audio procesado DESPUÉS del pipeline (pre-Whisper)
+        processed_audio_copy = audio_segment.copy() if _dlog else None
 
         segments, _info = whisper_model.transcribe(
             audio_segment,
@@ -1629,7 +1657,18 @@ class AudioWorker:
         text_parts = []
         for segment in segments:
             text_parts.append(segment.text.strip())
-        return " ".join(part for part in text_parts if part).strip()
+        transcript = " ".join(part for part in text_parts if part).strip()
+
+        # Guardar audios de debug (crudo + procesado + transcripción)
+        if _dlog and raw_audio_copy is not None and processed_audio_copy is not None:
+            _dlog.save_debug_audio(
+                raw_audio=raw_audio_copy,
+                processed_audio=processed_audio_copy,
+                transcript_text=transcript,
+                sample_rate=16000,
+            )
+
+        return transcript
 
     def _load_vad(self, sample_rate: int):
         return SileroVadAdapter(sample_rate=sample_rate)

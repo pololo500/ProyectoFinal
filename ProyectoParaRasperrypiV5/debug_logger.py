@@ -20,11 +20,14 @@ Uso:
 from __future__ import annotations
 
 import platform
+import struct
 import sys
 import threading
 import time
 from datetime import datetime
 from pathlib import Path
+
+import numpy as np
 
 
 class DebugLogger:
@@ -32,9 +35,15 @@ class DebugLogger:
 
     def __init__(self, log_dir: Path | None = None) -> None:
         self._lock = threading.Lock()
+        self._audio_counter = 0
+        self._audio_counter_lock = threading.Lock()
         app_dir = Path(__file__).resolve().parent
         self._log_dir = log_dir or (app_dir / "logs")
         self._log_dir.mkdir(parents=True, exist_ok=True)
+
+        # Carpeta de audios de debug (hermana de logs/)
+        self._audio_dir = app_dir / "audios"
+        self._audio_dir.mkdir(parents=True, exist_ok=True)
 
         now = datetime.now()
         filename = f"debug_{now.strftime('%Y-%m-%d_%H-%M-%S')}.txt"
@@ -88,6 +97,109 @@ class DebugLogger:
         """
         suffix = f" ({elapsed_ms:.0f}ms)" if elapsed_ms is not None else ""
         self._write(f"<<< [{component}] {description}{suffix}")
+
+    # ------------------------------------------------------------------
+    # Audio debug — guardar WAV crudos y procesados junto a transcripción
+    # ------------------------------------------------------------------
+
+    def get_audio_debug_dir(self) -> Path:
+        """Retorna la carpeta ``audios/`` creándola si no existe."""
+        self._audio_dir.mkdir(parents=True, exist_ok=True)
+        return self._audio_dir
+
+    def save_debug_audio(
+        self,
+        raw_audio: np.ndarray,
+        processed_audio: np.ndarray,
+        transcript_text: str,
+        sample_rate: int = 16000,
+    ) -> None:
+        """Guarda archivos de debug de una transcripción.
+
+        Genera tres archivos en ``audios/``:
+          - ``{ts}_{counter}_crudo.wav``      — audio tal cual lo captura el mic
+          - ``{ts}_{counter}_procesado.wav``   — audio post-pipeline (pre-Whisper)
+          - ``{ts}_{counter}_transcripcion.txt`` — texto transcripto + métricas
+
+        Nunca lanza excepciones para no afectar el pipeline principal.
+        """
+        try:
+            now = datetime.now()
+            ts_str = now.strftime("%Y-%m-%d_%H-%M-%S")
+
+            with self._audio_counter_lock:
+                self._audio_counter += 1
+                counter = self._audio_counter
+
+            base_name = f"{ts_str}_{counter:03d}"
+            audio_dir = self.get_audio_debug_dir()
+
+            # Guardar audio crudo
+            raw_path = audio_dir / f"{base_name}_crudo.wav"
+            self._save_wav(raw_path, raw_audio, sample_rate)
+
+            # Guardar audio procesado (post-pipeline, pre-Whisper)
+            proc_path = audio_dir / f"{base_name}_procesado.wav"
+            self._save_wav(proc_path, processed_audio, sample_rate)
+
+            # Calcular métricas
+            raw_duration_s = len(raw_audio) / sample_rate
+            proc_duration_s = len(processed_audio) / sample_rate
+            raw_rms = float(np.sqrt(np.mean(raw_audio ** 2))) if len(raw_audio) > 0 else 0.0
+            proc_rms = float(np.sqrt(np.mean(processed_audio ** 2))) if len(processed_audio) > 0 else 0.0
+
+            # Guardar transcripción con métricas
+            txt_path = audio_dir / f"{base_name}_transcripcion.txt"
+            with open(txt_path, "w", encoding="utf-8") as f:
+                f.write(f"Timestamp: {now.strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"Audio crudo: {raw_duration_s:.2f}s ({len(raw_audio)} samples)\n")
+                f.write(f"Audio procesado: {proc_duration_s:.2f}s ({len(processed_audio)} samples)\n")
+                f.write(f"RMS crudo: {raw_rms:.6f}\n")
+                f.write(f"RMS procesado: {proc_rms:.6f}\n")
+                f.write(f"Transcripción: \"{transcript_text}\"\n")
+
+            self._write(
+                f"[AUDIO_DEBUG] Guardados: {base_name}_crudo.wav, "
+                f"{base_name}_procesado.wav, {base_name}_transcripcion.txt"
+            )
+        except Exception as exc:
+            # Nunca interrumpir el pipeline principal por un error de debug
+            try:
+                self._write(f"[AUDIO_DEBUG] Error guardando audios: {exc}")
+            except Exception:
+                pass
+
+    @staticmethod
+    def _save_wav(path: Path, audio: np.ndarray, sample_rate: int) -> None:
+        """Guarda audio float32 como WAV 16-bit PCM sin dependencias externas."""
+        # Convertir float32 [-1.0, 1.0] a int16
+        audio_clipped = np.clip(audio, -1.0, 1.0)
+        audio_int16 = (audio_clipped * 32767).astype(np.int16)
+        raw_data = audio_int16.tobytes()
+
+        n_channels = 1
+        sample_width = 2  # 16-bit = 2 bytes
+        n_frames = len(audio_int16)
+        data_size = n_frames * n_channels * sample_width
+
+        with open(path, "wb") as f:
+            # RIFF header
+            f.write(b"RIFF")
+            f.write(struct.pack("<I", 36 + data_size))
+            f.write(b"WAVE")
+            # fmt chunk
+            f.write(b"fmt ")
+            f.write(struct.pack("<I", 16))  # chunk size
+            f.write(struct.pack("<H", 1))   # PCM format
+            f.write(struct.pack("<H", n_channels))
+            f.write(struct.pack("<I", sample_rate))
+            f.write(struct.pack("<I", sample_rate * n_channels * sample_width))  # byte rate
+            f.write(struct.pack("<H", n_channels * sample_width))  # block align
+            f.write(struct.pack("<H", sample_width * 8))  # bits per sample
+            # data chunk
+            f.write(b"data")
+            f.write(struct.pack("<I", data_size))
+            f.write(raw_data)
 
     # ------------------------------------------------------------------
     # Internal

@@ -25,6 +25,7 @@ pip-wheel-metadata/
 # Local logs and temp files
 *.log
 logs/
+audios/
 exe_stdout.txt
 exe_stderr.txt
 

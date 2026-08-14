@@ -10,8 +10,55 @@ Diseñado para Edge Computing: sin dependencias extra, lógica pura Python.
 from __future__ import annotations
 
 import random
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
+
+
+def _normalize_letter(char: str) -> str:
+    """Quita acentos de una letra para las pistas (á → a, ñ se preserva)."""
+    nfkd = unicodedata.normalize("NFKD", char)
+    return "".join(c for c in nfkd if not unicodedata.combining(c)).upper()
+
+
+def _words_match(guess: str, secret: str) -> bool:
+    """Verifica si la respuesta del niño contiene al menos una palabra
+    significativa del objeto secreto, o viceversa.
+
+    Usa coincidencia por palabras completas (no substrings) para evitar
+    falsos positivos como 'es' → 'estrella' o 'a' → 'banana'.
+    Requiere que las palabras coincidentes tengan al menos 3 caracteres.
+    """
+    if not guess or not secret:
+        return False
+    guess_words = set(re.findall(r"\w+", guess.lower()))
+    secret_words = set(re.findall(r"\w+", secret.lower()))
+    # Filtrar palabras muy cortas (artículos, preposiciones)
+    MIN_WORD_LEN = 3
+    meaningful_guess = {w for w in guess_words if len(w) >= MIN_WORD_LEN}
+    meaningful_secret = {w for w in secret_words if len(w) >= MIN_WORD_LEN}
+    if not meaningful_guess:
+        return False
+    # Match si alguna palabra significativa del guess coincide con el secret,
+    # o si el guess completo es igual al secret completo
+    return bool(meaningful_guess & meaningful_secret) or guess.lower().strip() == secret.lower().strip()
+
+
+def _wants_to_exit(text: str) -> bool:
+    """Detecta si el niño quiere salir del juego usando match por palabras completas.
+
+    Evita falsos positivos como 'noche' (contiene 'no') o 'dinosaurio' (contiene 'no').
+    """
+    normalized = text.lower().strip()
+    # Frases exactas que indican salida (match por substring está OK para frases)
+    exit_phrases = {"no quiero", "no quiero jugar", "no quiero más", "me aburro", "me aburrí"}
+    if any(phrase in normalized for phrase in exit_phrases):
+        return True
+    # Palabras exactas con word boundary (evita 'noche' → 'no', 'rebasta' → 'basta')
+    exit_exact_words = {"basta", "salir", "parar", "chau"}
+    words_in_text = set(re.findall(r"\w+", normalized))
+    return bool(words_in_text & exit_exact_words)
 
 
 # ---------------------------------------------------------------------------
@@ -118,40 +165,49 @@ class VeoVeoSession:
         """Procesa la respuesta del niño."""
         normalized = text.lower().strip()
 
-        # Detectar si quiere salir del juego
-        exit_words = {"no quiero", "basta", "salir", "parar", "chau", "no"}
-        if any(word in normalized for word in exit_words):
+        # Detectar si quiere salir del juego (BUG-1 fix: word boundary match)
+        if _wants_to_exit(normalized):
             return GameResponse(
                 text="¡Fue muy divertido jugar al Veo-veo con vos! "
                      "Cuando quieras jugamos de nuevo.",
                 game_over=True,
             )
 
+        # BUG-2 fix: texto vacío o muy corto no cuenta como intento válido
+        if len(normalized) < 2:
+            return GameResponse(
+                text="No escuché bien. ¿Qué dijiste? Probá de nuevo.",
+            )
+
         self.attempts += 1
 
-        # Verificar si acertó (coincidencia parcial)
-        if self.secret_object.lower() in normalized or normalized in self.secret_object.lower():
+        # BUG-3 fix: verificar acierto por coincidencia de palabras completas
+        if _words_match(normalized, self.secret_object):
             self.rounds_played += 1
             celebration = random.choice(_CELEBRATION_PHRASES)
+            # Guardar el objeto actual antes de iniciar nueva ronda
+            revealed_object = self.secret_object
 
             if self.rounds_played >= self.max_rounds:
                 return GameResponse(
-                    text=f"{celebration} ¡Era {self.secret_object}! "
+                    text=f"{celebration} ¡Era {revealed_object}! "
                          f"Jugamos {self.max_rounds} rondas. ¡Sos increíble!",
                     game_over=True,
                 )
             else:
                 next_round = self.start_round()
                 return GameResponse(
-                    text=f"{celebration} ¡Era {self.secret_object}! "
+                    text=f"{celebration} ¡Era {revealed_object}! "
                          f"¡Vamos con otra! {next_round}",
                 )
         else:
             if self.attempts >= self.max_attempts:
                 self.rounds_played += 1
+                # Guardar el objeto actual antes de iniciar nueva ronda
+                revealed_object = self.secret_object
                 if self.rounds_played >= self.max_rounds:
                     return GameResponse(
-                        text=f"¡Era {self.secret_object}! No te preocupes, "
+                        text=f"¡Era {revealed_object}! No te preocupes, "
                              f"estuvo muy bien. Jugamos {self.max_rounds} rondas. "
                              f"¡La próxima las adivinás todas!",
                         game_over=True,
@@ -159,12 +215,14 @@ class VeoVeoSession:
                 else:
                     next_round = self.start_round()
                     return GameResponse(
-                        text=f"¡Era {self.secret_object}! No pasa nada, "
+                        text=f"¡Era {revealed_object}! No pasa nada, "
                              f"¡vamos con otra! {next_round}",
                     )
             else:
                 encouragement = random.choice(_ENCOURAGEMENT_PHRASES)
-                hint = f"Te doy una pista: empieza con la letra {self.secret_object[0].upper()}."
+                # BUG-5 fix: normalizar letra (quitar acentos) para la pista
+                hint_letter = _normalize_letter(self.secret_object[0])
+                hint = f"Te doy una pista: empieza con la letra {hint_letter}."
                 return GameResponse(
                     text=f"{encouragement} {hint}",
                 )
@@ -190,9 +248,8 @@ class PiedraPapelTijeraSession:
         """Procesa la elección del niño."""
         normalized = text.lower().strip()
 
-        # Detectar si quiere salir
-        exit_words = {"no quiero", "basta", "salir", "parar", "chau"}
-        if any(word in normalized for word in exit_words):
+        # Detectar si quiere salir (BUG-1 fix: word boundary match)
+        if _wants_to_exit(normalized):
             return self._end_game()
 
         # Detectar elección del niño
@@ -346,13 +403,17 @@ class GameEngine:
                 }
             return dispatcher_result
 
+        # BUG-4 fix: guardar game_type ANTES de process_input, que puede
+        # poner _session=None al terminar el juego (game_over=True)
+        current_game_type = self.game_type or "unknown"
+
         # Juego activo: procesar input
         game_response = self.process_input(text)
         if game_response is None:
             return dispatcher_result
 
         return {
-            "intent_name": f"game_{self.game_type or 'unknown'}",
+            "intent_name": f"game_{current_game_type}",
             "confidence": 1.0,
             "response": game_response.text,
             "pilar": game_response.pilar,
