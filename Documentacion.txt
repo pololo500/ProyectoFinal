@@ -1,0 +1,1424 @@
+﻿
+
+ÍNDICE
+
+
+1.Resumen preliminar        3
+1.1 Objetivos del proyecto        4
+1.2 Breve descripción del proyecto        4
+1.3 Beneficios al Negocio        6
+1.4 Plan a Alto Nivel        7
+1.5 Riesgos Identificados        8
+2. Modelo de Negocio        9
+2.1 Business Model Canvas        10
+2.2 Explicación de los nueve módulos        10
+2.3 Oferta - Cuadro de competidores        13
+2.4 Oferta - Productos complementarios        13
+2.5 Análisis económico-financiero        14
+3. Definición de alcance        15
+3.1 Visual story Mapping        15
+3.2 Product Backlog        18
+3.3 Criterios de aceptación        23
+3.4 Criterios de completado.        29
+4. Equipo e Interesados        30
+4.1 Equipo de proyecto        30
+4.2 Matriz de interesados        30
+5. Release planning - Plan de versiones        33
+5.1 Estimación Story Points        33
+5.2 Plan de versiones        33
+6. Plan de comunicaciones        35
+6.1 Comunicaciones del proyecto        35
+7. Experiencia de Usuario        36
+7.1 Prototipo de navegación        36
+7.2 Wireframes Mockups        37
+8. Arquitectura de Software        39
+8.1 Diagrama de Arquitectura        39
+8.2 Frameworks / Componentes utilizados        40
+8.3 Infraestructura tecnológica        41
+8.4 Otros diagramas según corresponda        41
+8.5 Estándar de codificación        43
+9. Plan de pruebas        44
+9.1 Diseño y ejecución de escenario de prueba        44
+9.2 Seguimiento de fallas        47
+10. Manual Instalación        48
+11. Hoja de Ruta        49
+Anexos I. Retrospectiva        50
+Anexos II. Riesgos        52
+Anexos III. Minuta de reunión        53
+Anexos IV. Paper investigación        54
+________________
+1.Resumen preliminar
+v3.0
+Santiago Briasco Calvo
+Anabela Cejas
+Micaela Abril Marrone
+Tomás Agustin Menendez
+Micaela Palau
+Nicolas Pensel
+
+
+Historia de Revisión
+
+
+Fecha
+	Versión
+	Descripción
+	Autor
+	09/04/26
+	1.0
+	Robot peluche de apego para TEA
+	Todos
+	16/04/26
+	2.0
+	Acompañante para niños con características similares al TDAH
+	Todos
+	30/05/26
+	3.0
+	Alcance definitivo
+	Todos
+	 
+1.1 Objetivos del proyecto
+Desarrollar una herramienta interactiva, humanizada e infantil (no realista), diseñada para niños con diagnóstico o con características similares al Trastorno del Espectro Autista (TEA)  de grado 2, brindando apoyo en el desarrollo de habilidades comunicacionales, emocionales y sociales. 
+Su propósito es actuar como una herramienta de apoyo y acompañamiento dentro del hogar, favoreciendo la comunicación, la regulación emocional, la autonomía y el fortalecimiento del vínculo familiar a través de sus pilares cognitivo, emocional, vincular y autónomo. Como beneficio adicional, busca promover alternativas de interacción que contribuyan a reducir la dependencia de pantallas durante las primeras etapas del desarrollo. 
+El objetivo del sistema no es reemplazar la interacción humana, sino actuar como un facilitador que promueva la comunicación, el aprendizaje y el vínculo entre el niño y su entorno familiar, utilizando la tecnología como herramienta de apoyo.
+
+
+1.2 Breve descripción del proyecto
+El proyecto consiste en un ecosistema tecnológico cerrado compuesto por un peluche inteligente interactivo y una aplicación móvil orientada a los padres. Diseñado de forma infantilizada y no realista, nuestro producto funciona como un objeto de transición para la independencia dentro del hogar, apoyo y compañía para el niño. A través de una cámara, micrófono y parlante, el dispositivo interactúa con el niño en tiempo real (utilizando la IA como herramienta) para apoyarlo en su día a día. El dispositivo integrará una interfaz visual minimalista limitada exclusivamente a la zona de los ojos para mostrar expresiones que no resulten sobreestimulantes a los niños. Toda la información captada se procesa localmente para garantizar la privacidad absoluta de la familia, enviando únicamente métricas de desarrollo y herramientas de gestión a la aplicación parental. De este modo, el sistema se articula en torno a tres pilares fundamentales de acción: 
+
+
+1. Pilar Emocional
+* Identificación y gestión emocional: Usar cámara y micrófono para inferir posibles estados emocionales, ayudando al niño en la comprensión de sus sentimientos mediante dinámicas lúdicas, consultas interactivas y una interfaz visual que refleje respuestas empáticas.
+* Apoyo emocional: Crear tácticas de regulación y distracción mediante juegos, rutinas o música. Ante berrinches, brindar opciones como el retiro voluntario o contactar a los padres. Todas estas opciones serán configurables por el usuario responsable que incluso podrá darle un orden de prioridad a las acciones.
+* Fomento del bienestar: Incorporar actividades físicas y de relajación adaptadas, como rutinas de yoga para niños.
+* Estímulos de Presión Profunda y Contacto: Aprovechar el peluche como objeto de apego seguro ("Compañero predilecto"). Implementar dinámicas donde el robot pida contención física ("¿Me das un abrazo fuerte?") , promoviendo la conciencia del propio cuerpo (propiocepción) y la calma física en el niño.
+2. Pilar Cognitivo y de Desarrollo
+* Estimulación de la curiosidad: Configurar el sistema para responder a las preguntas del niño e interactuar mediante juegos tradicionales y lúdicos (como el "Veo veo" o "Piedra, papel o tijera").
+3. Pilar Vincular y Familiar
+* Involucramiento parental y monitoreo: Desarrollar una aplicación móvil (App) exclusiva para los padres que les permita:
+   * Administrar y gestionar el catálogo de canciones del muñeco.
+   * Monitorear el progreso, recibir alertas y festejar los logros del niño en conjunto.
+   * Centralizar herramientas útiles de organización familiar, como recordatorios de turnos médicos y calendarios de vacunación.
+* Gestión de Estímulos y Configuración Sensorial: Permitir a los padres/terapeutas regular el volumen máximo, la intensidad del brillo de los ojos, y personalizar las canciones permitidas a través de la App, asegurando que el producto se adapte al perfil sensorial específico del niño (evitando hipersensibilidades). 
+* Control de sobreestimulación: Monitorear el flujo de la interacción y las mecánicas de juego para asegurar que el producto cumpla su propósito de disminuir el uso de pantallas sin pasarse "para el otro lado", evitando generar una nueva dependencia adictiva en el niño.
+4. Pilar de Autonomía e Independencia
+* Acompañamiento en rutinas diarias: Guiar al niño durante actividades cotidianas mediante recordatorios, indicaciones simples y refuerzos positivos adaptados a su edad, favoreciendo la adquisición progresiva de hábitos y responsabilidades.
+* Facilitación de transiciones: Brindar apoyo durante los cambios entre actividades (por ejemplo, pasar del juego a la comida o de una actividad recreativa al descanso), utilizando anticipaciones, avisos graduales y estrategias lúdicas para reducir la frustración y la resistencia al cambio.
+* Promoción de la toma de decisiones: Fomentar la autonomía mediante la presentación de opciones simples y adecuadas al contexto, permitiendo que el niño participe activamente en pequeñas decisiones de su vida cotidiana.
+* Refuerzo de conductas independientes: Reconocer y celebrar logros relacionados con la iniciativa personal, el cumplimiento de rutinas y la realización de actividades sin asistencia directa, promoviendo la confianza en sus propias capacidades.
+* Desarrollo de habilidades de autorregulación: Incorporar dinámicas y herramientas que ayuden al niño a identificar sus necesidades, solicitar ayuda cuando sea necesario y aplicar estrategias aprendidas para afrontar situaciones cotidianas de manera más autónoma.
+
+
+Cabe aclarar que este proyecto tiene algunas limitaciones:
+* No reemplaza tratamientos médicos: Es un agente de concientización y asistencia familiar, su función es ayudar y acompañar.
+* Uso exclusivo dentro del hogar: El funcionamiento y diseño del dispositivo es para un uso tecnológico exclusivo dentro del ámbito doméstico (del hogar).
+1.3 Beneficios al Negocio
+Como resultado de la implementación de esta solución, la organización obtendrá los siguientes beneficios:
+* Diferenciación frente a la competencia, mediante un producto que combina un dispositivo físico inteligente con una aplicación móvil para padres.
+* Generación de nuevas fuentes de ingresos, a través de la comercialización del peluche inteligente y los servicios asociados a la aplicación.
+* Fidelización de usuarios, promoviendo el uso continuo del ecosistema gracias a la personalización y al seguimiento del desarrollo del niño.
+* Posicionamiento en el sector de tecnología aplicada al desarrollo infantil, fortaleciendo la presencia de la organización en un mercado con creciente demanda.
+1.4 Plan a Alto Nivel
+El proyecto se desarrollará en un plazo de 5 meses, con fecha de finalización y entrega en octubre de 2026. El cronograma se estructura en base a los siguientes hitos principales:
+* Junio: Fase de Diseño y Arquitectura Base
+   * Hito 1: Consolidación de guiones lúdicos, dinámicas de yoga y protocolos de crisis.
+   * Hito 2: Adquisición de componentes y ensamblaje del primer prototipo físico.
+* Julio: Desarrollo del "Cerebro" (Inteligencia Artificial)
+   * Hito 3: Implementación local en la Raspberry Pi de los modelos de visión artificial (lectura de expresiones faciales básicas) y procesamiento de audio (detección de palabras clave y foniatría).
+   * Hito 4: Programación de la lógica conversacional del robot (respuestas a preguntas y árboles de decisión juegos) y de las expresiones en la pantalla minimalista.
+* Agosto: Desarrollo de la Aplicación Móvil
+   * Hito 5: Diseño de la interfaz y desarrollo del frontend/backend de la App para padres.
+   * Hito 6: Integración del panel de métricas de desarrollo infantil, apartados de configuración y el gestor del catálogo de canciones.
+* Septiembre: Integración, Seguridad y Pruebas Alfa
+   * Hito 7: Integración y calibración del ecosistema completo (Peluche App) asegurando que los datos se procesan localmente sin vulnerar la privacidad.
+   * Hito 8: Pruebas de control de sobreestimulación (ajuste de límites de tiempo de juego).
+* Octubre: Pruebas Beta Domésticas y Cierre del Proyecto
+   * Hito 9: Implementación del prototipo en entornos domésticos reales con niños de la edad objetivo para evaluar el impacto vincular, la usabilidad de la app y la recepción del peluche.
+
+
+1.5 Riesgos Identificados
+Durante el diseño del producto, hemos identificado los siguientes riesgos principales respecto al desarrollo normal del proyecto:
+* Si las herramientas de inteligencia artificial seleccionadas no alcanzan el nivel de precisión esperado para interactuar con los niños, entonces algunas funcionalidades del producto podrían no cumplir los objetivos definidos.
+* Si no se consigue validar el producto con profesionales especializados en TEA durante el desarrollo, entonces podrían detectarse necesidades o problemas de diseño en etapas avanzadas del proyecto.
+* Si el hardware elegido para el peluche no cuenta con la capacidad de procesamiento necesaria, entonces podrían presentarse demoras o limitaciones en el funcionamiento del sistema. Lo mismo para la batería, que anularía completamente el uso del producto.
+* Si surgen dificultades en la integración entre el peluche inteligente y la aplicación móvil, entonces podrían verse afectados el intercambio de información y las funcionalidades de monitoreo parental.
+* Si los tiempos de desarrollo resultan mayores a los estimados inicialmente, entonces algunas funcionalidades previstas podrían quedar fuera del alcance de la primera versión del producto.
+* Reconocimiento de voz. Esto es tan desafiante, que lo consideramos un riesgo. Según las primeras investigaciones realizadas, es muy dificil detectar la voz, sobre todo de un niño con las condiciones similares a quienes destinamos el producto. Más allá de eso, creemos que es una funcionalidad clave en el producto, y se maximizará el esfuerzo para lograr/estabilizar su correcto funcionamiento. 
+
+
+
+
+________________
+
+
+2. Modelo de Negocio
+Historia de Revisión
+
+
+Fecha
+	Versión
+	Descripción
+	Autor
+	23/05/01
+	1.0
+	Modelo canvas
+	Todos
+	
+
+	
+
+	
+
+	
+
+	
+
+
+
+________________
+2.1 Business Model Canvas 
+  
+
+2.2 Explicación de los nueve módulos
+2.2.1 Segmento de mercado
+* Padres y madres de niños con TEA: Familias que buscan disminuir activamente el tiempo de exposición de sus hijos a las pantallas y proporcionarles herramientas lúdicas alternativas dentro del hogar.
+* Hogares enfocados en la crianza activa y organizada: Padres interesados en centralizar el seguimiento del desarrollo de sus hijos (emocional, cognitivo, vincular y autónomo).
+* Mercado de prevención primaria: Familias que desean herramientas tecnológicas de soporte temprano para la estimulación del habla y la socialización elemental, sin sustituir la intervención profesional.
+
+
+2.2.2 Propuesta de valor 
+* Para el niño: Un dispositivo físico interactivo (objeto transicional en forma de peluche) que acompaña y asiste los estados anímicos de manera lúdica y empática. Ofrece estimulación cognitiva y del lenguaje mediante juegos tradicionales, música, operando bajo un entorno estrictamente doméstico.
+* Para los padres: Una solución integral de gestión parental que permite el monitoreo transparente de los logros del niño, la recepción de alertas de bienestar (como detecciones tempranas en la limitación del vocabulario) y herramientas de organización familiar centralizadas (calendario de vacunación y recordatorios de turnos médicos).
+
+
+2.2.3 Canales
+* Canales Digitales Directos: Plataforma de comercio electrónico (E-commerce) oficial para la comercialización del dispositivo y tiendas de aplicaciones (App Store y Google Play) para la descarga de la aplicación móvil de gestión.
+* Canales de Concientización y Marketing: Redes sociales enfocadas en la comunidad de crianza y maternidad/paternidad responsable.
+
+
+2.2.4 Relaciones con los clientes
+* Asistencia Automatizada y Personalizada: Soporte técnico y guías de inicio rápido para la vinculación del peluche con la aplicación móvil doméstica.
+* Comunidad y Contenido de Valor: Espacios informativos dentro de la aplicación con recomendaciones de uso basadas en las tres áreas de desarrollo (cognitivo, vincular y emocional).
+* Confianza y Privacidad Estricta: Políticas rigurosas de seguridad de datos, garantizando que el registro de voz, visión y rutinas se maneje de forma confidencial y segura para el entorno familiar.
+
+
+2.2.5 Fuentes de ingresos
+* Venta del Dispositivo Físico (Hardware): Ingreso directo por la comercialización del muñeco interactivo y sus componentes electrónicos integrados.
+* Modelo de Suscripción (Software de la App): Acceso bajo modelo Freemium o suscripción mensual para funciones avanzadas de la aplicación móvil, tales como almacenamiento expandido de historial de métricas y herramientas avanzadas de agenda médica.
+
+
+
+
+2.2.6 Recursos clave
+* Tecnológicos e Infraestructura: Modelos de procesamiento de lenguaje, algoritmos de visión y audio optimizados para la voz infantil, infraestructura en la nube para sincronización de datos y el código fuente de la aplicación móvil.
+* Físicos y Materiales: Componentes electrónicos (microcontroladores, sensores, actuadores, módulos de audio/visión) y materiales textiles seguros, hipoalergénicos y de alta durabilidad para el peluche.
+
+
+2.2.7 Actividades clave 
+* Investigación y Desarrollo (I+D): Optimización constante del software de reconocimiento de voz y procesamiento de emociones para asegurar respuestas dinámicas, infantiles y no realistas.
+* Producción y Ensamblaje: Fabricación del hardware, integración de los sensores en el cuerpo del peluche y control de calidad físico y lógico.
+* Mantenimiento del Ecosistema Digital: Actualización de la aplicación móvil de los padres, corrección de errores y soporte de servidores en la nube.
+* Marketing y Gestión de Comunidad: Campañas orientadas al beneficio del juego tradicional, la reducción del berrinche y la disminución de tiempo de pantallas.
+
+
+2.2.8 Socios clave - Proveedores 
+* Proveedores de Tecnología y Manufactura: Fabricantes de componentes electrónicos y talleres de confección textil industrial especializada en productos infantiles seguros.
+* Profesionales de la Salud y Crianza: Psicólogos infantiles y psicopedagogos que actúen como asesores en el diseño de las dinámicas de contención, berrinches y estimulación del habla.
+* Proveedores de Servicios Cloud: Plataformas de infraestructura en la nube para el procesamiento seguro de datos de telemetría y hosting de la aplicación.
+
+
+2.2.9 Estructura de costos 
+* Costos de Producción Física: Adquisición de hardware (sensores, placas de desarrollo, baterías), materiales textiles y mano de obra para el ensamblaje del dispositivo.
+* Costos de Infraestructura Digital:costos de consumo de servidores en la nube.
+* Costos de Comercialización y Logística: Inversión en marketing digital, distribución física del producto, envíos.
+
+
+
+
+2.3 Oferta - Cuadro de competidores
+Nombre del producto
+	Sitio Web
+	Fortalezas
+	Debilidades
+	Moxie Robot 
+	embodied.com 
+	IA conversacional muy avanzada; excelente desarrollo de habilidades socioemocionales; app complementaria muy detallada para padres. 
+	Precio sumamente elevado; orientado a niños más grandes (5 a 10 años); idioma principal inglés. 
+	Toniebox 
+	tonies.com 
+	100% libre de pantallas; diseño sumamente resistente, acolchado y seguro para niños de 2 a 4 años; fomenta la autonomía mediante el uso de figuras físicas. 
+	No posee IA ni capacidad conversacional; no detecta emociones ni gestiona rutinas; modelo de negocio dependiente de la compra constante de nuevas figuras (Tonies) para renovar el contenido. 
+	Snorble 
+	snorble.com 
+	Especializado en la creación de rutinas y hábitos saludables (especialmente del sueño); diseño amigable e interactivo mediante luces y sonidos. 
+	Enfoque principal limitado al momento de dormir/despertar; carece de un sistema profundo de detección de vocabulario o asistencia foniátrica; no tiene la textura de un peluche tradicional. 
+	2.4 Oferta - Productos complementarios
+Nombre del producto
+	Sitio Web
+	Fortalezas
+	Debilidades
+	Kinedu (App) 
+	kinedu.com 
+	Base de datos exhaustiva de actividades de estimulación temprana avaladas por expertos; excelente seguimiento de hitos del desarrollo cognitivo y motriz para padres. 
+	Solución 100% digital basada en pantallas; requiere el tiempo activo y la disponibilidad del adulto para planificar y ejecutar cada actividad; no interactúa de forma directa con el niño. 
+	Nanit Pro Camera 
+	nanit.com 
+	Monitoreo inteligente por visión artificial; excelente recolección de métricas de bienestar y sueño; aplicación muy completa para la gestión parental. 
+	Dispositivo pasivo (observa y analiza, pero no interactúa ni contiene emocionalmente al niño); uso estático y anclado exclusivamente a la habitación/cuna. 
+	2.5 Análisis económico-financiero
+Según la proyección que pudimos hacer, donde consideramos una inversión inicial de 30 millones de pesos argentinos (donde el principal gasto a afrontar son las computadoras de los 6 integrantes del equipo) obtuvimos:
+* Un Valor Neto Actual (VAN) positivo, de poco más de 18 millones de pesos.
+* Una tasa Interna de Retorno (TIR) cercana al 124%
+Para todo esto es importante aclarar que en el primer año se consideran 4 meses de trabajo, por los meses donde no hubo cuatrimestre, los de vacaciones y que la dedicación del equipo será part time.
+El resultado reflejado, considera un objetivo que consideramos alcanzable de 80 unidades vendidas en el primer año y 180 para el segundo, con el aumento de precio incluido.
+
+
+Por otro lado, el payback (o período de recupero de la inversión) se estima a los 14 meses, llegando al punto de equilibrio muy rápidamente desde el inicio de las operaciones comerciales.
+
+
+Análisis Económico Financiero.xlsx
+________________
+3. Definición de alcance
+
+
+Historia de Revisión
+
+
+Fecha
+	Versión
+	Descripción
+	Autor
+	30/05/2026
+	1.0
+	1er alcance tentativo
+	Todos
+	13/06/2026
+	2.0
+	Refinamiento post redefinir alcance
+	Todos
+	09/07/2026
+	3.0
+	Reescritura de stories a pedido de los profesores
+	Todos
+	
+
+
+
+3.1 Visual story Mapping
+
+
+  
+
+
+
+  
+
+
+
+  
+
+ 
+________________
+3.2 Product Backlog
+ID Historia de usuario
+	Como
+	Quiero
+	Para
+	Prioridad
+	Status
+	#STORY01 - Abrazo 
+	Niño
+	interactuar físicamente con el robot mediante abrazos
+	Aprovechar el peluche como un objeto de apego seguro y obtener contención física.
+	Alta
+	To Do
+	#STORY02 Configuración de robot
+	Padre / Madre
+	gestionar la configuración sensorial a través de la App, incluyendo el volumen máximo, la intensidad del brillo y las canciones
+	asegurar que el producto se adapte al perfil sensorial específico de mi hijo para evitar la sobreestimulación.
+	Alta
+	To Do
+	#STORY03 - Procesamiento y respuesta natural
+	Niño
+	que el sistema procese mis palabras e interactúe conmigo 
+	estimular mi curiosidad a través de opciones no basadas en pantallas
+	Media
+	To Do
+	#STORY04 - Panel de notificacion en la app
+	Padre / Madre
+	acceder a un panel en la App móvil para visualizar métricas de uso diario y alertas de bienestar emocional generadas por el dispositivo 
+	monitorear la frecuencia de interacción del niño con el peluche, anticipar estados de desregulación
+	Media
+	To Do
+	#STORY05 - Análisis  emocional
+	Niño
+	que el robot infiera mis posibles estados emocionales analizando datos de cámara y micrófono de forma local
+	recibir apoyo con tácticas de regulación ante posibles berrinches y dinámicas de yoga para fomentar mi bienestar
+	Media
+	To Do
+	#STORY06 - Juegos / audiolibros / Relajación
+	Niño
+	jugar e interactuar con actividades que propone el peluche 
+	estimular el desarrollo cognitivo
+	Media
+	To Do
+	#STORY07 - Recordatorios
+	Padre / Madre
+	establecer indicaciones, avisos graduales y recordatorios para las rutinas cotidianas a través del dispositivo
+	facilitar las transiciones entre actividades (ej. del juego a la comida) y promover la adquisición progresiva de autonomía
+	Media
+	To Do
+	#STORY08 Herramientas
+	Padre / Madre
+	centralizar herramientas útiles como un calendario de vacunación y recordatorios de turnos médicos en la aplicación
+	mejorar la organización familiar general en un mismo ecosistema.
+	Baja
+	To Do
+	#STORY09 - Celebración de logro
+	Padre / Madre
+	tener una herramienta que me permita enviar una celebración para los logros de mi hijo al completar alguna tarea 
+	Para incentivar que mi hijo/a realice tareas 
+	Baja
+	To do
+	#STORY10 - Recordatorio para el niño
+	Niño
+	que el peluche me recuerde mis actividades diarias 
+	no olvidarme de mis actividades diarias
+	Media
+	To do
+	#STORY11 - Encendido / Apagado
+	Padre / Madre
+	Quiero poder encender/apagar el robot
+	Para poder controlar cuando mi hijo usa el robot
+	Alta 
+	To do
+	#STORY12 - Cargar musica
+	Padre / Madre 
+	tener la posibilidad de subir musicas que mi hijo reconozca
+	que se familiarize con el robot y le guste la música que reproduzca
+	Baja
+	To do
+	#STORY13 - Modo noche
+	Padre/madre
+	Poder poner al muñeco en modo noche
+	que interactúe menos con mi hijo y se pueda dormir
+	Media
+	To do
+	
+
+
+
+________________
+3.3 Criterios de aceptación
+Historia de Usuario: #STORY01 - Abrazo  
+N° Criterio de aceptación
+	Dado...
+	Cuando...
+	Entonces...
+	1. Solicitud de Abrazo.
+	El robot encendido y en modo activo
+	El niño toca el botón que tiene el peluche en la panza
+	El robot activa una respuesta física mediante servomotores realizando movimientos suaves
+	Historia de Usuario: #STORY02 - Configuración de robot
+N° Criterio de aceptación
+	Dado...
+	Cuando...
+	Entonces...
+	1.Atenuación Sensorial (Brillo de Ojos) 
+	El niño presenta hipersensibilidad visual y el padre accede a la configuración en la App
+	El usuario reduce la intensidad del brillo de los ojos y guarda los cambios
+	La aplicación sincroniza localmente vía Wi-Fi/Bluetooth el nuevo parámetro y los ojos del peluche reducen su luminosidad al instante
+	2. Restricción de Volumen Máximo 
+	El peluche está encendido y el volumen máximo fue limitado desde la App parental para evitar hiperacusias
+	El niño interactúa con el peluche y genera una respuesta o reproduce una canción
+	El firmware del módulo de sonido restringe los decibeles impidiendo que el audio sature o supere el límite seguro establecido por los padres
+	________________
+
+
+Historia de Usuario: #STORY03 - Procesamiento y respuesta natural
+N° Criterio de aceptación
+	Dado...
+	Cuando...
+	Entonces...
+	1. Conversación 
+	El robot peluche encendido y captando audio en el entorno doméstico
+
+
+	El niño le formule una pregunta o le hable
+	El sistema debe procesar el audio localmente (detección de palabras clave) y emitir una respuesta mediante su lógica conversacional infantil
+	Historia de Usuario: #STORY04 - Panel de notificación en la app
+N° Criterio de aceptación
+	Dado...
+	Cuando...
+	Entonces...
+	1. Telemetría de Uso (Tiempo de Interacción)
+	El niño interactúa activamente con el peluche a lo largo del día (juegos o rutinas de calma) 
+
+
+	El sistema del dispositivo registra la duración y el tipo de pilar de acción activado 
+	Se procesan los datos y actualiza el panel parental con gráficos simples de tiempo de uso diario (minutos totales) cuidando de no exponer transcripciones de voz 
+	2. Alertas de Bienestar (Monitoreo Semántico)
+	El peluche detecta de forma recurrente indicadores de angustia, frustración o malestar en las interacciones del niño 
+	Se procesa el resumen de las interacciones en el ecosistema 
+	La aplicación parental despliega un indicador visual de atención recomendada junto con sugerencias lúdicas para que los padres intervengan de manera orgánica 
+	________________
+
+
+Historia de Usuario: #STORY05 - Análisis emocional
+N° Criterio de aceptación
+	Dado...
+	Cuando...
+	Entonces...
+	1. Identificación y Reacción Empática 
+	El peluche se encuentra encendido en modo de juego o acompañamiento libre 
+	El dispositivo detecta a través de su camara y microfono expresiones de llanto, enojo o frases de malestar en el niño 
+	El dispositivo interrumpe la conversación común, adapta la expresión visual de sus ojos y emite una respuesta dulce de contención o propone una actividad de distracción 
+	2. Manejo de Pausas en el Habla 
+	El niño se encuentra interactuando verbalmente en un estado de angustia o desregulación emocional 
+	El menor realiza pausas prolongadas o interrupciones a la mitad de sus frases 
+	El sistema evita cortar la escucha de forma abrupta, otorgando un tiempo de espera prudencial para que el niño pueda terminar de expresarse a su propio ritmo 
+	3. Activación de Dinámicas de Bienestar 
+	El dispositivo valida que el niño necesita una estrategia de relajación física o distracción activa 
+	El sistema selecciona una actividad lúdica adaptada, como una rutina guiada de yoga infantil o música tranquila 
+	El peluche guía al niño con indicaciones pausadas y simples, celebrando sus intentos de participación para fomentar la calma 
+	Historia de Usuario: #STORY06 - Juegos / audiolibros / Relajación
+N° Criterio de aceptación
+	Dado...
+	Cuando...
+	Entonces...
+	1. Dinámica de Turnos Estructurada 
+	El peluche inicia una actividad tradicional interactiva, como el juego del "Veo veo" 
+	El dispositivo presenta un elemento del entorno o propone una consigna simple para avanzar en la dinámica
+	El sistema cede el turno de manera clara y explícita, esperando la respuesta del niño sin superponer estímulos ni apurarlo, respetando sus tiempos de procesamiento cognitivo. 
+	2. Flexibilidad ante Respuestas No Lineales 
+	El niño se encuentra participando de una dinámica lúdica propuesta de forma interactiva por el juguete. 
+	El menor responde de forma inesperada, cambia abruptamente de tema o utiliza una palabra fuera del contexto estricto del juego. 
+	El peluche evita penalizar el error o insistir de forma rígida en la estructura previa, redirigiendo la interacción de manera tierna y alegre hacia una nueva propuesta lúdica o de descanso. 
+	3. Refuerzo Positivo No Frustrante 
+	La interacción lúdica llega a una instancia de resolución exitosa, como cuando el niño adivina o completa la consigna. 
+	El dispositivo valida que se cumplió el hito de la actividad planteada. 
+	El peluche celebra el logro con una frase dulce y directa, evitando emitir sonidos fuertes o parpadeos intensos en su interfaz visual que puedan resultar sobreestimulantes para el perfil sensorial del menor. 
+	Historia de Usuario: #STORY07 - Recordatorios
+N° Criterio de aceptación
+	Dado...
+	Cuando...
+	Entonces...
+	1. Sincronización de Avisos de Rutina 
+	La aplicación móvil de gestión parental se encuentra vinculada y operativa. 
+
+
+	El adulto responsable configura un recordatorio o una indicación simple para una actividad cotidiana del niño. 
+	El sistema sincroniza la información y el peluche emite los avisos en el horario y formato estipulado. 
+	2. Anticipación Gradual de Transiciones 
+	Un cambio programado entre dos rutinas distintas (ej. pasar de una actividad recreativa al descanso) está próximo a ocurrir. 
+ 
+	Se alcanza el horario configurado para iniciar la transición gradual. 
+	El peluche brinda anticipaciones y avisos graduales mediante estrategias lúdicas para reducir la frustración y la resistencia al cambio en el niño. 
+	Historia de Usuario: #STORY08 - Herramientas
+N° Criterio de aceptación
+	Dado...
+	Cuando...
+	Entonces...
+	1. Registro de Turnos Médicos 
+	El usuario se encuentra navegando dentro de las herramientas de organización de la aplicación parental
+
+
+	Ingresa y guarda los datos correspondientes a un próximo turno o consulta médica
+	El sistema almacena la información de forma segura y planifica un recordatorio automático en el ecosistema móvil
+	2. Visualización del Calendario de Vacunación 
+
+
+	El panel de calendario de la aplicación móvil se encuentra activo 
+	El usuario consulta el esquema de salud y vacunas obligatorias del niño
+	La interfaz muestra el calendario de vacunación integrado de forma clara, visual y organizada
+	Historia de Usuario: #STORY09 - Celebración de logro
+N° Criterio de aceptación
+	Dado...
+	Cuando...
+	Entonces...
+	1. Activación Remota de Celebraciones 
+	El adulto responsable desea reforzar de manera inmediata una conducta positiva o un logro alcanzado por el niño
+
+
+
+
+	Envía la señal de festejo a través del botón correspondiente en la aplicación móvil
+	El peluche reacciona en tiempo real emitiendo una felicitación dulce y directa para dar el debido reconocimiento y motivación al niño
+	
+
+
+
+Historia de Usuario: #STORY10 - Recordatorio para el niño
+N° Criterio de aceptación
+	Dado...
+	Cuando...
+	Entonces...
+	1. Recordatorio por Pictograma y Voz 
+	Una actividad diaria o rutina del niño ha sido previamente cargada por el adulto mediante la aplicación móvil
+
+
+	Se alcanza el horario exacto programado para el inicio de la actividad
+	El peluche interactivo recuerda verbalmente la tarea al niño y despliega de forma simultánea un pictograma asociado en su interfaz visual para facilitar su comprensión
+	Historia de Usuario: #STORY11 - Encendido / Apagado
+N° Criterio de aceptación
+	Dado...
+	Cuando...
+	Entonces...
+	1. Encendido o apagado del dispositivo
+	Que el peluche se encuentre encendido o apagado
+
+
+	El adulto responsable desee prenderlo o apagarlo 
+	Se prenderá/apagará según el deseo del adulto
+	Historia de Usuario: #STORY12 - Cargar musica
+N° Criterio de aceptación
+	Dado...
+	Cuando...
+	Entonces...
+	1. Cargado de música
+	Que el padre desee subir música para que el robot reproduzca
+
+
+	El adulto ingrese a la app y cargue la canción
+	La app se comunicará con el robot para transferir la canción y almacenarla
+	
+
+
+
+Historia de Usuario: #STORY13 - Modo noche 
+N° Criterio de aceptación
+	Dado...
+	Cuando...
+	Entonces...
+	1. Modo noche
+	Que se hace de noche y no queiro que el muñeco interactue tanto
+
+
+	Toque el botón en la app
+	La app se comunicará con el robot para Transicionar al modo noche
+	3.4 Criterios de completado. 
+Consideramos que una User Story estará DONE cuando cumpla con las siguientes condiciones específicas de nuestro desarrollo de hardware y software:
+1. Revisión de Pares: El código de la historia y los diseños de hardware/carcasas 3D fueron revisados y aprobados por al menos OTROS DOS integrantes del equipo.
+2. Integración en Repositorio: El código correspondiente está mergeado en la rama de integración/QA correspondiente y compila sin warnings ni errores.
+3. Pruebas de Componentes: Se verificó de forma aislada que el componente involucrado en la historia responde correctamente a los estímulos eléctricos y lógicos definidos.
+4. Prueba End-to-End Física: Se realizó el test funcional completo integrando el software con el hardware físico real, comprobando que la acción (ej. Detección de una emoción por cámara o una caricia en el sensor) ejecuta la respuesta esperada en el peluche sin necesidad de mocks.
+5. Control de Estrés y Temperatura: La funcionalidad desarrollada fue probada bajo consumo continuo (mínimo 30 minutos) para garantizar que la temperatura dentro de la carcasa 3D es adecuada y no pone en riesgo el peluche.
+6. Gestión de Defectos: La historia no presenta bugs abiertos de prioridad crítica o alta que afecten la experiencia del niño o la estabilidad del sistema operativo.
+7. Aprobación del Project Manager: La funcionalidad fue demostrada ante el Project Manager y cumple estrictamente con los criterios de aceptación definidos originalmente para esa historia.
+
+
+
+
+
+
+
+
+________________
+4. Equipo e Interesados
+
+
+Historia de Revisión
+
+
+Fecha
+	Versión
+	Descripción
+	Autor
+	6/6/26
+	1.0
+	Debate inicial
+	Todos
+	20/6/26
+	2.0
+	Matriz de interesados
+	Todos
+	
+
+4.1 Equipo de proyecto
+
+
+Rol de Scrum
+	Nombre y apellido
+	Project Manager
+	Pensel Nicolas
+	Software Engineer
+	Micaela Palau
+	Developer SR
+	Anabela Cejas
+	Developer JR
+	Santiago Briasco
+	QA Tester
+	Tomás Menéndez
+	Encargado de Marketing y ventas
+	Micaela Marrone
+	4.2 Matriz de interesados 
+
+
+Fernando Paker
+	Rol: Profesor Departamento de Ingeniería
+	Organización: UNLaM
+	Contacto: fpaker@unlam.edu.ar
+	
+
+
+
+Mariano Bucher
+	Rol: Profesor Departamento de Ingeniería
+	Organización: UNLaM
+	Contacto: mbucher@unlam.edu.ar
+	
+
+
+
+Laura 
+	Rol: Psicóloga 
+	Empresa: Independiente
+	Contacto: 11 5653-1645
+	
+
+
+
+Ludmila
+	Rol: Acompañante terapeutico
+	Empresa: Independiente
+	Contacto: 11 6355-1077
+	
+
+
+
+Mariana
+	Rol: Madre de un niña 4 y un niño de 6
+	Empresa: N/A
+	Contacto: 11 3186-6764
+	
+
+
+
+Nicolás
+	Rol: Padre de una niña de 3 años
+	Empresa: N/A
+	Contacto: 11 6392-2312
+	
+
+
+
+  
+
+________________
+
+
+
+
+5. Release planning - Plan de versiones
+
+
+Historia de Revisión
+
+
+Fecha
+	Versión
+	Descripción
+	Autor
+	6/6/26
+	1.0
+	Definición inicial del plan de versiones
+	Todos
+	
+
+	
+
+	
+
+	
+
+	
+
+5.1 Estimación Story Points
+Para la estimación, utilizaremos la técnica de la serie Fibonacci, ya que la consideramos que es la más gráfica e intuitiva para otras personas interesadas en el proyecto ya que las historias podrán ser fácil y rápidamente comparadas entre ellas.
+5.2 Plan de versiones
+Nuestro plan es entregar tres distintas versiones, que pasamos a detallar:
+Release 1 — MVP: Peluche de apego físico (Junio - Julio) Desarrollaremos el core de interacción física y de sensores del robot, donde podremos validar la utilidad principal como objeto de apego y contención para nuestro público destino. 
+Alcance:
+* Hardware y estructura base: Integración del microcontrolador principal, desarrollo del firmware base, y diseño e impresión 3D de la carcasa interna para alojar electrónica y baterías.
+* Configuración básica: Encendido y apagado manual, control de volumen y ajuste del nivel de luz de los ojos.
+* Interacción física: Capacidad de detectar abrazos y responder con movimientos suaves (mover brazos mediante servomotores).
+* Comunicación y emociones: Respuestas auditivas y visuales básicas mediante módulo de sonido (reproducción de voz humana y sonidos) y expresiones en los ojos.
+* Juego y aprendizaje: Capacidad de reproducir música y audios pregrabados.
+
+
+Release 2 — Inteligencia emocional y actividades (Agosto) Extendemos las capacidades cognitivas del dispositivo, dotándolo de herramientas para interpretar el entorno del niño, interactuar proactivamente y acompañarlo en sus tareas diarias. 
+Alcance:
+* Interacción proactiva: El robot tendrá la iniciativa de pedir un abrazo.
+* Lectura y procesamiento emocional: Integración de visión e inteligencia para leer la emoción por cámara, entender el audio (voz del niño) y preguntar activamente por su estado emocional.
+* Actividades lúdicas y formativas: Incorporación de juegos interactivos (ej. "Veo veo", "Piedra, papel o tijera"), reproducción de audiolibros y uso de pictogramas para acompañar las rutinas.
+* Seguridad: Implementación de la detección y alerta de crisis a nivel local.
+
+
+Release 3 — Ecosistema parental conectado (Septiembre - Octubre) En esta etapa final liberamos las herramientas de control externo, seguimiento y personalización, conectando el dispositivo con los padres y terapeutas. 
+Alcance:
+* Conectividad y personalización (App): Desarrollo de la aplicación de gestión y vinculación del robot mediante Wi-Fi / Bluetooth. Permitirá a los padres cargar música desde la app, cargar las rutinas del niño y configurar el "Modo noche" (para limitar estímulos).
+* Monitoreo y seguimiento: Recopilación y visualización de métricas de uso diario.
+* Alertas y reportes: Envío de reportes de estado emocional del niño y notificaciones de alertas push a los padres en tiempo real (vinculado a las alertas de crisis del Release 2).
+* Asistencia familiar: Configuración de recordatorios médicos y de vacunas.
+
+
+________________
+
+
+
+
+6. Plan de comunicaciones
+Historia de Revisión
+
+
+Fecha
+	Versión
+	Descripción
+	Autor
+	06/06/26
+	1.0
+	Definición inicial de ceremonias
+	Todos
+	26/06/2026
+	2.0
+	Incorporación de más mensajes
+	Todos
+	
+
+6.1 Comunicaciones del proyecto
+
+
+
+
+Mensaje
+	Audiencia / Destinatario
+	Método / Medio
+	Frecuencia
+	Remitente del Mensaje
+	Describe la información a ser comunicada
+	Detalla el o los destinatarios del mensaje (Ej: Equipo del proyecto) 
+	Describe cómo será entregada dicha información (Ej: Escrito / vía e-mail)
+	Indica con qué frecuencia se envía dicha información (Ej: Quincenal)
+	Detalla el o los responsables de elaborar el mensaje 
+	Daily Standup Meeting 
+	Equipo de proyecto 
+	Google Meet 
+	Diaria
+	Project Manager 
+	Refinamiento del Backlog 
+	Equipo de proyecto 
+	Google Meet / Tablero colaborativo 
+	Semanal
+	Project Manager 
+	Retrospectiva del Sprint 
+	Equipo de proyecto 
+	Google Meet 
+	Mensual (Al cierre de cada sprint) 
+	Project Manager 
+	Comunicaciones Formales de la Cátedra 
+	Alumnos con profesores tutores
+	Ms Teams / Presencial
+	Quincenal
+	Equipo docente 
+	Validación con Especialistas 
+	Profesionales de la salud asesores
+	Videoconferencia 
+	Mensual (Asociado a los hitos de diseño lúdico y control de crisis) 
+	Equipo de Proyecto
+	Evaluación con Usuarios 
+	Familias seleccionadas para pruebas (Beta Testers) 
+	Entrevistas presenciales
+	A demanda durante la fase de pruebas 
+	Encargado de Marketing y Ventas / QA Tester 
+	________________
+
+
+7. Experiencia de Usuario
+Historia de Revisión
+
+
+Fecha
+	Versión
+	Descripción
+	Autor
+	25/06/2026
+	1.0
+	Creación de mockups
+	Todos
+	
+
+	
+
+	
+
+	
+
+	
+
+7.1 Prototipo de navegación
+  
+  
+________________
+7.2 Wireframes Mockups
+
+
+  
+  
+  
+
+  
+  
+
+
+
+
+
+
+
+________________
+
+
+8. Arquitectura de Software
+Historia de Revisión
+
+
+Fecha
+	Versión
+	Descripción
+	Autor
+	13/06/26
+	1.0
+	Version Inicial
+	Todos
+	
+
+	
+
+	
+
+	
+
+	
+
+8.1 Diagrama de Arquitectura
+  
+
+8.2 Frameworks / Componentes utilizados
+
+
+Visión Artificial y Rastreo Facial:
+* OpenCV y MediaPipe: Se utilizan en conjunto para gestionar la captura de imágenes a través de la cámara y realizar la extracción de emociones y el rastreo facial.
+Procesamiento de Audio (Voz a Texto):
+* Sounddevice: Se encarga de la interacción directa con el hardware para la captura física de audio a través del micrófono
+* Silero VAD (Voice Activity Detection): Utilizado para detectar inteligentemente la voz y los silencios, lo que permite cortar la grabación en el momento exacto y optimizar el tiempo de procesamiento
+* Faster-Whisper: Implementado para realizar la transcripción rápida y precisa de la voz del niño a texto de manera local
+Procesamiento de Lenguaje Natural:
+* spaCy: Este framework analiza el texto transcrito para comprender semánticamente la intención del niño.
+Saneamiento de Datos y Privacidad:
+* Scrubadub: Librería para la anonimización de datos. Antes de que cualquier información salga del dispositivo hacia la nube, limpia las transcripciones eliminando nombres propios o Información de Identificación Personal (PII)
+
+
+API de LLM externo (fallback)
+Dependencia externa que solo se invoca cuando la intención del niño no coincide con ningún caso del diccionario local.
+
+
+Diccionario local
+Mecanismo que permite que el robot reconozca frases o situaciones ya previstas y responda de forma instantánea, sin necesidad de conectividad ni de invocar al LLM externo. Esto es lo que permite que la mayoría de las interacciones tengan respuesta casi inmediata.
+
+
+
+
+Componentes de hardware
+
+
+Cámara (gran angular): captura de imagen para el módulo de visión artificial para el rastreo facial e inferencia de estado emocional.
+Micrófono (con cancelación de ruido): captura de audio ambiente para el pipeline de voz a texto.
+Parlante / altavoz: reproduce las respuestas generadas, tanto las del diccionario local como las del LLM externo, una vez convertidas a voz (TTS), además de música y audios pregrabados.
+Servomotores: ejecutan las respuestas físicas del peluche (mover brazos/cabeza, reaccionar a un abrazo, contención física), activados por la lógica del diccionario local o por el módulo de visión al detectar caricias/abrazos.
+Batería: alimenta de forma autónoma todo el sistema embebido, sin depender de estar conectado a la red eléctrica todo el tiempo, lo que es crítico para que el peluche sea portátil dentro del hogar.
+
+
+8.3 Infraestructura tecnológica
+
+
+
+
+Descripción 
+	
+
+	Sistema Operativo
+	Raspberry Pi OS / Linux
+	Bases de Datos
+	
+
+	
+
+	
+
+	AppServer / WebServer
+	
+
+	Lenguajes utilizados
+	python
+	
+
+	
+
+	
+
+En caso de utilizar AWS, Azure o cualquier otro tipo de nube indicar nomenclatura de servicios utilizados
+
+
+8.4 Otros diagramas según corresponda
+
+
+  
+
+8.5 Estándar de codificación
+Estándar de codificación principal (Python)
+
+
+Dado que el pipeline y la lógica central en la Raspberry Pi están desarrollados en Python (spaCy, OpenCV, entre otras), el código se regirá estrictamente bajo el estándar PEP 8, asegurando consistencia de estilo, revisión de pares e integración continua.
+
+
+Estándar de intercambio de datos
+
+
+La comunicación entre el dispositivo local y dependencias externas (API de contingencia del LLM) usará JSON.
+
+
+Semantic versioning
+
+
+El proyecto adoptará de manera estricta la especificación de Versionado Semántico 2.0.0 (SemVer) para gestionar el ciclo de vida del software, el firmware del dispositivo físico y la aplicación móvil. Cada identificador de versión seguirá la estructura de tres identificadores numéricos: MAJOR.MINOR.PATCH (Ejemplo: v1.0.0).
+
+
+* MAJOR (X.0.0): Incrementos cuando se introduzcan cambios estructurales o arquitectónicos importantes que rompan la compatibilidad hacia atrás o marquen el inicio de una fase evolutiva crítica del hardware/software.
+* MINOR (0.Y.0): Incrementos cuando se añadan nuevas funcionalidades, capacidades lúdicas o integraciones de servicios locales/nube de forma totalmente compatible con las versiones previas de la misma fase.
+* PATCH (0.0.Z): Incrementos dedicados exclusivamente a la corrección de errores de código (bug fixes), optimizaciones ligeras de rendimiento o ajustes de calibración sensorial sin alterar las historias de usuario base.
+
+
+________________
+
+
+9. Plan de pruebas 
+
+
+Historia de Revisión
+
+
+Fecha
+	Versión
+	Descripción
+	Autor
+	13/06/26
+	1.0
+	Version Inicial
+	Todos
+	20/06/26
+	2.0
+	Ajustes por cambio de alcance
+	Todos
+	09/07/26
+	3.0
+	Retoques final en el plan de pruebas
+	Todos
+	
+
+9.1 Diseño y ejecución de escenario de prueba
+Nuestro proyecto integra hardware, software, e IA. Además de tener el condimento adicional de la interacción y la aprobación del usuario final como indicador de éxito.
+Para garantizar la calidad de nuestro producto, diseñamos meticulosamente una estrategia de pruebas donde mezclamos diferentes tipos de tests (pruebas unitarias tanto de software como de hardware y electrónica, pruebas de integración, de IA/Vision artificial, de stress y de temperatura de los componentes y lo más importante: pruebas de aceptación del usuario).
+
+
+Historia de usuario
+	Escenario de prueba
+	Resultado
+	Observaciones
+	#1
+	Con el peluche encendido y en modo activo, el niño solicita un abrazo. Se verifica que el dispositivo active una respuesta física mediante movimientos suaves para simular una dinámica de contención y afecto 
+	
+
+	
+
+	#2
+	Con el robot encendido, el usuario modifica el valor del volumen actual y reproduce un sonido. Se nota un volumen diferente.
+	
+
+	
+
+	#3
+	El robot está encendido, el usuario le dice algún comando de voz, el robot lo reconoce.
+	
+
+	
+
+	#4
+	Con el robot encendido y vinculado, el usuario inicia la app parental y visualiza de manera completa las métricas de uso del producto
+	
+
+	
+
+	#5
+	Con el robot encendido y vinculado, el niño se posa al alcance de la cámara y el sistema interpreta su estado emocional según rasgos faciales
+	
+
+	
+
+	#6
+	Con el peluche encendido, se inicia una actividad interactiva (ej: "Veo veo"). Se verifica que el dispositivo respete los turnos de habla del niño, responda con flexibilidad adaptativa ante cambios imprevistos de tema y celebre los aciertos con estímulos visuales y auditivos atenuados.
+	
+
+	
+
+	#7
+	Con la rutina completamente cargada en la app, el robot encendido y vinculado da aviso al usuario que tiene que cambiar de actividad en el momento indicado.
+	
+
+	
+
+	#8
+	Con los recordatorios previamente cargados, la app envía notificaciones al usuario sobre la aproximación al evento.
+	
+
+	
+
+	#9
+	Con el robot encendido y vinculado, desde la app iniciada el usuario presiona el botón de “celebrar logro” y el robot da el debido reconocimiento al niño.
+	
+
+	
+
+	#10
+	Con el robot encendido y vinculado, al llegar el momento de una actividad programada, el robot le indica al niño lo que debe hacer mediante un pictograma.
+	
+
+	
+
+	#11
+	Con el robot prendido, cuando toco el boton apagar desde la app que el robot se apague
+	
+
+	
+
+	#12
+	Con el robot apagado, cuando toco el boton prender desde la app que el robot se prenda
+	
+
+	
+
+	#12
+	Con el robot prendido, cargar musica en la app y que el robot sea capaz de reproducirla
+	
+
+	
+
+	#13
+	Con el robot prendido, cuando en la app se active el modo noche, que el robot se ponga en modo noche efectivamente
+	
+
+	
+
+	
+
+
+
+
+
+9.2 Seguimiento de fallas
+Para seguimiento issues, utilizar la herramienta que deseen y volcar la información aquí.[a]
+________________
+
+
+10. Manual Instalación
+
+
+Historia de Revisión
+
+
+Fecha
+	Versión
+	Descripción
+	Autor
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+Describir el proceso de despliegue de la solución.
+________________
+
+
+11. Hoja de Ruta
+Historia de Revisión
+
+
+Fecha
+	Versión
+	Descripción
+	Autor
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+Incluir en una imágen la hoja de ruta a presentar
+________________
+
+
+Anexos I. Retrospectiva
+
+
+Historia de Revisión
+
+
+Fecha
+	Versión
+	Descripción
+	Autor
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+
+
+
+
+DD-MM-AAAA - Retrospectiva  #1
+	¿Qué hicimos bien?
+	* * * * 	¿Qué podemos mejorar?
+	* * * * 	Ideas y propuestas
+	* * * * 	ROI (retorno de la inversión) Indicar número del 2 al -2 de como fué la retrospectiva respecto al tiempo invertido
+	
+
+
+
+
+
+
+
+	
+
+
+
+DD-MM-AAAA - Retrospectiva  #1
+	¿Qué hicimos bien?
+	* * * * 	¿Qué podemos mejorar?
+	* * * * 	Ideas y propuestas
+	* * * * 	ROI (retorno de la inversión) Indicar número del 2 al -2 de como fué la retrospectiva respecto al tiempo invertido
+	
+
+
+
+
+
+
+
+	
+
+________________
+Anexos II. Riesgos
+Historia de Revisión
+
+
+Fecha
+	Versión
+	Descripción
+	Autor
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+
+
+Descripción del riesgo
+	Criticidad
+	Responsable
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	________________
+
+
+Anexos III. Minuta de reunión
+Historia de Revisión
+
+
+Fecha
+	Versión
+	Descripción
+	Autor
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+Minutas de reunión #1 
+ASISTENTES
+NOMBRE Y APELLIDO
+	ÁREA/SECTOR
+	PRESENTE: SI/NO
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	 
+OBJETIVO DE LA REUNIÓN: 
+DATOS DE LA REUNIÓN
+FECHA: 
+MINUTA ELABORADA POR:
+ 
+TEMAS TRATADOS Y PRINCIPALES ACUERDOS:
+
+
+ 
+SEGUIMIENTO Y TEMAS PENDIENTES:
+RESPONSABLE
+	COMPROMISO
+	FECHA DE VENCIMIENTO
+	...
+	...
+	...
+	         
+PRÓXIMA REUNIÓN: A definir.
+________________
+Anexos IV. Paper investigación
+Historia de Revisión
+
+
+Fecha
+	Versión
+	Descripción
+	Autor
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+	
+
+
+
+Incluir en una imagen el póster técnico e incluir el paper de investigación si aplica.
+
+
+
+
+	    
+
+
+	
+
+[a]Esto se irá completando a medida que se hagan las pruebas
