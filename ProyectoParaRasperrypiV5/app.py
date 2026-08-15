@@ -55,6 +55,12 @@ except ImportError:  # Optional dependency for frame rendering in Tkinter.
 from workers import AudioWorker, CameraWorker, IntentDispatcher, SpeechWorker, WorkerMessage, discover_cameras, discover_microphones, discover_output_devices
 
 try:
+    from api_server import ApiServer, robot_state
+except ImportError:
+    ApiServer = None  # type: ignore[misc,assignment]
+    robot_state = None  # type: ignore[assignment]
+
+try:
     from fallback_llm import FallbackLLM
 except ImportError:
     FallbackLLM = None  # type: ignore[misc,assignment]
@@ -133,6 +139,7 @@ class EyeModeApp(tk.Tk):
         self.audio_worker: AudioWorker | None = None
         self.intent_dispatcher: IntentDispatcher | None = None
         self.speech_worker: SpeechWorker | None = None
+        self.api_server: object | None = None
 
         # Subsystems
         self.telemetry = _create_telemetry()
@@ -142,6 +149,8 @@ class EyeModeApp(tk.Tk):
         # Volume limit (0-100)
         self._volume_limit: int = 100
         self._brightness: float = 1.0
+        self._night_mode: bool = False
+        self._power_on: bool = True
 
         # Eye display (created later, after device selection)
         self.eye_canvas: tk.Canvas | None = None
@@ -381,6 +390,9 @@ class EyeModeApp(tk.Tk):
         # Start workers with the selected devices
         self._start_workers(cam_idx, mic_idx, out_idx)
 
+        # Start API server for Android app communication
+        self._start_api_server()
+
         # Start routine check timer
         self.after(30000, self._check_routines)
 
@@ -422,6 +434,66 @@ class EyeModeApp(tk.Tk):
         self.camera_worker.start()
         self.audio_worker.start()
         print("[EyeMode] Workers iniciados", flush=True)
+
+    def _start_api_server(self) -> None:
+        """Initialize and start the REST API server for the parental app."""
+        if ApiServer is None or robot_state is None:
+            print("[EyeMode] API server no disponible", flush=True)
+            return
+
+        # Wire up robot state with subsystems
+        robot_state.telemetry = self.telemetry
+        robot_state.routine_scheduler = self.routine_scheduler
+        robot_state.speech_worker = self.speech_worker
+        robot_state.volume_limit = self._volume_limit
+        robot_state.brightness = self._brightness
+
+        # Callbacks from Android app → robot
+        def _on_celebrate() -> None:
+            if self.speech_worker:
+                self.speech_worker.speak("¡Felicitaciones! ¡Lo lograste! ¡Sos increíble!")
+            if self._eye_display is not None:
+                self.after(0, lambda: self._eye_display.set_expression("feliz"))
+                self.after(5000, lambda: self._eye_display.set_expression("neutral"))
+
+        def _on_config_changed(cfg: dict) -> None:
+            if "volume_limit" in cfg:
+                self._volume_limit = cfg["volume_limit"]
+            if "brightness" in cfg:
+                self._brightness = cfg["brightness"]
+                if self._eye_display is not None:
+                    self.after(0, lambda: self._eye_display.set_brightness(cfg["brightness"]))
+
+        def _on_night_mode(enabled: bool) -> None:
+            self._night_mode = enabled
+            if enabled:
+                if self.speech_worker:
+                    self.speech_worker.speak("Buenas noches. Voy a descansar un ratito.")
+                if self._eye_display is not None:
+                    self.after(0, lambda: self._eye_display.set_expression("dormido"))
+            else:
+                if self.speech_worker:
+                    self.speech_worker.speak("¡Buenos días! ¡Qué lindo verte!")
+                if self._eye_display is not None:
+                    self.after(0, lambda: self._eye_display.set_expression("neutral"))
+
+        def _on_power(on: bool) -> None:
+            self._power_on = on
+            if not on:
+                self.stop_workers()
+                if self._eye_display is not None:
+                    self.after(0, lambda: self._eye_display.set_expression("dormido"))
+
+        robot_state.on_celebrate = _on_celebrate
+        robot_state.on_config_changed = _on_config_changed
+        robot_state.on_night_mode_changed = _on_night_mode
+        robot_state.on_power_changed = _on_power
+
+        try:
+            self.api_server = ApiServer()
+            self.api_server.start()
+        except Exception as exc:
+            print(f"[EyeMode] Error al iniciar API server: {exc}", flush=True)
 
     # ------------------------------------------------------------------
     # Config panel (accessible via 'C' key during eye display)
@@ -563,6 +635,8 @@ class EyeModeApp(tk.Tk):
             self.speech_worker = None
 
     def on_close(self) -> None:
+        if hasattr(self, 'api_server') and self.api_server:
+            self.api_server.stop()
         self.stop_workers()
         self.destroy()
 

@@ -1,29 +1,274 @@
 package com.example.aplicacionparacelular.ui.config
 
+import android.app.Activity
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import com.example.aplicacionparacelular.R
 import com.example.aplicacionparacelular.databinding.FragmentConfigBinding
+import com.example.aplicacionparacelular.network.RobotApiClient
+import com.example.aplicacionparacelular.network.RobotConnectionManager
+import com.example.aplicacionparacelular.network.RobotDiscovery
+import com.google.android.material.snackbar.Snackbar
 
 class ConfigFragment : Fragment() {
 
     private var _binding: FragmentConfigBinding? = null
     private val binding get() = _binding!!
+    private lateinit var viewModel: ConfigViewModel
+
+    private val filePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            result.data?.data?.let { uri ->
+                val context = requireContext()
+                val filename = uri.lastPathSegment?.substringAfterLast("/") ?: "cancion.mp3"
+                try {
+                    val inputStream = context.contentResolver.openInputStream(uri) ?: return@let
+                    val bytes = inputStream.readBytes()
+                    inputStream.close()
+                    viewModel.uploadSong(filename, bytes)
+                } catch (e: Exception) {
+                    Snackbar.make(binding.root, "Error al leer archivo: ${e.message}", Snackbar.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        val configViewModel = ViewModelProvider(this).get(ConfigViewModel::class.java)
+        viewModel = ViewModelProvider(this).get(ConfigViewModel::class.java)
         _binding = FragmentConfigBinding.inflate(inflater, container, false)
         return binding.root
     }
 
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        setupConnectionSection()
+        setupSensorySection()
+        setupNightModeSection()
+        setupSongsSection()
+        setupStatusObservers()
+
+        // Load initial data if already connected
+        if (RobotApiClient.isConfigured()) {
+            viewModel.loadFromRobot()
+            viewModel.loadSongs()
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Connection & Discovery
+    // ------------------------------------------------------------------
+
+    private fun setupConnectionSection() {
+        // Show current IP if already configured
+        val currentIp = RobotApiClient.getRobotIp(requireContext())
+        binding.editRobotIp.setText(currentIp)
+
+        // Manual connect button
+        binding.btnSaveIp.setOnClickListener {
+            val ip = binding.editRobotIp.text.toString().trim()
+            if (ip.isNotBlank()) {
+                connectToRobot(ip)
+            }
+        }
+
+        // Auto-scan button
+        binding.btnAutoScan.setOnClickListener {
+            RobotDiscovery.startScan()
+        }
+
+        // Observe scanning state
+        RobotDiscovery.isScanning.observe(viewLifecycleOwner) { scanning ->
+            binding.btnAutoScan.isEnabled = !scanning
+            binding.btnAutoScan.text = if (scanning) "🔍 Buscando peluche..." else "🔍 Buscar automáticamente"
+            binding.progressScan.visibility = if (scanning) View.VISIBLE else View.GONE
+        }
+
+        // Observe discovered robot
+        RobotDiscovery.discoveredRobot.observe(viewLifecycleOwner) { robot ->
+            if (robot != null) {
+                // Found the robot! Show confirmation and auto-connect
+                binding.txtDiscoveryResult.visibility = View.VISIBLE
+                binding.txtDiscoveryResult.text = "✅ Encontrado: ${robot.deviceName} (${robot.ip})"
+                binding.editRobotIp.setText(robot.ip)
+
+                // Auto-connect
+                connectToRobot(robot.ip, robot.port)
+            }
+        }
+
+        // Observe scan errors
+        RobotDiscovery.scanError.observe(viewLifecycleOwner) { error ->
+            if (error != null) {
+                binding.txtDiscoveryResult.visibility = View.VISIBLE
+                binding.txtDiscoveryResult.text = "⚠️ $error"
+            }
+        }
+
+        // Connection status
+        RobotConnectionManager.isConnected.observe(viewLifecycleOwner) { connected ->
+            binding.txtConnectionStatus.text = if (connected) "🟢 Conectado" else "🔴 Desconectado"
+        }
+
+        // Auto-scan on first visit if not configured
+        if (!RobotApiClient.isConfigured()) {
+            RobotDiscovery.startScan()
+        }
+    }
+
+    private fun connectToRobot(ip: String, port: Int = 8080) {
+        RobotApiClient.setRobotAddress(requireContext(), ip, port)
+        RobotConnectionManager.startPolling()
+        Snackbar.make(binding.root, "Conectando a $ip:$port...", Snackbar.LENGTH_SHORT).show()
+        viewModel.loadFromRobot()
+        viewModel.loadSongs()
+    }
+
+    // ------------------------------------------------------------------
+    // Sensory Configuration
+    // ------------------------------------------------------------------
+
+    private fun setupSensorySection() {
+        // Volume slider
+        binding.sliderVolume.addOnChangeListener { _, value, fromUser ->
+            if (fromUser) {
+                viewModel.setVolumeLimit(value.toInt())
+                binding.txtVolumeValue.text = "${value.toInt()}%"
+            }
+        }
+        viewModel.volumeLimit.observe(viewLifecycleOwner) { value ->
+            binding.sliderVolume.value = value.toFloat()
+            binding.txtVolumeValue.text = "$value%"
+        }
+
+        // Brightness slider
+        binding.sliderBrightness.addOnChangeListener { _, value, fromUser ->
+            if (fromUser) {
+                viewModel.setBrightness(value.toInt())
+                binding.txtBrightnessValue.text = "${value.toInt()}%"
+            }
+        }
+        viewModel.brightness.observe(viewLifecycleOwner) { value ->
+            binding.sliderBrightness.value = value.toFloat()
+            binding.txtBrightnessValue.text = "$value%"
+        }
+
+        // Apply config button
+        binding.btnApplyConfig.setOnClickListener {
+            viewModel.applyConfig()
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Night Mode
+    // ------------------------------------------------------------------
+
+    private fun setupNightModeSection() {
+        binding.switchNightMode.setOnCheckedChangeListener(null)
+        viewModel.nightMode.observe(viewLifecycleOwner) { enabled ->
+            binding.switchNightMode.isChecked = enabled
+        }
+        binding.switchNightMode.setOnCheckedChangeListener { _, _ ->
+            viewModel.toggleNightMode()
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Songs Management
+    // ------------------------------------------------------------------
+
+    private fun setupSongsSection() {
+        binding.btnUploadSong.setOnClickListener {
+            val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                type = "audio/*"
+            }
+            filePickerLauncher.launch(intent)
+        }
+
+        viewModel.songs.observe(viewLifecycleOwner) { songs ->
+            binding.songsContainer.removeAllViews()
+            if (songs.isEmpty()) {
+                val tv = TextView(requireContext()).apply {
+                    text = "No hay canciones cargadas"
+                    setPadding(0, 16, 0, 16)
+                    setTextColor(resources.getColor(R.color.text_hint, null))
+                }
+                binding.songsContainer.addView(tv)
+            } else {
+                for (song in songs) {
+                    val row = LinearLayout(requireContext()).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = android.view.Gravity.CENTER_VERTICAL
+                        setPadding(0, 8, 0, 8)
+                    }
+                    val nameText = TextView(requireContext()).apply {
+                        text = "🎵 ${song.filename}"
+                        textSize = 14f
+                        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                    }
+                    val sizeText = TextView(requireContext()).apply {
+                        text = "${song.sizeBytes / 1024}KB"
+                        textSize = 12f
+                        setTextColor(resources.getColor(R.color.text_hint, null))
+                        setPadding(16, 0, 16, 0)
+                    }
+                    val deleteBtn = com.google.android.material.button.MaterialButton(
+                        requireContext(),
+                        null,
+                        com.google.android.material.R.attr.materialButtonOutlinedStyle
+                    ).apply {
+                        text = "✕"
+                        textSize = 12f
+                        minimumWidth = 0
+                        minimumHeight = 0
+                        setPadding(16, 0, 16, 0)
+                        setOnClickListener {
+                            AlertDialog.Builder(requireContext())
+                                .setTitle("Eliminar canción")
+                                .setMessage("¿Eliminar '${song.filename}'?")
+                                .setPositiveButton("Eliminar") { _, _ -> viewModel.deleteSong(song.filename) }
+                                .setNegativeButton("Cancelar", null)
+                                .show()
+                        }
+                    }
+                    row.addView(nameText)
+                    row.addView(sizeText)
+                    row.addView(deleteBtn)
+                    binding.songsContainer.addView(row)
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Status Messages
+    // ------------------------------------------------------------------
+
+    private fun setupStatusObservers() {
+        viewModel.statusMessage.observe(viewLifecycleOwner) { msg ->
+            if (msg != null) {
+                Snackbar.make(binding.root, msg, Snackbar.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     override fun onDestroyView() {
+        RobotDiscovery.stopScan()
         super.onDestroyView()
         _binding = null
     }

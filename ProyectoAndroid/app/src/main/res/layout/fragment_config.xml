@@ -14,7 +14,104 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <!-- Sensory Configuration -->
+        <!-- Connection Section -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/config_connection_title"
+            android:textAppearance="@style/TextAppearance.App.SectionTitle" />
+
+        <com.google.android.material.card.MaterialCardView
+            style="@style/Widget.App.CardView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/txt_connection_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🔴 Desconectado"
+                    android:textSize="14sp"
+                    android:layout_marginBottom="12dp" />
+
+                <!-- Auto-scan button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_auto_scan"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="🔍 Buscar automáticamente"
+                    app:cornerRadius="12dp"
+                    app:backgroundTint="@color/tertiary" />
+
+                <!-- Scanning progress -->
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/progress_scan"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:indeterminate="true"
+                    android:visibility="gone"
+                    app:trackColor="@color/card_bg_mint"
+                    app:indicatorColor="@color/tertiary" />
+
+                <!-- Discovery result -->
+                <TextView
+                    android:id="@+id/txt_discovery_result"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="14sp"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="8dp"
+                    android:visibility="gone" />
+
+                <!-- Divider -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="12dp"
+                    android:layout_marginBottom="12dp"
+                    android:background="@color/divider" />
+
+                <!-- Manual IP input (fallback) -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="O ingresá la IP manualmente:"
+                    android:textSize="13sp"
+                    android:textColor="@color/text_hint"
+                    android:layout_marginBottom="8dp" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="IP del Robot (ej. 192.168.1.100)"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/edit_robot_ip"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="text"
+                        android:textSize="16sp" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_save_ip"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Conectar manualmente"
+                    app:cornerRadius="8dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Sensory Configuration Section -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -24,109 +121,101 @@
         <com.google.android.material.card.MaterialCardView
             style="@style/Widget.App.CardView"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <!-- Volume Slider -->
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/config_volume_label"
-                    android:textAppearance="@style/TextAppearance.App.CardTitle" />
-
-                <com.google.android.material.slider.Slider
-                    android:id="@+id/slider_volume"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:value="70"
-                    android:valueFrom="0"
-                    android:valueTo="100"
-                    app:thumbColor="@color/primary"
-                    app:trackColorActive="@color/primary"
-                    app:trackColorInactive="@color/divider" />
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginTop="8dp"
-                    android:layout_marginBottom="8dp"
-                    android:background="@color/divider" />
-
-                <!-- Brightness Slider -->
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="@string/config_brightness_label"
-                    android:textAppearance="@style/TextAppearance.App.CardTitle" />
-
-                <com.google.android.material.slider.Slider
-                    android:id="@+id/slider_brightness"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:value="50"
-                    android:valueFrom="0"
-                    android:valueTo="100"
-                    app:thumbColor="@color/secondary"
-                    app:trackColorActive="@color/secondary"
-                    app:trackColorInactive="@color/divider" />
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginTop="8dp"
-                    android:layout_marginBottom="8dp"
-                    android:background="@color/divider" />
-
-                <!-- Night Mode Toggle -->
+                <!-- Volume -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <LinearLayout
+                    <TextView
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:orientation="vertical">
+                        android:text="🔊 @string/config_volume_label"
+                        android:textSize="15sp" />
 
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/config_night_mode"
-                            android:textAppearance="@style/TextAppearance.App.CardTitle" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/config_night_mode_subtitle"
-                            android:textAppearance="@style/TextAppearance.App.CardSubtitle" />
-                    </LinearLayout>
-
-                    <com.google.android.material.switchmaterial.SwitchMaterial
-                        android:id="@+id/switch_night_mode"
+                    <TextView
+                        android:id="@+id/txt_volume_value"
                         android:layout_width="wrap_content"
-                        android:layout_height="wrap_content" />
+                        android:layout_height="wrap_content"
+                        android:text="100%"
+                        android:textSize="14sp"
+                        android:textColor="@color/primary" />
                 </LinearLayout>
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/slider_volume"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:valueFrom="0"
+                    android:valueTo="100"
+                    android:value="100"
+                    android:stepSize="5"
+                    app:trackColorActive="@color/primary"
+                    app:thumbColor="@color/primary" />
+
+                <!-- Brightness -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="💡 @string/config_brightness_label"
+                        android:textSize="15sp" />
+
+                    <TextView
+                        android:id="@+id/txt_brightness_value"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="100%"
+                        android:textSize="14sp"
+                        android:textColor="@color/primary" />
+                </LinearLayout>
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/slider_brightness"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:valueFrom="0"
+                    android:valueTo="100"
+                    android:value="100"
+                    android:stepSize="5"
+                    app:trackColorActive="@color/card_emotion_happy"
+                    app:thumbColor="@color/card_emotion_happy" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_apply_config"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Aplicar cambios"
+                    app:cornerRadius="8dp"
+                    app:backgroundTint="@color/tertiary" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Overstimulation Control -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/section_margin_top"
-            android:text="@string/config_overstimulation_title"
-            android:textAppearance="@style/TextAppearance.App.SectionTitle" />
-
+        <!-- Night Mode Section -->
         <com.google.android.material.card.MaterialCardView
-            style="@style/Widget.App.CardView"
+            style="@style/Widget.App.CardView.Colored"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:cardBackgroundColor="@color/card_bg_sky">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -143,124 +232,90 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/config_playtime_limit"
+                        android:text="🌙 @string/config_night_mode"
                         android:textAppearance="@style/TextAppearance.App.CardTitle" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/config_playtime_limit_subtitle"
+                        android:text="@string/config_night_mode_subtitle"
                         android:textAppearance="@style/TextAppearance.App.CardSubtitle" />
                 </LinearLayout>
 
                 <com.google.android.material.switchmaterial.SwitchMaterial
-                    android:id="@+id/switch_playtime_limit"
+                    android:id="@+id/switch_night_mode"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Songs Catalog -->
+        <!-- Songs Section -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/section_margin_top"
             android:text="@string/config_songs_title"
-            android:textAppearance="@style/TextAppearance.App.SectionTitle" />
-
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/card_songs"
-            style="@style/Widget.App.CardView.Colored"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:clickable="true"
-            android:focusable="true"
-            app:cardBackgroundColor="@color/card_bg_lavender"
-            app:rippleColor="@color/primary_light">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <ImageView
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
-                    android:contentDescription="@string/config_songs_title"
-                    android:padding="8dp"
-                    app:srcCompat="@drawable/ic_slideshow_black_24dp"
-                    app:tint="@color/primary" />
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/config_songs_manage"
-                        android:textAppearance="@style/TextAppearance.App.CardTitle" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/config_songs_subtitle"
-                        android:textAppearance="@style/TextAppearance.App.CardSubtitle" />
-                </LinearLayout>
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Connection -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/section_margin_top"
-            android:text="@string/config_connection_title"
             android:textAppearance="@style/TextAppearance.App.SectionTitle" />
 
         <com.google.android.material.card.MaterialCardView
             style="@style/Widget.App.CardView"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/config_songs_subtitle"
+                    android:textAppearance="@style/TextAppearance.App.CardSubtitle"
+                    android:layout_marginBottom="12dp" />
+
+                <LinearLayout
+                    android:id="@+id/songs_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
                 <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_pair"
+                    android:id="@+id/btn_upload_song"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="@string/config_connection_pair"
-                    app:icon="@drawable/ic_teddy_24dp"
-                    app:strokeColor="@color/primary" />
+                    android:layout_marginTop="8dp"
+                    android:text="📁 Subir canción"
+                    app:cornerRadius="8dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <!-- About -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/section_margin_top"
-            android:text="@string/config_about_title"
-            android:textAppearance="@style/TextAppearance.App.SectionTitle" />
-
         <com.google.android.material.card.MaterialCardView
-            style="@style/Widget.App.CardView"
+            style="@style/Widget.App.CardView.Colored"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content">
+            android:layout_height="wrap_content"
+            app:cardBackgroundColor="@color/card_bg_lavender">
 
-            <TextView
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/config_version"
-                android:textAppearance="@style/TextAppearance.App.CardSubtitle" />
+                android:orientation="vertical"
+                android:gravity="center">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/config_about_title"
+                    android:textAppearance="@style/TextAppearance.App.CardTitle" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/config_version"
+                    android:textAppearance="@style/TextAppearance.App.CardSubtitle" />
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
     </LinearLayout>

@@ -13,6 +13,7 @@ import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
 import androidx.appcompat.app.AppCompatActivity
 import com.example.aplicacionparacelular.databinding.ActivityMainBinding
+import com.example.aplicacionparacelular.network.RobotConnectionManager
 
 class MainActivity : AppCompatActivity() {
 
@@ -25,15 +26,35 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         setSupportActionBar(binding.appBarMain.toolbar)
 
+        // Initialize Robot connection
+        RobotConnectionManager.init(this)
+        RobotConnectionManager.startPolling()
+
         binding.appBarMain.fab?.setOnClickListener { view ->
-            Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                .setAction("Action", null)
-                .setAnchorView(R.id.fab).show()
+            // Celebrate achievement - send signal to robot
+            RobotConnectionManager.celebrate { result ->
+                val message = when (result) {
+                    is com.example.aplicacionparacelular.network.ApiResult.Success ->
+                        "🎉 ¡Celebración enviada al peluche!"
+                    is com.example.aplicacionparacelular.network.ApiResult.Error ->
+                        "No se pudo enviar. ¿Está conectado el peluche?"
+                }
+                Snackbar.make(view, message, Snackbar.LENGTH_LONG)
+                    .setAnchorView(R.id.fab).show()
+            }
         }
 
         val navHostFragment =
             (supportFragmentManager.findFragmentById(R.id.nav_host_fragment_content_main) as NavHostFragment?)!!
         val navController = navHostFragment.navController
+
+        // Show/hide FAB based on current destination
+        navController.addOnDestinationChangedListener { _, destination, _ ->
+            binding.appBarMain.fab?.visibility = when (destination.id) {
+                R.id.nav_dashboard -> android.view.View.VISIBLE
+                else -> android.view.View.GONE
+            }
+        }
 
         binding.navView?.let {
             appBarConfiguration = AppBarConfiguration(
@@ -55,6 +76,11 @@ class MainActivity : AppCompatActivity() {
             setupActionBarWithNavController(navController, appBarConfiguration)
             it.setupWithNavController(navController)
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        RobotConnectionManager.stopPolling()
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
