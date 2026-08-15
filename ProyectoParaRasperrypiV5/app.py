@@ -54,6 +54,20 @@ except ImportError:  # Optional dependency for frame rendering in Tkinter.
 
 from workers import AudioWorker, CameraWorker, IntentDispatcher, SpeechWorker, WorkerMessage, discover_cameras, discover_microphones, discover_output_devices
 
+# Cloud services (modo nube)
+try:
+    from cloud_services import CloudSTT, CloudLLM, CloudTTS
+    _CLOUD_AVAILABLE = True
+except ImportError:
+    _CLOUD_AVAILABLE = False
+
+# Leer API key de .env si existe
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 try:
     from api_server import ApiServer, robot_state
 except ImportError:
@@ -152,6 +166,10 @@ class EyeModeApp(tk.Tk):
         self._night_mode: bool = False
         self._power_on: bool = True
 
+        # Cloud mode (#CLOUD-001)
+        self._cloud_mode: bool = False
+        self._groq_api_key: str = os.environ.get("GROQ_API_KEY", "")
+
         # Eye display (created later, after device selection)
         self.eye_canvas: tk.Canvas | None = None
         self._eye_display = None
@@ -235,9 +253,51 @@ class EyeModeApp(tk.Tk):
         if out_values:
             self._sel_out_combo.current(0)
 
+        # --- Processing mode selector (#CLOUD-001) ---
+        tk.Label(self._setup_frame, text="⚙️  Procesamiento:", **label_style).grid(
+            row=5, column=0, sticky="w", pady=8, padx=(0, 16),
+        )
+        mode_frame = tk.Frame(self._setup_frame, bg="#1a1a2e")
+        mode_frame.grid(row=5, column=1, sticky="w", pady=8)
+
+        self._mode_var = tk.StringVar(value="local")
+        tk.Radiobutton(
+            mode_frame, text="🟢 Local (Edge - Privacidad)",
+            variable=self._mode_var, value="local",
+            fg="#b0bec5", bg="#1a1a2e", selectcolor="#263238",
+            activebackground="#1a1a2e", activeforeground="#e0f7fa",
+            font=("Segoe UI", 11),
+            command=self._on_mode_changed,
+        ).pack(side="left", padx=(0, 16))
+        tk.Radiobutton(
+            mode_frame, text="☁️ Nube (Alta Fidelidad)",
+            variable=self._mode_var, value="cloud",
+            fg="#b0bec5", bg="#1a1a2e", selectcolor="#263238",
+            activebackground="#1a1a2e", activeforeground="#e0f7fa",
+            font=("Segoe UI", 11),
+            command=self._on_mode_changed,
+            state="normal" if _CLOUD_AVAILABLE else "disabled",
+        ).pack(side="left")
+
+        # API Key field (hidden by default, shown when cloud mode is selected)
+        self._apikey_frame = tk.Frame(self._setup_frame, bg="#1a1a2e")
+        self._apikey_frame.grid(row=6, column=0, columnspan=2, sticky="we", pady=(0, 4))
+        self._apikey_frame.grid_remove()  # Oculto por defecto
+
+        tk.Label(self._apikey_frame, text="🔑  API Key Groq:", **label_style).pack(
+            side="left", padx=(0, 8),
+        )
+        self._apikey_var = tk.StringVar(value=self._groq_api_key)
+        self._apikey_entry = tk.Entry(
+            self._apikey_frame, textvariable=self._apikey_var,
+            font=("Segoe UI", 11), width=44, show="•",
+            bg="#263238", fg="#e0f7fa", insertbackground="#e0f7fa",
+        )
+        self._apikey_entry.pack(side="left", fill="x", expand=True)
+
         # --- Test buttons ---
         test_frame = tk.Frame(self._setup_frame, bg="#1a1a2e")
-        test_frame.grid(row=5, column=0, columnspan=2, pady=(8, 0))
+        test_frame.grid(row=7, column=0, columnspan=2, pady=(8, 0))
 
         self._test_mic_btn = tk.Button(
             test_frame, text="🎤 Probar Micrófono",
@@ -262,7 +322,7 @@ class EyeModeApp(tk.Tk):
         tk.Label(
             self._setup_frame, textvariable=self._setup_status_var,
             fg="#80cbc4", bg="#1a1a2e", font=("Segoe UI", 10),
-        ).grid(row=6, column=0, columnspan=2, pady=(8, 0))
+        ).grid(row=8, column=0, columnspan=2, pady=(8, 0))
 
         # Start button
         self._start_btn = tk.Button(
@@ -275,7 +335,7 @@ class EyeModeApp(tk.Tk):
             cursor="hand2",
             command=self._on_start_pressed,
         )
-        self._start_btn.grid(row=7, column=0, columnspan=2, pady=(24, 0))
+        self._start_btn.grid(row=9, column=0, columnspan=2, pady=(24, 0))
 
     def _get_selected_camera_idx(self) -> int:
         if not self.camera_options:
@@ -294,6 +354,13 @@ class EyeModeApp(tk.Tk):
             return None
         idx = self._sel_out_combo.current()
         return self.output_device_options[max(0, idx)][0]
+
+    def _on_mode_changed(self) -> None:
+        """Mostrar/ocultar campo de API key según el modo seleccionado."""
+        if self._mode_var.get() == "cloud":
+            self._apikey_frame.grid()
+        else:
+            self._apikey_frame.grid_remove()
 
     def _test_microphone_setup(self) -> None:
         """Record 3s from selected mic and play back through selected speaker."""
@@ -353,6 +420,13 @@ class EyeModeApp(tk.Tk):
         mic_idx = self._get_selected_mic_idx()
         out_idx = self._get_selected_out_idx()
 
+        self._cloud_mode = self._mode_var.get() == "cloud"
+        if self._cloud_mode:
+            self._groq_api_key = self._apikey_var.get().strip()
+            if not self._groq_api_key:
+                self._setup_status_var.set("⚠ Ingresá la API Key de Groq para usar modo Nube")
+                return
+
         if mic_idx is None:
             mic_idx = -1
 
@@ -404,10 +478,22 @@ class EyeModeApp(tk.Tk):
             print(f"[EyeMode] ERROR NLU: {exc}", flush=True)
             return
 
+        # Cloud services (si modo nube está activo)
+        cloud_stt = None
+        cloud_llm = None
+        cloud_tts = None
+        if self._cloud_mode and _CLOUD_AVAILABLE:
+            cloud_stt = CloudSTT(self._groq_api_key)
+            cloud_llm = CloudLLM(self._groq_api_key)
+            cloud_tts = CloudTTS()
+            print("[EyeMode] Modo NUBE activo — usando Groq + Google gTTS", flush=True)
+
         self.speech_worker = SpeechWorker(
             output_device_index=out_idx,
             message_queue=self.message_queue,
             message_semaphore=self.message_queue_semaphore,
+            cloud_mode=self._cloud_mode,
+            cloud_tts=cloud_tts,
         )
         self.speech_worker.start()
 
@@ -428,7 +514,10 @@ class EyeModeApp(tk.Tk):
             telemetry=self.telemetry,
             vocabulary_tracker=self.vocabulary_tracker,
             routine_scheduler=self.routine_scheduler,
-            fallback_llm=FallbackLLM() if FallbackLLM is not None else None,
+            fallback_llm=FallbackLLM() if (FallbackLLM is not None and not self._cloud_mode) else None,
+            cloud_mode=self._cloud_mode,
+            cloud_stt=cloud_stt,
+            cloud_llm=cloud_llm,
         )
 
         self.camera_worker.start()
@@ -679,6 +768,10 @@ class EdgeAiDesktopApp(tk.Tk):
         self._mic_desc = "inactivo"
         self._mic_volume_pct = 0
 
+        # Cloud mode (#CLOUD-001)
+        self._cloud_mode: bool = False
+        self._groq_api_key: str = os.environ.get("GROQ_API_KEY", "")
+
         self._build_ui()
         self._refresh_device_labels()
         self.after(30, self._poll_queues)
@@ -732,16 +825,39 @@ class EdgeAiDesktopApp(tk.Tk):
         self.test_audio_button = ttk.Button(speaker_frame, text="Probar", command=self._test_audio_output, width=8)
         self.test_audio_button.pack(side="left", padx=(8, 0))
 
+        # --- Processing mode selector (#CLOUD-001) ---
+        ttk.Label(controls, text="Modo:").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=4)
+        mode_frame_dbg = ttk.Frame(controls)
+        mode_frame_dbg.grid(row=3, column=1, sticky="w", pady=4)
+
+        self._mode_var = tk.StringVar(value="local")
+        ttk.Radiobutton(
+            mode_frame_dbg, text="🟢 Local (Edge)",
+            variable=self._mode_var, value="local",
+        ).pack(side="left", padx=(0, 12))
+        ttk.Radiobutton(
+            mode_frame_dbg, text="☁️ Nube",
+            variable=self._mode_var, value="cloud",
+            state="normal" if _CLOUD_AVAILABLE else "disabled",
+        ).pack(side="left", padx=(0, 12))
+
+        self._apikey_var_dbg = tk.StringVar(value=self._groq_api_key)
+        ttk.Label(mode_frame_dbg, text="Key:").pack(side="left", padx=(8, 4))
+        self._apikey_entry_dbg = ttk.Entry(
+            mode_frame_dbg, textvariable=self._apikey_var_dbg, width=30, show="•",
+        )
+        self._apikey_entry_dbg.pack(side="left")
+
         # --- Sensory config row (#EPIC-002) ---
-        ttk.Label(controls, text="Vol. máx:").grid(row=3, column=0, sticky="w", padx=(0, 8), pady=4)
+        ttk.Label(controls, text="Vol. máx:").grid(row=4, column=0, sticky="w", padx=(0, 8), pady=4)
         self._volume_var = tk.IntVar(value=100)
         vol_scale = ttk.Scale(controls, from_=0, to=100, variable=self._volume_var, orient="horizontal")
-        vol_scale.grid(row=3, column=1, sticky="we", pady=4)
+        vol_scale.grid(row=4, column=1, sticky="we", pady=4)
 
         controls.columnconfigure(1, weight=1)
 
         actions = ttk.Frame(controls)
-        actions.grid(row=0, column=2, rowspan=4, padx=(14, 0), sticky="ns")
+        actions.grid(row=0, column=2, rowspan=5, padx=(14, 0), sticky="ns")
 
         self.start_button = ttk.Button(actions, text="Iniciar", command=self.start_workers)
         self.start_button.pack(fill="x", pady=(0, 8))
@@ -921,6 +1037,13 @@ class EdgeAiDesktopApp(tk.Tk):
             messagebox.showerror("Hardware no disponible", str(exc))
             return
 
+        self._cloud_mode = self._mode_var.get() == "cloud"
+        if self._cloud_mode:
+            self._groq_api_key = self._apikey_var_dbg.get().strip()
+            if not self._groq_api_key:
+                messagebox.showwarning("API Key requerida", "Ingresá la API Key de Groq para usar modo Nube.")
+                return
+
         if _dlog:
             _dlog.log_input(
                 "WORKERS",
@@ -937,10 +1060,22 @@ class EdgeAiDesktopApp(tk.Tk):
             self.intent_dispatcher = None
             return
 
+        # Cloud services
+        cloud_stt = None
+        cloud_llm = None
+        cloud_tts = None
+        if self._cloud_mode and _CLOUD_AVAILABLE:
+            cloud_stt = CloudSTT(self._groq_api_key)
+            cloud_llm = CloudLLM(self._groq_api_key)
+            cloud_tts = CloudTTS()
+            self._append_log("Modo NUBE activo — usando Groq + Google gTTS")
+
         self.speech_worker = SpeechWorker(
             output_device_index=output_device_index,
             message_queue=self.message_queue,
             message_semaphore=self.message_queue_semaphore,
+            cloud_mode=self._cloud_mode,
+            cloud_tts=cloud_tts,
         )
         self.speech_worker.start()
 
@@ -969,7 +1104,10 @@ class EdgeAiDesktopApp(tk.Tk):
             telemetry=self.telemetry,
             vocabulary_tracker=self.vocabulary_tracker,
             routine_scheduler=self.routine_scheduler,
-            fallback_llm=FallbackLLM() if FallbackLLM is not None else None,
+            fallback_llm=FallbackLLM() if (FallbackLLM is not None and not self._cloud_mode) else None,
+            cloud_mode=self._cloud_mode,
+            cloud_stt=cloud_stt,
+            cloud_llm=cloud_llm,
         )
 
         self.camera_worker.start()

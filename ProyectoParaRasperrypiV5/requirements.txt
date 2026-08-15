@@ -9,3 +9,8 @@ numpy
 Pillow
 piper-tts
 llama-cpp-python
+groq
+edge-tts
+python-dotenv
+soundfile
+gTTS

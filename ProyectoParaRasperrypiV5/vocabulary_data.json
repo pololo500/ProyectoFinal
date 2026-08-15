@@ -24,6 +24,7 @@
     "anos",
     "aparto",
     "aporta",
+    "artificial",
     "asi",
     "atencion",
     "aunque",
@@ -56,6 +57,7 @@
     "canta",
     "carton",
     "chame",
+    "chao",
     "chas",
     "che",
     "chique",
@@ -122,6 +124,7 @@
     "embargo",
     "empanada",
     "empezamos",
+    "empieza",
     "encanta",
     "enojado",
     "enojo",
@@ -161,6 +164,7 @@
     "futuro",
     "gallego",
     "games",
+    "ganas",
     "gaste",
     "gato",
     "girafa",
@@ -209,6 +213,8 @@
     "lampara",
     "lee",
     "leerlo",
+    "lenguaje",
+    "letra",
     "libre",
     "listo",
     "literal",
@@ -262,6 +268,8 @@
     "necesito",
     "nene",
     "ni",
+    "nieve",
+    "nio",
     "nl",
     "nombrarla",
     "nombre",
@@ -353,6 +361,8 @@
     "reyes",
     "rica",
     "rico",
+    "robotica",
+    "rocoso",
     "rollo",
     "rompiste",
     "roto",
@@ -376,6 +386,7 @@
     "silencio",
     "sin",
     "siquiera",
+    "slm",
     "solamente",
     "solo",
     "son",
@@ -2623,11 +2634,66 @@
       "word": "detecto",
       "date": "2026-08-14",
       "timestamp": "2026-08-14T15:34:15.797570"
+    },
+    {
+      "word": "chao",
+      "date": "2026-08-15",
+      "timestamp": "2026-08-15T00:17:13.844227"
+    },
+    {
+      "word": "rocoso",
+      "date": "2026-08-15",
+      "timestamp": "2026-08-15T00:17:26.448283"
+    },
+    {
+      "word": "robotica",
+      "date": "2026-08-15",
+      "timestamp": "2026-08-15T00:17:54.431816"
+    },
+    {
+      "word": "letra",
+      "date": "2026-08-15",
+      "timestamp": "2026-08-15T00:25:27.517067"
+    },
+    {
+      "word": "empieza",
+      "date": "2026-08-15",
+      "timestamp": "2026-08-15T00:25:27.517074"
+    },
+    {
+      "word": "nieve",
+      "date": "2026-08-15",
+      "timestamp": "2026-08-15T00:26:10.815151"
+    },
+    {
+      "word": "nio",
+      "date": "2026-08-15",
+      "timestamp": "2026-08-15T00:26:23.837211"
+    },
+    {
+      "word": "ganas",
+      "date": "2026-08-15",
+      "timestamp": "2026-08-15T00:33:08.781646"
+    },
+    {
+      "word": "slm",
+      "date": "2026-08-15",
+      "timestamp": "2026-08-15T00:33:28.703713"
+    },
+    {
+      "word": "lenguaje",
+      "date": "2026-08-15",
+      "timestamp": "2026-08-15T00:33:48.277382"
+    },
+    {
+      "word": "artificial",
+      "date": "2026-08-15",
+      "timestamp": "2026-08-15T00:33:48.277388"
     }
   ],
   "stats": {
-    "total_words": 437,
-    "new_words_today": 124,
-    "history_count": 437
+    "total_words": 448,
+    "new_words_today": 11,
+    "history_count": 448
   }
 }

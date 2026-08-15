@@ -848,6 +848,9 @@ class AudioWorker:
         vocabulary_tracker: Any = None,
         routine_scheduler: Any = None,
         fallback_llm: Any = None,
+        cloud_mode: bool = False,
+        cloud_stt: Any = None,
+        cloud_llm: Any = None,
     ) -> None:
         self.microphone_device_index = microphone_device_index
         self.message_queue = message_queue
@@ -867,6 +870,11 @@ class AudioWorker:
 
         # Fallback LLM for unknown intents (#EPIC-LLM)
         self.fallback_llm = fallback_llm
+
+        # Cloud mode (#CLOUD-001)
+        self.cloud_mode = cloud_mode
+        self.cloud_stt = cloud_stt
+        self.cloud_llm = cloud_llm
 
         # Game engine for multi-turn interactive games (#EPIC-006)
         try:
@@ -906,11 +914,18 @@ class AudioWorker:
             )
             self.camera_ready_event.wait(timeout=30)
 
-        whisper_model = self._load_whisper_model()
+        whisper_model = None
+        if not self.cloud_mode:
+            whisper_model = self._load_whisper_model()
+        else:
+            _queue_message_with_semaphore(
+                self.message_queue, self.message_semaphore, "log",
+                "AudioWorker: modo NUBE activo — omitiendo carga de Whisper local",
+            )
         vad = self._load_vad(sample_rate)
 
-        # Load fallback LLM sequentially after Whisper + VAD
-        if self.fallback_llm is not None:
+        # Load fallback LLM sequentially after Whisper + VAD (solo modo local)
+        if not self.cloud_mode and self.fallback_llm is not None:
             _queue_message_with_semaphore(
                 self.message_queue, self.message_semaphore, "log",
                 "AudioWorker: cargando LLM de fallback...",
@@ -1012,7 +1027,11 @@ class AudioWorker:
                     if speech_detected:
                         if not speech_active:
                             speech_active = True
-                            current_segment = [audio_block]
+                            # Pre-roll: incluir hasta 2 bloques previos (~1.0s) del buffer circular
+                            # para evitar que se corte la primera sílaba o palabra al empezar a hablar
+                            buf_list = list(circular_buffer)
+                            pre_roll = buf_list[:-1][-2:] if len(buf_list) > 1 else []
+                            current_segment = pre_roll + [audio_block]
                             _queue_message_with_semaphore(
                                 self.message_queue,
                                 self.message_semaphore,
@@ -1059,11 +1078,16 @@ class AudioWorker:
             _dlog.log_input("SEGMENT", f"Audio segment ({segment_duration_s:.1f}s, {len(audio_segment)} samples)")
 
         try:
-            # 1. Transcribe
+            # 1. Transcribe (cloud o local según modo)
             _t_transcribe = time.monotonic()
-            if _dlog:
-                _dlog.log_input("TRANSCRIPTION", f"Audio ({segment_duration_s:.1f}s)")
-            raw_text = self._transcribe(whisper_model, audio_segment)
+            if self.cloud_mode and self.cloud_stt is not None:
+                if _dlog:
+                    _dlog.log_input("TRANSCRIPTION", f"Audio ({segment_duration_s:.1f}s) [CLOUD]")
+                raw_text = self.cloud_stt.transcribe(audio_segment)
+            else:
+                if _dlog:
+                    _dlog.log_input("TRANSCRIPTION", f"Audio ({segment_duration_s:.1f}s) [LOCAL]")
+                raw_text = self._transcribe(whisper_model, audio_segment)
             if _dlog:
                 _dlog.log_output("TRANSCRIPTION", f"\"{raw_text}\"", elapsed_ms=(time.monotonic() - _t_transcribe) * 1000)
             if not raw_text.strip():
@@ -1131,7 +1155,22 @@ class AudioWorker:
 
             # 8.5. Fallback LLM — generate empathetic response for unknown intents
             intent_name = intent_payload.get("intent_name", "")
-            if intent_name == "unknown" and self.fallback_llm is not None and self.fallback_llm.is_available:
+            if intent_name == "unknown" and self.cloud_mode and self.cloud_llm is not None and self.cloud_llm.is_available:
+                _t_llm = time.monotonic()
+                if _dlog:
+                    _dlog.log_input("LLM_FALLBACK", f'text="{sanitized_text}" [CLOUD]')
+                llm_response = self.cloud_llm.generate(sanitized_text, emotion_context)
+                if llm_response:
+                    intent_payload["intent_name"] = "llm_fallback"
+                    intent_payload["response"] = llm_response
+                    intent_payload["pilar"] = "general"
+                if _dlog:
+                    _dlog.log_output(
+                        "LLM_FALLBACK",
+                        f'response="{llm_response}"' if llm_response else "sin respuesta",
+                        elapsed_ms=(time.monotonic() - _t_llm) * 1000,
+                    )
+            elif intent_name == "unknown" and self.fallback_llm is not None and self.fallback_llm.is_available:
                 _t_llm = time.monotonic()
                 if _dlog:
                     _dlog.log_input("LLM_FALLBACK", f"text=\"{sanitized_text}\"")
@@ -1680,6 +1719,8 @@ class SpeechWorker:
         output_device_index: int | None = None,
         message_queue: queue.Queue[WorkerMessage] | None = None,
         message_semaphore: threading.Semaphore | None = None,
+        cloud_mode: bool = False,
+        cloud_tts: Any = None,
     ) -> None:
         self._queue: queue.Queue[str] = queue.Queue(maxsize=32)
         self._stop_event = threading.Event()
@@ -1691,6 +1732,10 @@ class SpeechWorker:
         self._piper_voice: Any = None
         self._idle_event = threading.Event()
         self._idle_event.set()  # Not speaking initially
+
+        # Cloud mode (#CLOUD-001)
+        self._cloud_mode = cloud_mode
+        self._cloud_tts = cloud_tts
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -1834,12 +1879,15 @@ class SpeechWorker:
             finished.wait(timeout=len(audio_array) / sample_rate + 5.0)
 
     def _run(self) -> None:
-        # Try to load piper neural TTS (best quality, cross-platform, edge-optimized)
-        self._try_load_piper()
-        if self._piper_voice is not None:
-            self._log("piper-tts neural cargado correctamente")
+        if self._cloud_mode:
+            self._log("Modo NUBE activo — usando Google gTTS (con caché local)")
         else:
-            self._log("piper-tts no disponible, usando TTS de plataforma")
+            # Try to load piper neural TTS (best quality, cross-platform, edge-optimized)
+            self._try_load_piper()
+            if self._piper_voice is not None:
+                self._log("piper-tts neural cargado correctamente")
+            else:
+                self._log("piper-tts no disponible, usando TTS de plataforma")
 
         while not self._stop_event.is_set():
             try:
@@ -1857,8 +1905,10 @@ class SpeechWorker:
                 _dlog = get_debug_logger()
                 _t_synth = time.monotonic()
                 if _dlog:
-                    _dlog.log_input("TTS_SYNTH", f"engine={'piper' if self._piper_voice else ('sapi' if self._is_windows else 'espeak')}, text=\"{text}\"")
-                if self._piper_voice is not None:
+                    _dlog.log_input("TTS_SYNTH", f"engine={'gTTS' if self._cloud_mode else ('piper' if self._piper_voice else ('sapi' if self._is_windows else 'espeak'))}, text=\"{text}\"")
+                if self._cloud_mode and self._cloud_tts is not None:
+                    self._speak_cloud(text)
+                elif self._piper_voice is not None:
                     self._speak_piper(text)
                 elif self._is_windows:
                     self._speak_windows(text)
@@ -1930,6 +1980,20 @@ class SpeechWorker:
 
         audio_array = np.concatenate(audio_chunks).astype(np.float32)
         # audio_float_array is already in [-1.0, 1.0] range
+        self._play_wav_via_output_stream(audio_array, sample_rate)
+
+    def _speak_cloud(self, text: str) -> None:
+        """Sintetiza voz con Google gTTS (con caché local) vía CloudTTS."""
+        if self._cloud_tts is None:
+            self._log("CloudTTS no disponible")
+            return
+
+        result = self._cloud_tts.synthesize_to_audio(text)
+        if result is None:
+            self._log("gTTS no generó audio para el texto dado")
+            return
+
+        audio_array, sample_rate = result
         self._play_wav_via_output_stream(audio_array, sample_rate)
 
     def _speak_windows(self, text: str) -> None:

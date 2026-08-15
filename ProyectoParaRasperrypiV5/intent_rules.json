@@ -222,6 +222,145 @@
       "decile a mama",
       "decile a papa"
     ],
-    "response": "Entendido, voy a avisarle a mamá o papá que querés hablar. Mientras tanto, estoy acá con vos."
+    "response": "Entendido, voy a avisarle a mamá o papá que querés hablar. Mientras tanto, estoy acá con vos.",
+    "emotions": [],
+    "emotion_threshold": 0.0
+  },
+  "hug_request": {
+    "pilar": "emocional",
+    "examples": [
+      "dame un abrazo",
+      "te quiero abrazar",
+      "abrazame",
+      "quiero un abrazo",
+      "un abrazo fuerte",
+      "te quiero",
+      "te amo",
+      "sos mi amigo",
+      "sos mi amiga",
+      "sos lindo",
+      "sos linda",
+      "sos muy bueno",
+      "sos muy buena"
+    ],
+    "response": "¡Qué lindo! Me encantan los abrazos y estar con vos. ¡Te quiero mucho!",
+    "emotions": ["feliz", "triste", "neutral"],
+    "emotion_threshold": 0.10
+  },
+  "sensory_discomfort": {
+    "pilar": "emocional",
+    "priority": 15,
+    "examples": [
+      "hay mucho ruido",
+      "me molesta el ruido",
+      "está muy fuerte",
+      "me duelen los oídos",
+      "me molesta",
+      "no me gusta este ruido",
+      "hay mucho sonido"
+    ],
+    "response": "Tranqui, si te molesta podemos tomarnos un ratito de silencio y respirar despacito.",
+    "emotions": ["triste", "enojado", "neutral"],
+    "emotion_threshold": 0.10
+  },
+  "emotion_fear": {
+    "pilar": "emocional",
+    "priority": 15,
+    "examples": [
+      "tengo miedo",
+      "estoy asustado",
+      "estoy asustada",
+      "me da miedo",
+      "tengo miedo a la oscuridad",
+      "me asusté",
+      "tengo cuco"
+    ],
+    "response": "No tengas miedo, estoy acá cerquita para acompañarte. Todo va a estar bien.",
+    "emotions": ["triste", "sorprendido", "neutral"],
+    "emotion_threshold": 0.10
+  },
+  "tired_sleepy": {
+    "pilar": "emocional",
+    "examples": [
+      "tengo sueño",
+      "estoy cansado",
+      "estoy cansada",
+      "quiero dormir",
+      "me quiero acostar",
+      "tengo fiaca"
+    ],
+    "response": "Descansar hace muy bien cuando tenemos sueño. Ponete cómodo y relajá un ratito.",
+    "emotions": ["neutral", "triste"],
+    "emotion_threshold": 0.10
+  },
+  "frustration_support": {
+    "pilar": "emocional",
+    "priority": 10,
+    "examples": [
+      "no me sale",
+      "no puedo",
+      "es muy difícil",
+      "estoy frustrado",
+      "estoy frustrada",
+      "no quiero intentar más",
+      "no me sale nada"
+    ],
+    "response": "No pasa nada si algo cuesta. A veces lleva tiempo aprender. Lo importante es intentar con calma y sin apuro.",
+    "emotions": ["enojado", "triste", "neutral"],
+    "emotion_threshold": 0.10
+  },
+  "needs_basic": {
+    "pilar": "autonomia",
+    "examples": [
+      "tengo hambre",
+      "tengo sed",
+      "quiero agua",
+      "quiero comer",
+      "tengo ganas de comer",
+      "tengo ganas de tomar agua"
+    ],
+    "response": "¡Es importante cuidar la pancita! Podés pedirle un vaso de agua o algo de comer a los grandes.",
+    "emotions": [],
+    "emotion_threshold": 0.0
+  },
+  "routine_hygiene": {
+    "pilar": "autonomia",
+    "examples": [
+      "tengo que ir al baño",
+      "quiero ir al baño",
+      "me hago pis",
+      "me lavo las manos",
+      "me lavo los dientes",
+      "a lavarse las manos"
+    ],
+    "response": "¡Muy bien por cuidar tu cuerpo y estar limpio! Es un gran hábito.",
+    "emotions": [],
+    "emotion_threshold": 0.0
+  },
+  "routine_tidy": {
+    "pilar": "autonomia",
+    "examples": [
+      "hay que ordenar",
+      "a guardar los juguetes",
+      "tengo que guardar",
+      "a ordenar",
+      "guardemos",
+      "a guardar"
+    ],
+    "response": "¡Genial! Dejar las cosas en su lugar ayuda un montón a que todo esté lindo y ordenado.",
+    "emotions": [],
+    "emotion_threshold": 0.0
+  },
+  "gratitude": {
+    "pilar": "general",
+    "examples": [
+      "gracias",
+      "muchas gracias",
+      "gracias teo",
+      "te agradezco"
+    ],
+    "response": "¡De nada! Me alegra mucho poder acompañarte siempre.",
+    "emotions": ["feliz", "neutral"],
+    "emotion_threshold": 0.10
   }
 }

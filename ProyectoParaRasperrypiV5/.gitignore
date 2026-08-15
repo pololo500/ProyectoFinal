@@ -26,8 +26,13 @@ pip-wheel-metadata/
 *.log
 logs/
 audios/
+cache_voces/
+telemetry_data/
 exe_stdout.txt
 exe_stderr.txt
+
+# API keys and secrets
+.env
 
 # OS files
 .DS_Store
