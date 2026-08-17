@@ -1,7 +1,9 @@
 package com.example.aplicacionparacelular.ui.config
 
 import android.app.Activity
+import android.content.Context
 import android.content.Intent
+import android.net.wifi.WifiManager
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -12,12 +14,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import com.example.aplicacionparacelular.BuildConfig
 import com.example.aplicacionparacelular.R
 import com.example.aplicacionparacelular.databinding.FragmentConfigBinding
 import com.example.aplicacionparacelular.network.RobotApiClient
 import com.example.aplicacionparacelular.network.RobotConnectionManager
 import com.example.aplicacionparacelular.network.RobotDiscovery
 import com.google.android.material.snackbar.Snackbar
+import java.net.Inet4Address
+import java.net.NetworkInterface
 
 class ConfigFragment : Fragment() {
 
@@ -57,6 +62,7 @@ class ConfigFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        setupDebugBanner()
         setupConnectionSection()
         setupSensorySection()
         setupNightModeSection()
@@ -68,6 +74,118 @@ class ConfigFragment : Fragment() {
             viewModel.loadFromRobot()
             viewModel.loadSongs()
         }
+    }
+
+    private fun setupDebugBanner() {
+        if (BuildConfig.DEBUG) {
+            binding.debugInfoBanner.visibility = View.VISIBLE
+
+            // Get phone's WiFi IP
+            val phoneIp = getDeviceIpAddress()
+            binding.txtDebugPhoneIp.text = "📱 IP del celular: $phoneIp"
+
+            // Show configured robot IP
+            val configuredIp = RobotApiClient.getRobotIp(requireContext())
+            binding.txtDebugConfiguredIp.text = if (configuredIp.isNotBlank()) {
+                "🧸 IP configurada: $configuredIp"
+            } else {
+                "🧸 IP configurada: (ninguna)"
+            }
+
+            // Determine hint based on emulator vs real device
+            val isEmulator = RobotDiscovery.isEmulator()
+            binding.txtDebugHint.text = if (isEmulator) {
+                "💡 Estás en emulador → usá 10.0.2.2 como IP del robot"
+            } else {
+                "💡 Abrí la consola del Python y buscá la IP que aparece en el recuadro del servidor. Ingresala abajo."
+            }
+
+            // Try to fetch server info from configured IP
+            if (configuredIp.isNotBlank()) {
+                fetchServerInfo(configuredIp)
+            } else {
+                binding.txtDebugServerIp.text = "🖥️ IP del servidor Python: (no configurada, ingresá la IP primero)"
+            }
+        } else {
+            binding.debugInfoBanner.visibility = View.GONE
+        }
+    }
+
+    private fun getDeviceIpAddress(): String {
+        try {
+            // Try WiFi manager first
+            @Suppress("DEPRECATION")
+            val wifiManager = requireContext().applicationContext.getSystemService(android.content.Context.WIFI_SERVICE) as? WifiManager
+            if (wifiManager != null) {
+                val ipInt = wifiManager.connectionInfo.ipAddress
+                if (ipInt != 0) {
+                    return String.format("%d.%d.%d.%d",
+                        ipInt and 0xff, (ipInt shr 8) and 0xff,
+                        (ipInt shr 16) and 0xff, (ipInt shr 24) and 0xff)
+                }
+            }
+            // Fallback: enumerate network interfaces
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                val addresses = iface.inetAddresses
+                while (addresses.hasMoreElements()) {
+                    val addr = addresses.nextElement()
+                    if (!addr.isLoopbackAddress && addr is Inet4Address) {
+                        return addr.hostAddress ?: "?.?.?.?"
+                    }
+                }
+            }
+        } catch (_: Exception) { }
+        return "No disponible"
+    }
+
+    private fun fetchServerInfo(robotIp: String) {
+        binding.txtDebugServerIp.text = "🖥️ IP del servidor Python: buscando..."
+        Thread {
+            try {
+                val url = java.net.URL("http://$robotIp:8080/api/server-info")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 2000
+                conn.readTimeout = 2000
+                conn.requestMethod = "GET"
+                val code = conn.responseCode
+                if (code == 200) {
+                    val body = conn.inputStream.bufferedReader().readText()
+                    conn.disconnect()
+                    val json = org.json.JSONObject(body)
+                    val serverIp = json.optString("server_ip", "?")
+                    val serverPort = json.optInt("server_port", 8080)
+                    activity?.runOnUiThread {
+                        if (_binding != null) {
+                            binding.txtDebugServerIp.text = "🖥️ IP del servidor Python: $serverIp:$serverPort"
+                            binding.txtDebugConnectionResult.visibility = View.VISIBLE
+                            binding.txtDebugConnectionResult.text = "✅ Conexión exitosa al servidor Python"
+                            binding.txtDebugConnectionResult.setTextColor(0xFF4CAF50.toInt())
+                        }
+                    }
+                } else {
+                    conn.disconnect()
+                    activity?.runOnUiThread {
+                        if (_binding != null) {
+                            binding.txtDebugServerIp.text = "🖥️ IP del servidor Python: error HTTP $code"
+                            binding.txtDebugConnectionResult.visibility = View.VISIBLE
+                            binding.txtDebugConnectionResult.text = "❌ Servidor respondió con error $code"
+                            binding.txtDebugConnectionResult.setTextColor(0xFFF44336.toInt())
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                activity?.runOnUiThread {
+                    if (_binding != null) {
+                        binding.txtDebugServerIp.text = "🖥️ IP del servidor Python: no alcanzable"
+                        binding.txtDebugConnectionResult.visibility = View.VISIBLE
+                        binding.txtDebugConnectionResult.text = "❌ No se puede conectar a $robotIp:8080 — ${e.message}"
+                        binding.txtDebugConnectionResult.setTextColor(0xFFF44336.toInt())
+                    }
+                }
+            }
+        }.start()
     }
 
     // ------------------------------------------------------------------
@@ -156,6 +274,11 @@ class ConfigFragment : Fragment() {
         Snackbar.make(binding.root, "Conectando a $ip:$port...", Snackbar.LENGTH_SHORT).show()
         viewModel.loadFromRobot()
         viewModel.loadSongs()
+        // Refresh debug info after connecting
+        if (BuildConfig.DEBUG) {
+            binding.txtDebugConfiguredIp.text = "🧸 IP configurada: $ip"
+            fetchServerInfo(ip)
+        }
     }
 
     // ------------------------------------------------------------------

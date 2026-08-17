@@ -148,6 +148,8 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/api/status":
             self._handle_get_status()
+        elif path == "/api/server-info":
+            self._handle_get_server_info()
         elif path == "/api/telemetry/today":
             self._handle_get_telemetry(date.today().isoformat())
         elif path.startswith("/api/telemetry/"):
@@ -162,6 +164,24 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
 
     def _handle_get_status(self) -> None:
         self._send_json(robot_state.to_dict())
+
+    def _handle_get_server_info(self) -> None:
+        """Devuelve información del servidor para debug de conexión."""
+        import socket as _socket
+        try:
+            s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+            s.settimeout(0.5)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+        except Exception:
+            local_ip = "0.0.0.0"
+        self._send_json({
+            "server_ip": local_ip,
+            "server_port": 8080,
+            "device_name": "MiCompañero Peluche",
+            "connect_url": f"http://{local_ip}:8080",
+        })
 
     def _handle_get_telemetry(self, date_str: str) -> None:
         telemetry = robot_state.telemetry
@@ -505,10 +525,29 @@ class ApiServer:
             name="ApiServer",
         )
         self._thread.start()
-        print(
-            f"[API] Servidor REST iniciado en http://{self.host}:{self.port}",
-            flush=True,
-        )
+
+        # Obtain local IP for display
+        import socket as _socket
+        try:
+            s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+            s.settimeout(0.5)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+        except Exception:
+            local_ip = "0.0.0.0"
+
+        print(flush=True)
+        print("╔══════════════════════════════════════════════════╗", flush=True)
+        print("║        🧸 SERVIDOR API - MiCompañero            ║", flush=True)
+        print("╠══════════════════════════════════════════════════╣", flush=True)
+        print(f"║  IP local:  {local_ip:<37s}║", flush=True)
+        print(f"║  Puerto:    {self.port:<37d}║", flush=True)
+        print("╠══════════════════════════════════════════════════╣", flush=True)
+        print(f"║  👉 En la app Android, ingresá: {local_ip:<17s}║", flush=True)
+        print("║  👉 En emulador Android, usá:   10.0.2.2        ║", flush=True)
+        print("╚══════════════════════════════════════════════════╝", flush=True)
+        print(flush=True)
 
         # UDP discovery beacon
         self._beacon = _DiscoveryBeacon(api_port=self.port)

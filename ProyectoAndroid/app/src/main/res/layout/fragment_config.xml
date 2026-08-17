@@ -32,6 +32,81 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
+                <!-- Debug Info Banner (only visible in debug mode) -->
+                <LinearLayout
+                    android:id="@+id/debug_info_banner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:background="#1A2196F3"
+                    android:padding="12dp"
+                    android:layout_marginBottom="12dp"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🔧 Info de Debug — Conexión"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        android:textColor="#2196F3"
+                        android:layout_marginBottom="6dp" />
+
+                    <TextView
+                        android:id="@+id/txt_debug_phone_ip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="📱 IP del celular: ..."
+                        android:textSize="12sp"
+                        android:textColor="#555555"
+                        android:fontFamily="monospace" />
+
+                    <TextView
+                        android:id="@+id/txt_debug_configured_ip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🧸 IP configurada: (ninguna)"
+                        android:textSize="12sp"
+                        android:textColor="#555555"
+                        android:fontFamily="monospace"
+                        android:layout_marginTop="2dp" />
+
+                    <TextView
+                        android:id="@+id/txt_debug_server_ip"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🖥️ IP del servidor Python: (buscando...)"
+                        android:textSize="12sp"
+                        android:textColor="#555555"
+                        android:fontFamily="monospace"
+                        android:layout_marginTop="2dp" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="8dp"
+                        android:background="#332196F3" />
+
+                    <TextView
+                        android:id="@+id/txt_debug_hint"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="💡 Abrí la consola del Python y buscá la IP que aparece en el recuadro del servidor"
+                        android:textSize="11sp"
+                        android:textColor="#2196F3"
+                        android:lineSpacingExtra="2dp" />
+
+                    <TextView
+                        android:id="@+id/txt_debug_connection_result"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:layout_marginTop="6dp"
+                        android:visibility="gone" />
+                </LinearLayout>
+
                 <TextView
                     android:id="@+id/txt_connection_status"
                     android:layout_width="wrap_content"
