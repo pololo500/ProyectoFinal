@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network security configuration to allow cleartext (HTTP) traffic
+    to the Raspberry Pi / local development server.
+
+    In production, the robot runs on the local network without TLS,
+    so we must explicitly allow cleartext traffic to common local IPs:
+    - 10.0.2.2: Android emulator → host machine
+    - 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12: LAN ranges
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <!-- Emulator host loopback -->
+        <domain includeSubdomains="false">10.0.2.2</domain>
+        <!-- Common LAN ranges (Raspberry Pi) -->
+        <domain includeSubdomains="true">192.168.0.0</domain>
+        <domain includeSubdomains="true">192.168.1.0</domain>
+        <domain includeSubdomains="true">10.0.0.0</domain>
+        <domain includeSubdomains="true">172.16.0.0</domain>
+    </domain-config>
+
+    <!-- Block cleartext to everything else (secure by default) -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

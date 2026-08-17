@@ -3,6 +3,7 @@ package com.example.aplicacionparacelular.network
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import org.json.JSONObject
@@ -15,12 +16,23 @@ import java.util.concurrent.TimeUnit
  *
  * Mantiene un polling periódico del estado del robot y expone LiveData
  * reactivos que los Fragments pueden observar para actualizar la UI.
+ *
+ * Flujo de conexión:
+ * 1. init() carga la IP guardada en SharedPreferences.
+ * 2. Si no hay IP, inicia descubrimiento automático (UDP beacon + fallback HTTP).
+ * 3. Cuando se configura una IP, arranca el polling automáticamente.
+ * 4. El polling consulta /api/status cada N segundos y actualiza los LiveData.
  */
 object RobotConnectionManager {
+
+    private const val TAG = "RobotConnMgr"
 
     private val executor = Executors.newScheduledThreadPool(2)
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pollingFuture: ScheduledFuture<*>? = null
+
+    /** Indica si init() ya fue llamado para evitar registrar observers duplicados. */
+    private var initialized = false
 
     // ------------------------------------------------------------------
     // LiveData observables
@@ -43,15 +55,31 @@ object RobotConnectionManager {
      * Inicializa el manager y el cliente API.
      * Debe llamarse una vez desde Application.onCreate() o MainActivity.
      * Si no hay IP configurada, intenta descubrir el robot automáticamente.
+     *
+     * Es seguro llamar múltiples veces — solo la primera tiene efecto.
      */
     fun init(context: Context) {
-        RobotApiClient.init(context)
+        if (initialized) {
+            Log.d(TAG, "init() ya fue llamado, ignorando llamada duplicada")
+            return
+        }
+        initialized = true
 
-        // Si no hay IP configurada, intentar descubrimiento automático
-        if (!RobotApiClient.isConfigured()) {
+        val appContext = context.applicationContext
+        RobotApiClient.init(appContext)
+
+        if (RobotApiClient.isConfigured()) {
+            // Ya tenemos IP guardada, arrancar polling de inmediato
+            Log.d(TAG, "IP ya configurada, arrancando polling")
+            startPolling()
+        } else {
+            // No hay IP guardada — iniciar descubrimiento automático
+            Log.d(TAG, "No hay IP configurada, iniciando descubrimiento automático")
+
             RobotDiscovery.discoveredRobot.observeForever { robot ->
                 if (robot != null && !RobotApiClient.isConfigured()) {
-                    RobotApiClient.setRobotAddress(context, robot.ip, robot.port)
+                    Log.d(TAG, "Robot descubierto: ${robot.ip}:${robot.port} (${robot.deviceName})")
+                    RobotApiClient.setRobotAddress(appContext, robot.ip, robot.port)
                     startPolling()
                 }
             }
@@ -60,11 +88,26 @@ object RobotConnectionManager {
     }
 
     /**
+     * Configura manualmente la IP del robot y arranca el polling.
+     * Usar desde la UI de configuración cuando el usuario ingresa la IP.
+     */
+    fun connectManually(context: Context, ip: String, port: Int = 8080) {
+        Log.d(TAG, "Conexión manual a $ip:$port")
+        RobotApiClient.setRobotAddress(context, ip, port)
+        startPolling()
+    }
+
+    /**
      * Inicia el polling periódico del estado del robot.
      * El intervalo por defecto es de 5 segundos.
      */
     fun startPolling(intervalSeconds: Long = 5) {
+        if (!RobotApiClient.isConfigured()) {
+            Log.d(TAG, "startPolling() ignorado: no hay IP configurada")
+            return
+        }
         stopPolling()
+        Log.d(TAG, "Polling iniciado (cada ${intervalSeconds}s)")
         pollingFuture = executor.scheduleWithFixedDelay(
             { pollStatus() },
             0,
@@ -96,6 +139,7 @@ object RobotConnectionManager {
                 }
             }
             is ApiResult.Error -> {
+                Log.d(TAG, "Poll falló: ${result.message}")
                 postToMain {
                     _isConnected.value = false
                     _robotStatus.value = null

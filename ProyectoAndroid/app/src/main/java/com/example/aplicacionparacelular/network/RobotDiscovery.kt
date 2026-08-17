@@ -1,13 +1,17 @@
 package com.example.aplicacionparacelular.network
 
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import org.json.JSONObject
 import java.net.DatagramPacket
 import java.net.DatagramSocket
+import java.net.HttpURLConnection
 import java.net.InetAddress
+import java.net.URL
 
 /**
  * Descubre automáticamente la Raspberry Pi en la red local escuchando
@@ -18,11 +22,20 @@ import java.net.InetAddress
  * - device_name: nombre del dispositivo
  * - api_port: puerto del servidor REST
  * - local_ip: IP del robot en la red local
+ *
+ * Cuando corre en el emulador de Android Studio, el beacon UDP no llega
+ * (red virtual aislada), así que se prueba automáticamente la IP especial
+ * 10.0.2.2 (host del emulador) como fallback.
  */
 object RobotDiscovery {
 
+    private const val TAG = "RobotDiscovery"
     private const val BEACON_PORT = 5555
     private const val LISTEN_TIMEOUT_MS = 8000  // Escuchar máximo 8 segundos
+
+    /** IP especial que el emulador de Android Studio mapea al host. */
+    private const val EMULATOR_HOST_IP = "10.0.2.2"
+    private const val DEFAULT_API_PORT = 8080
 
     /**
      * Resultado del descubrimiento.
@@ -49,7 +62,31 @@ object RobotDiscovery {
     private var scanThread: Thread? = null
 
     /**
+     * Detecta si la app está corriendo en un emulador de Android Studio.
+     *
+     * Usa varias heurísticas del Build: fingerprint genérico, modelo "sdk",
+     * hardware "goldfish"/"ranchu", etc.
+     */
+    fun isEmulator(): Boolean {
+        return (Build.FINGERPRINT.startsWith("generic")
+                || Build.FINGERPRINT.startsWith("unknown")
+                || Build.MODEL.contains("google_sdk", ignoreCase = true)
+                || Build.MODEL.contains("Emulator", ignoreCase = true)
+                || Build.MODEL.contains("Android SDK built for x86", ignoreCase = true)
+                || Build.MANUFACTURER.contains("Genymotion", ignoreCase = true)
+                || Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")
+                || Build.PRODUCT.contains("sdk", ignoreCase = true)
+                || Build.HARDWARE.contains("goldfish", ignoreCase = true)
+                || Build.HARDWARE.contains("ranchu", ignoreCase = true))
+    }
+
+    /**
      * Inicia un escaneo de la red local buscando el beacon UDP del robot.
+     *
+     * Si detecta que corre en un emulador, primero intenta conectar
+     * directamente a 10.0.2.2:8080 (el host del emulador), ya que los
+     * broadcasts UDP no atraviesan la red virtual del emulador.
+     *
      * El escaneo se detiene automáticamente cuando encuentra un robot
      * o cuando se agota el timeout.
      */
@@ -61,6 +98,16 @@ object RobotDiscovery {
         _discoveredRobot.postValue(null)
 
         scanThread = Thread({
+            // En el emulador, intentar primero la IP del host directamente
+            if (isEmulator()) {
+                Log.d(TAG, "Emulador detectado, intentando 10.0.2.2:$DEFAULT_API_PORT...")
+                if (tryDirectConnection(EMULATOR_HOST_IP, DEFAULT_API_PORT)) {
+                    return@Thread
+                }
+                Log.d(TAG, "Conexión directa a 10.0.2.2 falló, intentando beacon UDP...")
+            }
+
+            // Intentar descubrimiento por beacon UDP (funciona en red real)
             var socket: DatagramSocket? = null
             try {
                 socket = DatagramSocket(BEACON_PORT)
@@ -82,7 +129,7 @@ object RobotDiscovery {
                     // Usar la IP del paquete recibido (más confiable que la
                     // IP que reporta el beacon, por si hay NAT o multi-homed)
                     val ip = json.optString("local_ip", packet.address.hostAddress ?: "")
-                    val port = json.optInt("api_port", 8080)
+                    val port = json.optInt("api_port", DEFAULT_API_PORT)
                     val name = json.optString("device_name", "Peluche")
 
                     val robot = DiscoveredRobot(
@@ -106,6 +153,12 @@ object RobotDiscovery {
                 }
 
             } catch (e: java.net.SocketTimeoutException) {
+                // Beacon no recibido. Si no estamos en emulador (ya intentamos
+                // arriba), intentar la IP del host por si acaso.
+                if (!isEmulator() && tryDirectConnection(EMULATOR_HOST_IP, DEFAULT_API_PORT)) {
+                    return@Thread
+                }
+
                 mainHandler.post {
                     _scanError.value = "No se encontró el peluche en la red. Ingresá la IP manualmente."
                     _isScanning.value = false
@@ -122,6 +175,44 @@ object RobotDiscovery {
 
         scanThread?.isDaemon = true
         scanThread?.start()
+    }
+
+    /**
+     * Intenta una conexión HTTP directa a la IP y puerto dados,
+     * haciendo un GET /api/status. Si responde correctamente,
+     * publica el robot descubierto y retorna true.
+     */
+    private fun tryDirectConnection(ip: String, port: Int): Boolean {
+        return try {
+            val url = URL("http://$ip:$port/api/status")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.connectTimeout = 3000
+            conn.readTimeout = 3000
+            conn.requestMethod = "GET"
+
+            val code = conn.responseCode
+            if (code == 200) {
+                val robot = DiscoveredRobot(
+                    ip = ip,
+                    port = port,
+                    deviceName = "MiCompañero Peluche (local)",
+                    deviceId = "micompanero_robot"
+                )
+                mainHandler.post {
+                    _discoveredRobot.value = robot
+                    _isScanning.value = false
+                }
+                conn.disconnect()
+                Log.d(TAG, "Conexión directa exitosa a $ip:$port")
+                true
+            } else {
+                conn.disconnect()
+                false
+            }
+        } catch (e: Exception) {
+            Log.d(TAG, "Conexión directa a $ip:$port falló: ${e.message}")
+            false
+        }
     }
 
     /**

@@ -79,9 +79,19 @@ class ConfigFragment : Fragment() {
         val currentIp = RobotApiClient.getRobotIp(requireContext())
         binding.editRobotIp.setText(currentIp)
 
+        // If running on emulator and no IP configured, suggest 10.0.2.2
+        if (currentIp.isBlank() && RobotDiscovery.isEmulator()) {
+            binding.editRobotIp.hint = "10.0.2.2 (emulador detectado)"
+        }
+
         // Manual connect button
         binding.btnSaveIp.setOnClickListener {
-            val ip = binding.editRobotIp.text.toString().trim()
+            var ip = binding.editRobotIp.text.toString().trim()
+            // If empty and on emulator, use 10.0.2.2 by default
+            if (ip.isBlank() && RobotDiscovery.isEmulator()) {
+                ip = "10.0.2.2"
+                binding.editRobotIp.setText(ip)
+            }
             if (ip.isNotBlank()) {
                 connectToRobot(ip)
             }
@@ -107,8 +117,10 @@ class ConfigFragment : Fragment() {
                 binding.txtDiscoveryResult.text = "✅ Encontrado: ${robot.deviceName} (${robot.ip})"
                 binding.editRobotIp.setText(robot.ip)
 
-                // Auto-connect
-                connectToRobot(robot.ip, robot.port)
+                // Auto-connect if not already connected
+                if (!RobotApiClient.isConfigured() || RobotApiClient.getRobotIp(requireContext()) != robot.ip) {
+                    connectToRobot(robot.ip, robot.port)
+                }
             }
         }
 
@@ -125,6 +137,14 @@ class ConfigFragment : Fragment() {
             binding.txtConnectionStatus.text = if (connected) "🟢 Conectado" else "🔴 Desconectado"
         }
 
+        // Show last error for debugging
+        RobotConnectionManager.lastError.observe(viewLifecycleOwner) { error ->
+            if (error != null && RobotConnectionManager.isConnected.value != true) {
+                binding.txtDiscoveryResult.visibility = View.VISIBLE
+                binding.txtDiscoveryResult.text = "⚠️ Error: $error"
+            }
+        }
+
         // Auto-scan on first visit if not configured
         if (!RobotApiClient.isConfigured()) {
             RobotDiscovery.startScan()
@@ -132,8 +152,7 @@ class ConfigFragment : Fragment() {
     }
 
     private fun connectToRobot(ip: String, port: Int = 8080) {
-        RobotApiClient.setRobotAddress(requireContext(), ip, port)
-        RobotConnectionManager.startPolling()
+        RobotConnectionManager.connectManually(requireContext(), ip, port)
         Snackbar.make(binding.root, "Conectando a $ip:$port...", Snackbar.LENGTH_SHORT).show()
         viewModel.loadFromRobot()
         viewModel.loadSongs()

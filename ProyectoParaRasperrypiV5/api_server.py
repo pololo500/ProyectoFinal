@@ -526,3 +526,48 @@ class ApiServer:
             self._thread.join(timeout=3)
             self._thread = None
         print("[API] Servidor REST detenido", flush=True)
+
+
+# ------------------------------------------------------------------
+# Standalone mode for quick testing
+# ------------------------------------------------------------------
+
+if __name__ == "__main__":
+    import signal
+    import sys
+
+    print("=" * 60)
+    print("  API Server — Modo de prueba standalone")
+    print("=" * 60)
+    print()
+
+    server = ApiServer()
+    server.start()
+
+    print()
+    print("Servidor corriendo. Endpoints disponibles:")
+    print(f"  GET  http://localhost:8080/api/status")
+    print(f"  GET  http://localhost:8080/api/telemetry/today")
+    print(f"  GET  http://localhost:8080/api/routines")
+    print(f"  GET  http://localhost:8080/api/music")
+    print(f"  POST http://localhost:8080/api/celebrate")
+    print(f"  POST http://localhost:8080/api/config")
+    print(f"  POST http://localhost:8080/api/night-mode")
+    print(f"  POST http://localhost:8080/api/power")
+    print()
+    print("Desde el emulador de Android Studio, usá: 10.0.2.2:8080")
+    print("Presioná Ctrl+C para detener.")
+    print()
+
+    def _signal_handler(sig, frame):
+        print("\nDeteniendo servidor...")
+        server.stop()
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, _signal_handler)
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        server.stop()

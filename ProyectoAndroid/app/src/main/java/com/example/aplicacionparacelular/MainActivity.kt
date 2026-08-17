@@ -26,9 +26,8 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         setSupportActionBar(binding.appBarMain.toolbar)
 
-        // Initialize Robot connection
+        // Initialize Robot connection (auto-discovers or loads saved IP)
         RobotConnectionManager.init(this)
-        RobotConnectionManager.startPolling()
 
         binding.appBarMain.fab?.setOnClickListener { view ->
             // Celebrate achievement - send signal to robot

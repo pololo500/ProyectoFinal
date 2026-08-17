@@ -280,6 +280,7 @@
     "ok",
     "otra",
     "otras",
+    "otro",
     "pa",
     "paga",
     "pagaste",
@@ -2689,11 +2690,16 @@
       "word": "artificial",
       "date": "2026-08-15",
       "timestamp": "2026-08-15T00:33:48.277388"
+    },
+    {
+      "word": "otro",
+      "date": "2026-08-17",
+      "timestamp": "2026-08-17T13:43:01.632493"
     }
   ],
   "stats": {
-    "total_words": 448,
-    "new_words_today": 11,
-    "history_count": 448
+    "total_words": 449,
+    "new_words_today": 1,
+    "history_count": 449
   }
 }
