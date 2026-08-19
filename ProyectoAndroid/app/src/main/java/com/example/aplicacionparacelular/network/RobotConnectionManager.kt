@@ -83,7 +83,7 @@ object RobotConnectionManager {
                     startPolling()
                 }
             }
-            RobotDiscovery.startScan()
+            RobotDiscovery.startScan(appContext)
         }
     }
 

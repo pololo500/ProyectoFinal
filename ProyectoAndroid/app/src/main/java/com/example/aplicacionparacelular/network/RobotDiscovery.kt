@@ -1,5 +1,7 @@
 package com.example.aplicacionparacelular.network
 
+import android.content.Context
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -61,6 +63,12 @@ object RobotDiscovery {
     @Volatile
     private var scanThread: Thread? = null
 
+    /** Contexto de la aplicación, necesario para adquirir el MulticastLock. */
+    private var appContext: Context? = null
+
+    /** Lock que impide que el chip WiFi descarte paquetes multicast/broadcast. */
+    private var multicastLock: WifiManager.MulticastLock? = null
+
     /**
      * Detecta si la app está corriendo en un emulador de Android Studio.
      *
@@ -90,8 +98,13 @@ object RobotDiscovery {
      * El escaneo se detiene automáticamente cuando encuentra un robot
      * o cuando se agota el timeout.
      */
-    fun startScan() {
+    fun startScan(context: Context? = null) {
         if (_isScanning.value == true) return
+
+        // Guardar el contexto de la aplicación para el MulticastLock
+        if (context != null) {
+            appContext = context.applicationContext
+        }
 
         _isScanning.postValue(true)
         _scanError.postValue(null)
@@ -106,6 +119,11 @@ object RobotDiscovery {
                 }
                 Log.d(TAG, "Conexión directa a 10.0.2.2 falló, intentando beacon UDP...")
             }
+
+            // Adquirir MulticastLock para que el chip WiFi no descarte
+            // los paquetes broadcast/multicast (beacons UDP del peluche).
+            // Sin esto, en celulares físicos el receive() siempre da timeout.
+            acquireMulticastLock()
 
             // Intentar descubrimiento por beacon UDP (funciona en red real)
             var socket: DatagramSocket? = null
@@ -170,6 +188,7 @@ object RobotDiscovery {
                 }
             } finally {
                 try { socket?.close() } catch (_: Exception) {}
+                releaseMulticastLock()
             }
         }, "RobotDiscovery")
 
@@ -221,6 +240,51 @@ object RobotDiscovery {
     fun stopScan() {
         scanThread?.interrupt()
         scanThread = null
+        releaseMulticastLock()
         _isScanning.postValue(false)
+    }
+
+    // ------------------------------------------------------------------
+    // MulticastLock helpers
+    // ------------------------------------------------------------------
+
+    /**
+     * Adquiere un [WifiManager.MulticastLock].
+     *
+     * Por defecto, Android desactiva la recepción de paquetes multicast/broadcast
+     * en el chip WiFi para ahorrar batería. El beacon UDP que emite el peluche
+     * es un broadcast, así que sin este lock el [DatagramSocket.receive] nunca
+     * recibe nada y siempre da timeout en celulares físicos.
+     */
+    private fun acquireMulticastLock() {
+        try {
+            val ctx = appContext ?: return
+            val wifiMgr = ctx.getSystemService(Context.WIFI_SERVICE) as? WifiManager ?: return
+            val lock = wifiMgr.createMulticastLock("RobotDiscovery")
+            lock.setReferenceCounted(true)
+            lock.acquire()
+            multicastLock = lock
+            Log.d(TAG, "MulticastLock adquirido")
+        } catch (e: Exception) {
+            Log.w(TAG, "No se pudo adquirir MulticastLock: ${e.message}")
+        }
+    }
+
+    /**
+     * Libera el [WifiManager.MulticastLock] si estaba adquirido,
+     * para no consumir batería innecesariamente.
+     */
+    private fun releaseMulticastLock() {
+        try {
+            multicastLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    Log.d(TAG, "MulticastLock liberado")
+                }
+            }
+            multicastLock = null
+        } catch (e: Exception) {
+            Log.w(TAG, "Error al liberar MulticastLock: ${e.message}")
+        }
     }
 }

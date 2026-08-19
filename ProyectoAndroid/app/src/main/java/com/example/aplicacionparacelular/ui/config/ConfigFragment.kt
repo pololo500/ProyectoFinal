@@ -217,7 +217,7 @@ class ConfigFragment : Fragment() {
 
         // Auto-scan button
         binding.btnAutoScan.setOnClickListener {
-            RobotDiscovery.startScan()
+            RobotDiscovery.startScan(requireContext())
         }
 
         // Observe scanning state
@@ -265,7 +265,7 @@ class ConfigFragment : Fragment() {
 
         // Auto-scan on first visit if not configured
         if (!RobotApiClient.isConfigured()) {
-            RobotDiscovery.startScan()
+            RobotDiscovery.startScan(requireContext())
         }
     }
 
