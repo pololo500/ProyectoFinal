@@ -155,7 +155,9 @@
     "ey",
     "fato",
     "favor",
+    "favorita",
     "feliz",
+    "femenina",
     "feo",
     "flaco",
     "flamenco",
@@ -263,6 +265,7 @@
     "mueves",
     "mujer",
     "murencia",
+    "musica",
     "nada",
     "nasty",
     "necesito",
@@ -308,9 +311,11 @@
     "pienso",
     "piloz",
     "pipi",
+    "pista",
     "pitoforo",
     "playa",
     "poncierame",
+    "pone",
     "poner",
     "ponte",
     "poquito",
@@ -2695,11 +2700,36 @@
       "word": "otro",
       "date": "2026-08-17",
       "timestamp": "2026-08-17T13:43:01.632493"
+    },
+    {
+      "word": "pista",
+      "date": "2026-08-20",
+      "timestamp": "2026-08-20T18:30:52.592577"
+    },
+    {
+      "word": "femenina",
+      "date": "2026-08-20",
+      "timestamp": "2026-08-20T18:37:16.300843"
+    },
+    {
+      "word": "favorita",
+      "date": "2026-08-20",
+      "timestamp": "2026-08-20T18:37:32.692756"
+    },
+    {
+      "word": "pone",
+      "date": "2026-08-20",
+      "timestamp": "2026-08-20T19:14:45.360560"
+    },
+    {
+      "word": "musica",
+      "date": "2026-08-20",
+      "timestamp": "2026-08-20T19:14:45.360572"
     }
   ],
   "stats": {
-    "total_words": 449,
-    "new_words_today": 1,
-    "history_count": 449
+    "total_words": 454,
+    "new_words_today": 5,
+    "history_count": 454
   }
 }

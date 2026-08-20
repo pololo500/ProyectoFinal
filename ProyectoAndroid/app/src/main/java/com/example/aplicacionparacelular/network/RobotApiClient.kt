@@ -112,17 +112,33 @@ object RobotApiClient {
     fun postRoutines(routinesJson: JSONObject): ApiResult<JSONObject> =
         doPost("/api/routines", routinesJson)
 
+    /** Reproduce una canción en el robot. */
+    fun playMusic(filename: String? = null): ApiResult<JSONObject> {
+        val body = JSONObject().apply {
+            if (filename != null) put("filename", filename)
+        }
+        return doPost("/api/music/play", body)
+    }
+
+    /** Detiene la reproducción de música en el robot. */
+    fun stopMusic(): ApiResult<JSONObject> =
+        doPost("/api/music/stop", JSONObject())
+
+    /** Sube un archivo de música al robot. */
     /** Sube un archivo de música al robot. */
     fun uploadMusic(filename: String, data: ByteArray): ApiResult<JSONObject> {
         if (!isConfigured()) return ApiResult.Error("Robot no configurado")
         return try {
+            val encodedFilename = java.net.URLEncoder.encode(filename, "UTF-8")
             val url = URL("$baseUrl/api/music/upload")
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 connectTimeout = CONNECT_TIMEOUT
-                readTimeout = 30000 // Upload puede tardar más
+                readTimeout = 60000 // Upload de MP3 puede tardar varios segundos
+                setFixedLengthStreamingMode(data.size)
                 setRequestProperty("Content-Type", "application/octet-stream")
-                setRequestProperty("X-Filename", filename)
+                setRequestProperty("Content-Length", data.size.toString())
+                setRequestProperty("X-Filename", encodedFilename)
                 doOutput = true
             }
             conn.outputStream.use { it.write(data) }

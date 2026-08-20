@@ -1090,7 +1090,22 @@ class AudioWorker:
                 raw_text = self._transcribe(whisper_model, audio_segment)
             if _dlog:
                 _dlog.log_output("TRANSCRIPTION", f"\"{raw_text}\"", elapsed_ms=(time.monotonic() - _t_transcribe) * 1000)
-            if not raw_text.strip():
+            
+            elapsed_stt_ms = (time.monotonic() - _t_transcribe) * 1000
+            if raw_text.strip():
+                _queue_message_with_semaphore(
+                    self.message_queue,
+                    self.message_semaphore,
+                    "log",
+                    f"[STT] Transcrito ({elapsed_stt_ms:.0f}ms): \"{raw_text}\"",
+                )
+            else:
+                _queue_message_with_semaphore(
+                    self.message_queue,
+                    self.message_semaphore,
+                    "log",
+                    f"[STT] Audio procesado ({elapsed_stt_ms:.0f}ms) — no se detectó texto",
+                )
                 return
 
             # 2. Sanitize (PII removal)
@@ -1186,6 +1201,23 @@ class AudioWorker:
                         elapsed_ms=(time.monotonic() - _t_llm) * 1000,
                     )
 
+            # 8.6 Music playback for song_request
+            if intent_name == "song_request":
+                music_dir = Path(__file__).resolve().parent / "music"
+                music_files = []
+                if music_dir.exists():
+                    allowed_ext = {".mp3", ".wav", ".ogg", ".m4a", ".flac"}
+                    music_files = [f for f in sorted(music_dir.iterdir()) if f.suffix.lower() in allowed_ext]
+
+                if music_files:
+                    import random
+                    chosen_song = random.choice(music_files)
+                    song_title = chosen_song.stem.replace("_", " ")
+                    intent_payload["response"] = f"¡Me encanta cantar! Vamos a escuchar {song_title}."
+                    intent_payload["play_music_file"] = str(chosen_song)
+                else:
+                    intent_payload["response"] = "Todavía no tenés canciones guardadas. ¡Pedile a mamá o papá que te suban una desde el celular!"
+
             # 9. Determine pilar for telemetry
             pilar = intent_payload.get("pilar", "general")
 
@@ -1242,6 +1274,11 @@ class AudioWorker:
                 if _dlog:
                     _dlog.log_output("TTS", "Reproducción completada", elapsed_ms=(time.monotonic() - _t_tts) * 1000)
 
+            # Reproducir archivo de música si fue solicitado
+            music_to_play = intent_payload.get("play_music_file")
+            if music_to_play and self.speech_worker is not None:
+                self.speech_worker.play_audio_file(music_to_play)
+
             if _dlog:
                 _dlog.log_output("SEGMENT", "Pipeline completo", elapsed_ms=(time.monotonic() - segment_start) * 1000)
 
@@ -1282,9 +1319,13 @@ class AudioWorker:
     # hallucinations (e.g. injecting "mamá" into adult speech).  Uses common
     # Argentine expressions to condition the decoder for rioplatense accent.
     _WHISPER_INITIAL_PROMPT: str = (
-        "Hola, buen día. ¿Cómo estás? Quiero jugar. "
+        "Hola TEO, buen día. ¿Cómo estás? Quiero jugar. "
         "Sí, dale. No quiero. Dame eso. Mirá, vení. "
-        "Está bueno. Vamos a hacer algo divertido."
+        "Está bueno. Vamos a hacer algo divertido. "
+        "¿Jugamos a las adivinanzas? Me gusta el peluche. "
+        "Estoy contento. Tengo miedo. Quiero a mi mamá. "
+        "¿Qué es eso? Contame un cuento. Estoy aburrido. "
+        "No me gusta. ¡Qué lindo! Dale, otra vez."
     )
 
     def _load_whisper_model(self):
@@ -1298,10 +1339,16 @@ class AudioWorker:
             # 'medium' model: ~1.5GB RAM (int8) — 769M params, 10x more than
             # 'base' (74M) and 3x more than 'small' (244M).  Best accuracy for
             # Spanish vocabulary including uncommon words ("flamenco", "soleado").
-            # The 'small' model still garbled these as "lo amenco", "acasio", etc.
-            # Fits on RPi 5 with 8GB RAM.  Slower than small but combined with
-            # beam_size=1 keeps transcription in a usable range.
-            model = WhisperModel("medium", device="cpu", compute_type="int8")
+            # Limitar cpu_threads=4 para evitar saturar el 100% de la CPU (12 hilos)
+            # lo que provocaba cortes térmicos/energéticos en PCs y sobrecalentamiento.
+            # En la Raspberry Pi 5 también es ideal porque tiene exactamente 4 cores.
+            model = WhisperModel(
+                "medium",
+                device="cpu",
+                compute_type="int8",
+                cpu_threads=4,
+                num_workers=1,
+            )
             if _dlog:
                 _dlog.log_output("WHISPER", "Modelo cargado", elapsed_ms=(time.monotonic() - _t0) * 1000)
             return model
@@ -1630,9 +1677,13 @@ class AudioWorker:
         # audio = self._pre_emphasis(audio, coeff=0.97)
         # --- FIN DESHABILITADO ---
 
-        # 5. Normalize — consistent level (necesario para Whisper)
+        # 5. DC offset removal — micrófonos USB baratos introducen un
+        # desplazamiento constante que confunde a Whisper.  Una sola resta
+        # del promedio limpia la señal sin tocar los formantes.
+        audio = (audio - np.mean(audio)).astype(np.float32)
+        # 6. Normalize — consistent level (necesario para Whisper)
         audio = self._normalize_audio(audio)
-        # 6. Pad — minimum duration for Whisper
+        # 7. Pad — minimum duration for Whisper
         audio = self._pad_audio(audio, sample_rate=16000, min_duration_s=1.5)
         return audio
 
@@ -1642,13 +1693,11 @@ class AudioWorker:
 
         _dlog = get_debug_logger()
 
-        # Early exit: if the raw audio is essentially silence at capture,
-        # skip all processing and Whisper entirely.  This catches segments
-        # where the VAD triggered on electrical noise but the mic captured
-        # nothing meaningful.  We check BEFORE preprocessing because our
-        # noise gate can sometimes attenuate quiet speech too aggressively.
+        # Solo descartar si es silencio absoluto digital (RMS < 0.0005)
+        # El VAD de Silero ya validó que hay habla. Un umbral alto como 0.005
+        # descartaba voces suaves o micrófonos con baja ganancia.
         raw_rms = float(np.sqrt(np.mean(audio_segment ** 2)))
-        if raw_rms < 0.005:
+        if raw_rms < 0.0005:
             return ""
 
         # Guardar copia del audio crudo ANTES del pipeline de procesamiento
@@ -1656,7 +1705,7 @@ class AudioWorker:
         raw_audio_copy = audio_segment.copy() if _dlog else None
 
         # Full audio preprocessing pipeline:
-        # bandpass → spectral denoise → noise gate → pre-emphasis → normalize → pad
+        # DC removal → normalize (peak 0.9) → pad (1.5s)
         audio_segment = self._preprocess_audio(audio_segment)
 
         # Guardar copia del audio procesado DESPUÉS del pipeline (pre-Whisper)
@@ -1665,38 +1714,31 @@ class AudioWorker:
         segments, _info = whisper_model.transcribe(
             audio_segment,
             language="es",
-            # Whisper's internal VAD pre-filters silent chunks before decoding,
-            # reducing hallucinations on residual silence within segments.
-            vad_filter=True,
-            # Greedy decoding (beam_size=1) is 2-4x faster and produces fewer
-            # hallucinations for clear adult speech.  beam_size=5 was causing
-            # low-confidence hypotheses biased by the initial_prompt to win.
-            beam_size=1,
-            # Neutral contextual prompt for Argentine Spanish
+            # vad_filter=False porque SileroVadAdapter ya segmentó el habla.
+            # vad_filter=True dentro de faster-whisper descarta segmentos cortos
+            # con padding de 1.5s, provocando transcripciones vacías.
+            vad_filter=False,
+            # Beam search con 2 hipótesis: excelente precisión sin sobrecargar la CPU
+            beam_size=2,
+            # Prompt contextual neutro para español rioplatense
             initial_prompt=self._WHISPER_INITIAL_PROMPT,
-            # Reject hallucinations on noise/silence — raised from 0.7 to 0.75
-            # to be more aggressive in noisy environments after spectral cleanup
-            no_speech_threshold=0.75,
-            # Log-prob threshold: -0.5 was too strict with larger models,
-            # causing valid speech to be rejected as empty strings.
-            # -0.8 is a balanced compromise — rejects clear garbage but
-            # accepts legitimate low-confidence transcriptions.
-            log_prob_threshold=-0.8,
-            # Reject repetitive hallucinations ("ruido ruido ruido...")
-            # caused by stationary noise feeding the decoder in a loop.
-            compression_ratio_threshold=2.0,
-            # Prevent previous transcription errors from biasing the next
-            # segment — critical in noisy environments where one bad
-            # transcription can cascade into many.
+            # Umbral de no-speech permisivo para no perder frases cortas
+            no_speech_threshold=0.6,
+            log_prob_threshold=-1.0,
+            compression_ratio_threshold=2.4,
             condition_on_previous_text=False,
-            # Skip timestamp prediction — saves decoder compute and lets it
-            # focus entirely on text accuracy for short segments
             without_timestamps=True,
         )
         text_parts = []
         for segment in segments:
             text_parts.append(segment.text.strip())
         transcript = " ".join(part for part in text_parts if part).strip()
+
+        # --- Filtro anti-alucinaciones de Whisper ---
+        # Whisper inventa frases cuando recibe audio corto, ruidoso o casi
+        # silencioso.  Las más comunes son créditos de subtítulos, agradecimientos,
+        # y repeticiones en bucle.  Las descartamos antes de pasar al LLM.
+        transcript = self._filter_hallucinations(transcript)
 
         # Guardar audios de debug (crudo + procesado + transcripción)
         if _dlog and raw_audio_copy is not None and processed_audio_copy is not None:
@@ -1708,6 +1750,55 @@ class AudioWorker:
             )
 
         return transcript
+
+    @staticmethod
+    def _filter_hallucinations(text: str) -> str:
+        """Descarta transcripciones que son alucinaciones conocidas de Whisper.
+
+        Whisper genera frases inventadas cuando recibe audio muy corto,
+        ruidoso o casi silencioso.  Las más frecuentes son:
+        - Créditos de subtítulos ("Subtítulos realizados por...", "Sous-titres...")
+        - Agradecimientos genéricos ("Gracias por ver", "Thank you...")
+        - Una sola palabra repetida N veces ("ruido ruido ruido")
+        - Texto que es eco del initial_prompt
+        """
+        if not text:
+            return ""
+
+        low = text.lower().strip()
+
+        # Frases basura conocidas (multilingüe porque Whisper a veces
+        # cambia de idioma en las alucinaciones)
+        _HALLUCINATION_PHRASES = [
+            "subtítulos realizados",
+            "subtitulos realizados",
+            "subtítulos por",
+            "sous-titres",
+            "sous titres",
+            "gracias por ver",
+            "thanks for watching",
+            "thank you for watching",
+            "suscríbete",
+            "subscribe",
+            "like and subscribe",
+            "amara.org",
+            "www.",
+            "http",
+        ]
+        for phrase in _HALLUCINATION_PHRASES:
+            if phrase in low:
+                return ""
+
+        # Palabra única repetida (ej: "ruido ruido ruido", "no no no no")
+        words = low.split()
+        if len(words) >= 3 and len(set(words)) == 1:
+            return ""
+
+        # Texto demasiado corto para ser habla real (1 carácter suelto)
+        if len(low) <= 1:
+            return ""
+
+        return text
 
     def _load_vad(self, sample_rate: int):
         return SileroVadAdapter(sample_rate=sample_rate)
@@ -1732,6 +1823,10 @@ class SpeechWorker:
         self._piper_voice: Any = None
         self._idle_event = threading.Event()
         self._idle_event.set()  # Not speaking initially
+
+        # Music playback state
+        self._music_stop_event = threading.Event()
+        self._is_playing_music = False
 
         # Cloud mode (#CLOUD-001)
         self._cloud_mode = cloud_mode
@@ -1857,6 +1952,9 @@ class SpeechWorker:
         pos = [0]  # mutable counter shared with callback
 
         def _callback(outdata: np.ndarray, frames: int, _time_info: Any, _status: Any) -> None:
+            if self._stop_event.is_set() or self._music_stop_event.is_set():
+                finished.set()
+                raise sd.CallbackStop()
             start = pos[0]
             end = start + frames
             chunk = audio_array[start:end]
@@ -1944,7 +2042,7 @@ class SpeechWorker:
     @staticmethod
     def _ensure_piper_model() -> Path:
         """Return path to the piper ONNX model, downloading it on first use."""
-        model_name = "es_MX-ald-medium"
+        model_name = "es_MX-claude-high"
         cache_dir = Path.home() / ".edge_ai_models" / "piper"
         cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -1956,7 +2054,7 @@ class SpeechWorker:
 
         base_url = (
             "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
-            f"es/es_MX/ald/medium/{model_name}"
+            f"es/es_MX/claude/high/{model_name}"
         )
 
         for suffix, target in [(".onnx", model_file), (".onnx.json", config_file)]:
@@ -1970,7 +2068,18 @@ class SpeechWorker:
         audio_chunks: list[np.ndarray] = []
         sample_rate: int = 22050  # default; updated from first chunk
 
-        for chunk in self._piper_voice.synthesize(text):
+        try:
+            from piper.config import SynthesisConfig
+            syn_config = SynthesisConfig(
+                length_scale=1.25,     # Habla más pausada, dulce y clara para niños
+                noise_scale=0.667,     # Variación natural en fonemas
+                noise_w_scale=0.8,     # Cadencia y ritmo natural
+            )
+        except Exception:
+            syn_config = None
+
+        synth_kwargs = {"syn_config": syn_config} if syn_config is not None else {}
+        for chunk in self._piper_voice.synthesize(text, **synth_kwargs):
             audio_chunks.append(chunk.audio_float_array)
             sample_rate = chunk.sample_rate
 
@@ -1981,6 +2090,105 @@ class SpeechWorker:
         audio_array = np.concatenate(audio_chunks).astype(np.float32)
         # audio_float_array is already in [-1.0, 1.0] range
         self._play_wav_via_output_stream(audio_array, sample_rate)
+
+    # ------------------------------------------------------------------
+    # Music playback
+    # ------------------------------------------------------------------
+
+    def stop_music(self) -> None:
+        """Detiene la reproducción de música en curso."""
+        self._music_stop_event.set()
+        self._is_playing_music = False
+        self._log("Música detenida")
+
+    def play_music(self, filename: str | None = None) -> bool:
+        """Reproduce una canción de la carpeta music/."""
+        music_dir = APP_DIR / "music"
+        if not music_dir.exists():
+            self._log("Carpeta music/ no existe")
+            return False
+
+        allowed_ext = {".mp3", ".wav", ".ogg", ".m4a", ".flac"}
+        if filename:
+            file_path = music_dir / filename
+            if not file_path.exists():
+                self._log(f"Canción no encontrada: {filename}")
+                return False
+        else:
+            files = [f for f in sorted(music_dir.iterdir()) if f.suffix.lower() in allowed_ext]
+            if not files:
+                self._log("No hay canciones disponibles en music/")
+                return False
+            import random
+            file_path = random.choice(files)
+
+        return self.play_audio_file(file_path)
+
+    def play_audio_file(self, file_path: Path | str) -> bool:
+        """Carga y reproduce cualquier archivo de audio (mp3, m4a, wav, ogg, flac)."""
+        path = Path(file_path)
+        if not path.exists():
+            self._log(f"Archivo no encontrado: {path}")
+            return False
+
+        self.stop_music()
+        self._music_stop_event.clear()
+        self._is_playing_music = True
+        self._log(f"Reproduciendo música: {path.name}")
+
+        audio_array: np.ndarray | None = None
+        sample_rate: int = 44100
+
+        # 1. Intentar con soundfile (WAV, OGG, FLAC, MP3)
+        try:
+            import soundfile as sf
+            data, sr = sf.read(str(path), dtype="float32")
+            if data.ndim > 1:
+                data = data.mean(axis=1)
+            audio_array = data.astype(np.float32)
+            sample_rate = sr
+        except Exception:
+            pass
+
+        # 2. Fallback con PyAV (M4A, AAC, etc.)
+        if audio_array is None:
+            try:
+                import av
+                container = av.open(str(path))
+                stream = container.streams.audio[0]
+                sample_rate = stream.rate
+                frames = []
+                for frame in container.decode(stream):
+                    arr = frame.to_ndarray()
+                    if arr.ndim > 1:
+                        arr = arr.mean(axis=0)
+                    frames.append(arr)
+                if frames:
+                    audio_array = np.concatenate(frames).astype(np.float32)
+                    max_abs = np.max(np.abs(audio_array))
+                    if max_abs > 1.0:
+                        audio_array = audio_array / max_abs
+            except Exception as e:
+                self._log(f"Error decodificando audio {path.name}: {e}")
+                self._is_playing_music = False
+                return False
+
+        if audio_array is None or len(audio_array) == 0:
+            self._log(f"Audio vacío en {path.name}")
+            self._is_playing_music = False
+            return False
+
+        self._idle_event.clear()
+        try:
+            self._play_wav_via_output_stream(audio_array, sample_rate)
+            self._log("Reproducción de música completada")
+        except Exception as exc:
+            self._log(f"Error en reproducción de música: {exc}")
+        finally:
+            self._is_playing_music = False
+            self._idle_event.set()
+
+        return True
 
     def _speak_cloud(self, text: str) -> None:
         """Sintetiza voz con Google gTTS (con caché local) vía CloudTTS."""

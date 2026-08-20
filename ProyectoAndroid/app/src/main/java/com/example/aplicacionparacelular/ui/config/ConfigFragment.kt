@@ -36,7 +36,7 @@ class ConfigFragment : Fragment() {
         if (result.resultCode == Activity.RESULT_OK) {
             result.data?.data?.let { uri ->
                 val context = requireContext()
-                val filename = uri.lastPathSegment?.substringAfterLast("/") ?: "cancion.mp3"
+                val filename = getFileNameFromUri(context, uri)
                 try {
                     val inputStream = context.contentResolver.openInputStream(uri) ?: return@let
                     val bytes = inputStream.readBytes()
@@ -47,6 +47,27 @@ class ConfigFragment : Fragment() {
                 }
             }
         }
+    }
+
+    private fun getFileNameFromUri(context: Context, uri: android.net.Uri): String {
+        var name: String? = null
+        if (uri.scheme == "content") {
+            try {
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (nameIndex != -1) {
+                            name = cursor.getString(nameIndex)
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+        if (name == null) {
+            name = uri.lastPathSegment?.substringAfterLast("/")
+        }
+        val safeName = name?.trim() ?: "cancion.mp3"
+        return if (!safeName.contains(".")) "$safeName.mp3" else safeName
     }
 
     override fun onCreateView(
@@ -369,6 +390,20 @@ class ConfigFragment : Fragment() {
                         setTextColor(resources.getColor(R.color.text_hint, null))
                         setPadding(16, 0, 16, 0)
                     }
+                    val playBtn = com.google.android.material.button.MaterialButton(
+                        requireContext(),
+                        null,
+                        com.google.android.material.R.attr.materialButtonOutlinedStyle
+                    ).apply {
+                        text = "▶"
+                        textSize = 12f
+                        minimumWidth = 0
+                        minimumHeight = 0
+                        setPadding(16, 0, 16, 0)
+                        setOnClickListener {
+                            viewModel.playSong(song.filename)
+                        }
+                    }
                     val deleteBtn = com.google.android.material.button.MaterialButton(
                         requireContext(),
                         null,
@@ -390,6 +425,7 @@ class ConfigFragment : Fragment() {
                     }
                     row.addView(nameText)
                     row.addView(sizeText)
+                    row.addView(playBtn)
                     row.addView(deleteBtn)
                     binding.songsContainer.addView(row)
                 }

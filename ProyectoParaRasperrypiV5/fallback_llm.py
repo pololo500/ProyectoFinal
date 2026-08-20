@@ -1,13 +1,13 @@
 """fallback_llm.py — LLM local de fallback para intents no reconocidos.
 
 Cuando el IntentDispatcher retorna ``unknown``, este módulo genera una
-respuesta empática usando un LLM pequeño (internlm2.5-1.8B-chat Q4_K_M)
+respuesta empática usando un LLM pequeño (Qwen2.5-3B-Instruct Q4_K_M)
 ejecutado localmente vía ``llama-cpp-python``.
 
 El modelo se descarga automáticamente desde HuggingFace la primera vez
 y se cachea en ``~/.edge_ai_models/llm/``.
 
-Diseñado para Raspberry Pi 5 (ARM64, CPU-only, ~1.2 GB RAM).
+Diseñado para Raspberry Pi 5 (ARM64, CPU-only, ~2.2 GB RAM).
 """
 from __future__ import annotations
 
@@ -23,8 +23,8 @@ from debug_logger import get_debug_logger
 # Modelo y descarga
 # ---------------------------------------------------------------------------
 
-_MODEL_REPO = "bartowski/Llama-3.2-3B-Instruct-GGUF"
-_MODEL_FILENAME = "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+_MODEL_REPO = "Qwen/Qwen2.5-3B-Instruct-GGUF"
+_MODEL_FILENAME = "qwen2.5-3b-instruct-q4_k_m.gguf"
 _MODEL_URL = (
     f"https://huggingface.co/{_MODEL_REPO}/resolve/main/{_MODEL_FILENAME}"
 )
@@ -97,7 +97,7 @@ class FallbackLLM:
         try:
             self._llm = Llama(
                 model_path=str(model_path),
-                n_ctx=1024,         # Contexto cómodo para prompt + respuesta
+                n_ctx=768,          # Suficiente para prompt TEO + historial corto
                 n_threads=4,        # 4 cores de CPU
                 n_batch=128,        # Batch eficiente
                 verbose=False,

@@ -7,6 +7,12 @@ from __future__ import annotations
 import os
 import warnings
 
+# --- Límites de hilos CPU (evita saturar el 100% de los cores y cortes térmicos) ---
+os.environ.setdefault("OMP_NUM_THREADS", "4")
+os.environ.setdefault("MKL_NUM_THREADS", "4")
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "4")
+os.environ.setdefault("NUMEXPR_NUM_THREADS", "4")
+
 # --- C++ native warnings (MediaPipe / TensorFlow Lite) ---
 # MediaPipe uses absl-logging (W0000 format) and TFLite uses its own logger.
 # Level 3 = ERROR only, suppressing INFO and WARNING from both systems.
@@ -577,6 +583,8 @@ class EyeModeApp(tk.Tk):
         robot_state.on_config_changed = _on_config_changed
         robot_state.on_night_mode_changed = _on_night_mode
         robot_state.on_power_changed = _on_power
+        robot_state.on_play_music = self.speech_worker.play_music if self.speech_worker else None
+        robot_state.on_stop_music = self.speech_worker.stop_music if self.speech_worker else None
 
         try:
             self.api_server = ApiServer()

@@ -136,4 +136,18 @@ class ConfigViewModel : ViewModel() {
             }
         }
     }
+
+    fun playSong(filename: String) {
+        _statusMessage.value = "▶️ Reproduciendo '$filename' en el robot..."
+        RobotConnectionManager.playMusic(filename) { result ->
+            if (result is ApiResult.Error) {
+                _statusMessage.value = "Error al reproducir: ${result.message}"
+            }
+        }
+    }
+
+    fun stopMusic() {
+        _statusMessage.value = "⏹️ Música detenida"
+        RobotConnectionManager.stopMusic()
+    }
 }

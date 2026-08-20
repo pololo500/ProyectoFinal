@@ -243,6 +243,20 @@ object RobotConnectionManager {
         executeAsync({ RobotApiClient.deleteMusic(filename) }, onResult)
     }
 
+    /**
+     * Reproduce una canción en el robot.
+     */
+    fun playMusic(filename: String? = null, onResult: (ApiResult<JSONObject>) -> Unit = {}) {
+        executeAsync({ RobotApiClient.playMusic(filename) }, onResult)
+    }
+
+    /**
+     * Detiene la reproducción de música en el robot.
+     */
+    fun stopMusic(onResult: (ApiResult<JSONObject>) -> Unit = {}) {
+        executeAsync({ RobotApiClient.stopMusic() }, onResult)
+    }
+
     // ------------------------------------------------------------------
     // Utilidad
     // ------------------------------------------------------------------

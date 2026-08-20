@@ -45,6 +45,8 @@ class RobotState:
         self.on_config_changed: Callable[[dict], None] | None = None
         self.on_night_mode_changed: Callable[[bool], None] | None = None
         self.on_power_changed: Callable[[bool], None] | None = None
+        self.on_play_music: Callable[[str | None], bool] | None = None
+        self.on_stop_music: Callable[[], None] | None = None
 
         # Referencias a subsistemas (set from app.py)
         self.telemetry: Any = None
@@ -298,6 +300,10 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
             self._handle_post_power()
         elif path == "/api/music/upload":
             self._handle_post_music_upload()
+        elif path == "/api/music/play":
+            self._handle_post_music_play()
+        elif path == "/api/music/stop":
+            self._handle_post_music_stop()
         else:
             self._send_error_json(404, "Endpoint no encontrado")
 
@@ -365,33 +371,32 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
         self._send_json({"status": "ok", "power_on": power_on})
 
     def _handle_post_music_upload(self) -> None:
-        """Recibe un archivo de música via multipart/form-data simple.
+        """Recibe un archivo de música via streaming raw body con header X-Filename."""
+        import urllib.parse
 
-        Para simplificar, acepta también un body raw con header
-        X-Filename para el nombre del archivo.
-        """
-        filename = self.headers.get("X-Filename")
-        if not filename:
-            self._send_error_json(400, "Falta header X-Filename")
-            return
+        raw_header = self.headers.get("X-Filename", "cancion.mp3")
+        try:
+            filename = urllib.parse.unquote(raw_header)
+        except Exception:
+            filename = raw_header
 
         # Sanear nombre de archivo
         safe_name = Path(filename).name
         if not safe_name:
-            self._send_error_json(400, "Nombre de archivo inválido")
-            return
+            safe_name = "cancion.mp3"
 
-        # Validar extensión
+        # Si no tiene extensión permitida, asegurar extensión .mp3
         allowed_ext = {".mp3", ".wav", ".ogg", ".m4a", ".flac"}
         if Path(safe_name).suffix.lower() not in allowed_ext:
-            self._send_error_json(
-                400,
-                f"Extensión no permitida. Permitidas: {', '.join(allowed_ext)}"
-            )
-            return
+            safe_name = f"{safe_name}.mp3"
 
         try:
+            MUSIC_DIR.mkdir(parents=True, exist_ok=True)
             raw_data = self._read_body()
+            if not raw_data:
+                self._send_error_json(400, "Archivo recibido vacío")
+                return
+
             dest = MUSIC_DIR / safe_name
             dest.write_bytes(raw_data)
             self._send_json({
@@ -402,6 +407,30 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
             })
         except Exception as exc:
             self._send_error_json(500, f"Error al guardar archivo: {exc}")
+
+    def _handle_post_music_play(self) -> None:
+        """Reproduce una canción específica o una al azar."""
+        body = self._parse_json_body() or {}
+        filename = body.get("filename")
+        if robot_state.on_play_music:
+            import threading
+            threading.Thread(
+                target=robot_state.on_play_music,
+                args=(filename,),
+                name="MusicPlayThread",
+                daemon=True,
+            ).start()
+            self._send_json({"status": "ok", "message": f"Reproduciendo {filename or 'música'}"})
+        else:
+            self._send_error_json(503, "Reproductor de música no disponible")
+
+    def _handle_post_music_stop(self) -> None:
+        """Detiene la reproducción de música en curso."""
+        if robot_state.on_stop_music:
+            robot_state.on_stop_music()
+            self._send_json({"status": "ok", "message": "Música detenida"})
+        else:
+            self._send_error_json(503, "Reproductor de música no disponible")
 
     # ------------------------------------------------------------------
     # DELETE endpoints
