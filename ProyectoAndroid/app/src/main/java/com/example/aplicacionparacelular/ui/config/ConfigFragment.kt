@@ -363,33 +363,79 @@ class ConfigFragment : Fragment() {
             filePickerLauncher.launch(intent)
         }
 
-        viewModel.songs.observe(viewLifecycleOwner) { songs ->
-            binding.songsContainer.removeAllViews()
-            if (songs.isEmpty()) {
-                val tv = TextView(requireContext()).apply {
-                    text = "No hay canciones cargadas"
-                    setPadding(0, 16, 0, 16)
-                    setTextColor(resources.getColor(R.color.text_hint, null))
+        viewModel.songs.observe(viewLifecycleOwner) { _ ->
+            rebuildSongsList()
+        }
+
+        viewModel.currentlyPlaying.observe(viewLifecycleOwner) { _ ->
+            rebuildSongsList()
+        }
+    }
+
+    private fun rebuildSongsList() {
+        val songs = viewModel.songs.value ?: emptyList()
+        val currentlyPlaying = viewModel.currentlyPlaying.value
+
+        binding.songsContainer.removeAllViews()
+        if (songs.isEmpty()) {
+            val tv = TextView(requireContext()).apply {
+                text = "No hay canciones cargadas"
+                setPadding(0, 16, 0, 16)
+                setTextColor(resources.getColor(R.color.text_hint, null))
+            }
+            binding.songsContainer.addView(tv)
+        } else {
+            for (song in songs) {
+                val isPlaying = song.filename == currentlyPlaying
+                val row = LinearLayout(requireContext()).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = android.view.Gravity.CENTER_VERTICAL
+                    setPadding(0, 8, 0, 8)
                 }
-                binding.songsContainer.addView(tv)
-            } else {
-                for (song in songs) {
-                    val row = LinearLayout(requireContext()).apply {
-                        orientation = LinearLayout.HORIZONTAL
-                        gravity = android.view.Gravity.CENTER_VERTICAL
-                        setPadding(0, 8, 0, 8)
+                val nameText = TextView(requireContext()).apply {
+                    text = "🎵 ${song.filename}"
+                    textSize = 14f
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                }
+                val sizeText = TextView(requireContext()).apply {
+                    text = "${song.sizeBytes / 1024}KB"
+                    textSize = 12f
+                    setTextColor(resources.getColor(R.color.text_hint, null))
+                    setPadding(16, 0, 16, 0)
+                }
+                row.addView(nameText)
+                row.addView(sizeText)
+
+                if (isPlaying) {
+                    // Indicador giratorio (ProgressBar circular pequeño)
+                    val spinner = android.widget.ProgressBar(requireContext(), null, android.R.attr.progressBarStyleSmall).apply {
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        ).apply {
+                            marginEnd = 8
+                        }
                     }
-                    val nameText = TextView(requireContext()).apply {
-                        text = "🎵 ${song.filename}"
-                        textSize = 14f
-                        layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                    }
-                    val sizeText = TextView(requireContext()).apply {
-                        text = "${song.sizeBytes / 1024}KB"
+                    row.addView(spinner)
+
+                    // Botón Stop
+                    val stopBtn = com.google.android.material.button.MaterialButton(
+                        requireContext(),
+                        null,
+                        com.google.android.material.R.attr.materialButtonOutlinedStyle
+                    ).apply {
+                        text = "⏹"
                         textSize = 12f
-                        setTextColor(resources.getColor(R.color.text_hint, null))
+                        minimumWidth = 0
+                        minimumHeight = 0
                         setPadding(16, 0, 16, 0)
+                        setOnClickListener {
+                            viewModel.stopMusic()
+                        }
                     }
+                    row.addView(stopBtn)
+                } else {
+                    // Botón Play
                     val playBtn = com.google.android.material.button.MaterialButton(
                         requireContext(),
                         null,
@@ -404,31 +450,31 @@ class ConfigFragment : Fragment() {
                             viewModel.playSong(song.filename)
                         }
                     }
-                    val deleteBtn = com.google.android.material.button.MaterialButton(
-                        requireContext(),
-                        null,
-                        com.google.android.material.R.attr.materialButtonOutlinedStyle
-                    ).apply {
-                        text = "✕"
-                        textSize = 12f
-                        minimumWidth = 0
-                        minimumHeight = 0
-                        setPadding(16, 0, 16, 0)
-                        setOnClickListener {
-                            AlertDialog.Builder(requireContext())
-                                .setTitle("Eliminar canción")
-                                .setMessage("¿Eliminar '${song.filename}'?")
-                                .setPositiveButton("Eliminar") { _, _ -> viewModel.deleteSong(song.filename) }
-                                .setNegativeButton("Cancelar", null)
-                                .show()
-                        }
-                    }
-                    row.addView(nameText)
-                    row.addView(sizeText)
                     row.addView(playBtn)
-                    row.addView(deleteBtn)
-                    binding.songsContainer.addView(row)
                 }
+
+                // Botón Eliminar
+                val deleteBtn = com.google.android.material.button.MaterialButton(
+                    requireContext(),
+                    null,
+                    com.google.android.material.R.attr.materialButtonOutlinedStyle
+                ).apply {
+                    text = "✕"
+                    textSize = 12f
+                    minimumWidth = 0
+                    minimumHeight = 0
+                    setPadding(16, 0, 16, 0)
+                    setOnClickListener {
+                        AlertDialog.Builder(requireContext())
+                            .setTitle("Eliminar canción")
+                            .setMessage("¿Eliminar '${song.filename}'?")
+                            .setPositiveButton("Eliminar") { _, _ -> viewModel.deleteSong(song.filename) }
+                            .setNegativeButton("Cancelar", null)
+                            .show()
+                    }
+                }
+                row.addView(deleteBtn)
+                binding.songsContainer.addView(row)
             }
         }
     }

@@ -1978,6 +1978,7 @@ class SpeechWorker:
         # Music playback state
         self._music_stop_event = threading.Event()
         self._is_playing_music = False
+        self._current_song_name: str | None = None
 
         # Cloud mode (#CLOUD-001)
         self._cloud_mode = cloud_mode
@@ -2250,6 +2251,7 @@ class SpeechWorker:
         """Detiene la reproducción de música en curso."""
         self._music_stop_event.set()
         self._is_playing_music = False
+        self._current_song_name = None
         self._log("Música detenida")
 
     def play_music(self, filename: str | None = None) -> bool:
@@ -2285,6 +2287,7 @@ class SpeechWorker:
         self.stop_music()
         self._music_stop_event.clear()
         self._is_playing_music = True
+        self._current_song_name = path.name
         self._log(f"Reproduciendo música: {path.name}")
 
         audio_array: np.ndarray | None = None
@@ -2337,6 +2340,7 @@ class SpeechWorker:
             self._log(f"Error en reproducción de música: {exc}")
         finally:
             self._is_playing_music = False
+            self._current_song_name = None
             self._idle_event.set()
 
         return True

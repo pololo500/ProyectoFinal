@@ -27,6 +27,9 @@ class ConfigViewModel : ViewModel() {
     private val _songs = MutableLiveData<List<SongItem>>(emptyList())
     val songs: LiveData<List<SongItem>> = _songs
 
+    private val _currentlyPlaying = MutableLiveData<String?>(null)
+    val currentlyPlaying: LiveData<String?> = _currentlyPlaying
+
     private val _statusMessage = MutableLiveData<String?>()
     val statusMessage: LiveData<String?> = _statusMessage
 
@@ -100,6 +103,10 @@ class ConfigViewModel : ViewModel() {
                         }
                     }
                     _songs.value = list
+                    // Actualizar canción en reproducción desde la respuesta del servidor
+                    val playing = if (result.data.isNull("currently_playing")) null
+                                  else result.data.optString("currently_playing", null)
+                    _currentlyPlaying.value = playing
                 }
                 is ApiResult.Error -> {
                     _statusMessage.value = "Error al cargar canciones: ${result.message}"
@@ -140,14 +147,28 @@ class ConfigViewModel : ViewModel() {
     fun playSong(filename: String) {
         _statusMessage.value = "▶️ Reproduciendo '$filename' en el robot..."
         RobotConnectionManager.playMusic(filename) { result ->
-            if (result is ApiResult.Error) {
-                _statusMessage.value = "Error al reproducir: ${result.message}"
+            when (result) {
+                is ApiResult.Success -> {
+                    _currentlyPlaying.value = filename
+                }
+                is ApiResult.Error -> {
+                    _statusMessage.value = "Error al reproducir: ${result.message}"
+                }
             }
         }
     }
 
     fun stopMusic() {
-        _statusMessage.value = "⏹️ Música detenida"
-        RobotConnectionManager.stopMusic()
+        RobotConnectionManager.stopMusic { result ->
+            when (result) {
+                is ApiResult.Success -> {
+                    _currentlyPlaying.value = null
+                    _statusMessage.value = "⏹️ Música detenida"
+                }
+                is ApiResult.Error -> {
+                    _statusMessage.value = "Error al detener: ${result.message}"
+                }
+            }
+        }
     }
 }

@@ -38,6 +38,7 @@ class RobotState:
         self.brightness: float = 1.0       # 0.0-1.0
         self.current_emotion: str | None = None
         self.current_emotion_score: float = 0.0
+        self.currently_playing_song: str | None = None  # Canción en reproducción
         self._lock = threading.Lock()
 
         # Cola de notificaciones para la app Android (crisis, logros, pedidos)
@@ -319,7 +320,12 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
                         "size_bytes": f.stat().st_size,
                         "modified": datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
                     })
-        self._send_json({"songs": songs})
+        # Consultar canción en reproducción desde el speech_worker
+        currently_playing: str | None = None
+        sw = robot_state.speech_worker
+        if sw is not None and hasattr(sw, '_is_playing_music') and sw._is_playing_music:
+            currently_playing = getattr(sw, '_current_song_name', None)
+        self._send_json({"songs": songs, "currently_playing": currently_playing})
 
     def _handle_get_notifications(self) -> None:
         """Devuelve y vacía las notificaciones pendientes.
@@ -462,6 +468,7 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
         body = self._parse_json_body() or {}
         filename = body.get("filename")
         if robot_state.on_play_music:
+            robot_state.currently_playing_song = filename
             import threading
             threading.Thread(
                 target=robot_state.on_play_music,
@@ -477,6 +484,7 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
         """Detiene la reproducción de música en curso."""
         if robot_state.on_stop_music:
             robot_state.on_stop_music()
+            robot_state.currently_playing_song = None
             self._send_json({"status": "ok", "message": "Música detenida"})
         else:
             self._send_error_json(503, "Reproductor de música no disponible")
