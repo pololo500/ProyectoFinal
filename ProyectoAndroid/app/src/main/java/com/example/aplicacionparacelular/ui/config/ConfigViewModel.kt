@@ -145,13 +145,18 @@ class ConfigViewModel : ViewModel() {
     }
 
     fun playSong(filename: String) {
+        // Actualización optimista: mostrar spinner inmediatamente
+        _currentlyPlaying.value = filename
         _statusMessage.value = "▶️ Reproduciendo '$filename' en el robot..."
         RobotConnectionManager.playMusic(filename) { result ->
             when (result) {
                 is ApiResult.Success -> {
-                    _currentlyPlaying.value = filename
+                    // Confirmar — sincronizar con estado real del servidor
+                    loadSongs()
                 }
                 is ApiResult.Error -> {
+                    // Revertir UI optimista
+                    _currentlyPlaying.value = null
                     _statusMessage.value = "Error al reproducir: ${result.message}"
                 }
             }
@@ -159,14 +164,19 @@ class ConfigViewModel : ViewModel() {
     }
 
     fun stopMusic() {
+        // Actualización optimista: quitar spinner inmediatamente
+        _currentlyPlaying.value = null
+        _statusMessage.value = "⏹️ Música detenida"
         RobotConnectionManager.stopMusic { result ->
             when (result) {
                 is ApiResult.Success -> {
-                    _currentlyPlaying.value = null
-                    _statusMessage.value = "⏹️ Música detenida"
+                    // Confirmar — sincronizar con estado real del servidor
+                    loadSongs()
                 }
                 is ApiResult.Error -> {
                     _statusMessage.value = "Error al detener: ${result.message}"
+                    // Sincronizar para ver el estado real
+                    loadSongs()
                 }
             }
         }

@@ -1139,6 +1139,8 @@ class EdgeAiDesktopApp(tk.Tk):
         robot_state.routine_scheduler = self.routine_scheduler
         robot_state.speech_worker = self.speech_worker
         robot_state.volume_limit = self._volume_var.get()
+        robot_state.on_play_music = self.speech_worker.play_music if self.speech_worker else None
+        robot_state.on_stop_music = self.speech_worker.stop_music if self.speech_worker else None
 
         try:
             self.api_server = ApiServer()
