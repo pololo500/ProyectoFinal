@@ -4,10 +4,12 @@ sounddevice
 silero-vad
 faster-whisper
 spacy
+sentence-transformers
 scrubadub
 numpy
 Pillow
 piper-tts
+--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 llama-cpp-python
 groq
 edge-tts

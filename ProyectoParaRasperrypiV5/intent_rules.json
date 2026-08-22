@@ -3,15 +3,44 @@
     "pilar": "general",
     "examples": [
       "hola",
+      "hola teo",
       "buenos dias",
+      "buenos dias teo",
       "buenas tardes",
       "que tal",
       "hey",
       "holi"
     ],
-    "response": "¡Hola! Qué lindo que estés acá. ¿Querés jugar o charlar conmigo?",
+    "response": [
+      "¡Hola! Qué lindo que estés acá. ¿Querés jugar o charlar conmigo?",
+      "¡Hola! Me alegra verte. ¿Qué querés hacer hoy?",
+      "¡Holi! Estoy acá para jugar o charlar. ¿Qué te copa?"
+    ],
     "emotions": ["feliz", "neutral"],
     "emotion_threshold": 0.10
+  },
+  "activity_offer": {
+    "pilar": "cognitivo",
+    "examples": [
+      "que podemos hacer",
+      "que podemos hacer?",
+      "qué podemos hacer",
+      "que hacemos",
+      "qué hacemos",
+      "que queres hacer",
+      "qué querés hacer",
+      "que jugamos",
+      "a que jugamos",
+      "que hay para hacer",
+      "estoy aburrido",
+      "estoy aburrida",
+      "no se que hacer"
+    ],
+    "response": [
+      "¡Hay de todo! Podemos jugar al veo veo, piedra papel o tijera, escuchar música o charlar. ¿Cuál te copa?",
+      "¡Dale! ¿Jugamos al veo veo, ponemos una canción o hacemos yoga un ratito?",
+      "Podemos jugar, cantar o conversar. Decime qué preferís."
+    ]
   },
   "farewell": {
     "pilar": "general",
@@ -20,9 +49,14 @@
       "nos vemos",
       "hasta luego",
       "me voy",
-      "adios"
+      "adios",
+      "adios teo"
     ],
-    "response": "¡Chau! Fue muy divertido estar con vos. ¡Nos vemos pronto!",
+    "response": [
+      "¡Chau! Fue muy divertido estar con vos. ¡Nos vemos pronto!",
+      "¡Chau chau! Gracias por jugar conmigo. ¡Hasta rato!",
+      "¡Nos vemos! Que tengas un día lindo."
+    ],
     "emotions": [],
     "emotion_threshold": 0.0
   },
@@ -34,11 +68,15 @@
       "me siento mal",
       "no estoy bien",
       "estoy llorando",
-      "me duele",
+      "me duele el corazón",
       "no me gusta nada",
       "quiero llorar"
     ],
-    "response": "Entiendo que te sentís así. Está bien estar triste a veces. ¿Querés que respiremos juntos para sentirnos mejor?",
+    "response": [
+      "Entiendo que te sentís así. Está bien estar triste a veces. ¿Querés que respiremos juntos para sentirnos mejor?",
+      "Estoy acá con vos. A veces ponernos tristes está bien. ¿Querés un abrazo o respirar despacito?",
+      "Qué bajón que te sientas así. Te acompaño. ¿Querés que hagamos algo calmito?"
+    ],
     "emotions": ["triste"],
     "emotion_threshold": 0.12
   },
@@ -51,10 +89,15 @@
       "no quiero nada",
       "dejame",
       "andate",
-      "no me gusta",
-      "me enoja"
+      "me enoja",
+      "estoy furioso",
+      "estoy furiosa"
     ],
-    "response": "Veo que estás enojado. Está bien sentirse así. ¿Querés que hagamos respiraciones juntos? Inspirá profundo conmigo... uno... dos... tres... y soltá despacito.",
+    "response": [
+      "Veo que estás enojado. Está bien sentirse así. ¿Querés que hagamos respiraciones juntos?",
+      "Entiendo que estés enojado. No pasa nada. Inspirá conmigo... uno, dos, tres... y soltá despacito.",
+      "Está bien enojarse a veces. Estoy acá. ¿Querés que nos calmemos juntos?"
+    ],
     "emotions": ["enojado"],
     "emotion_threshold": 0.12
   },
@@ -68,7 +111,11 @@
       "me encanta",
       "que divertido"
     ],
-    "response": "¡Qué bueno que estés tan feliz! Me pone contento verte así. ¿Querés que hagamos algo divertido juntos?",
+    "response": [
+      "¡Qué bueno que estés tan feliz! Me pone contento verte así. ¿Querés que hagamos algo divertido juntos?",
+      "¡Qué alegría! Me encanta cuando estás contento. ¿Jugamos algo?",
+      "¡Genial! Esa sonrisa me gusta un montón. ¿Qué hacemos ahora?"
+    ],
     "emotions": ["feliz"],
     "emotion_threshold": 0.14
   },
@@ -81,11 +128,15 @@
       "quiero a papa",
       "quiero a mi papa",
       "no puedo mas",
-      "tengo miedo",
       "me quiero ir",
-      "no quiero estar solo"
+      "no quiero estar solo",
+      "no quiero estar sola"
     ],
-    "response": "Estoy acá con vos, no estás solo. ¿Querés que llamemos a mamá o a papá? También podemos respirar juntos para sentirnos más tranquilos.",
+    "response": [
+      "Estoy acá con vos, no estás solo. ¿Querés que llamemos a mamá o a papá?",
+      "No estás solo, yo te acompaño. Si querés, avisamos a mamá o a papá ahora.",
+      "Estoy cerquita. Podemos llamar a mamá o papá, o respirar juntos un ratito."
+    ],
     "emotions": [],
     "emotion_threshold": 0.0
   },
@@ -99,7 +150,11 @@
       "estoy nervioso",
       "estoy nerviosa"
     ],
-    "response": "¡Dale! Vamos a respirar juntos. Inspirá profundo por la nariz como si olieras una flor... uno, dos, tres. Ahora soltá el aire despacito como si apagaras una velita... uno, dos, tres, cuatro. ¡Muy bien! ¿Otra vez?"
+    "response": [
+      "¡Dale! Vamos a respirar juntos. Inspirá profundo por la nariz... uno, dos, tres. Ahora soltá el aire despacito. ¡Muy bien!",
+      "Respiremos despacito. Oler una flor... y soplar una velita. ¿Otra vez?",
+      "Inspirá conmigo... y soltá. De a poquito el cuerpo se calma."
+    ]
   },
   "yoga_request": {
     "pilar": "emocional",
@@ -110,7 +165,11 @@
       "quiero estirarme",
       "hagamos ejercicio"
     ],
-    "response": "¡Vamos a hacer yoga! Poné los pies juntos y levantá los brazos como si fueras un árbol grande y fuerte. Ahora quedate quietito como una estatua... ¡Muy bien, lo estás haciendo genial!"
+    "response": [
+      "¡Vamos a hacer yoga! Poné los pies juntos y levantá los brazos como un árbol grande. ¡Muy bien!",
+      "¡Yoga! Estirá los bracitos hacia arriba y quedate quietito como una estatua. ¡Genial!",
+      "Vamos a movernos despacito. Estirá el cuerpo y respirá. ¡Lo estás haciendo bárbaro!"
+    ]
   },
   "play_veo_veo": {
     "pilar": "cognitivo",
@@ -121,7 +180,11 @@
       "dale veo veo",
       "juguemos a veo veo"
     ],
-    "response": "¡Dale, juguemos al Veo-veo! Veo veo... una cosita... ¿De qué color será?",
+    "response": [
+      "¡Dale, juguemos al Veo-veo! Veo veo... una cosita... ¿De qué color será?",
+      "¡Veo veo! Yo empiezo. Veo veo una cosita... ¿de qué color?",
+      "¡Sí! Juguemos al Veo-veo. Prestá atención..."
+    ],
     "game_type": "veo_veo"
   },
   "play_piedra_papel": {
@@ -132,7 +195,11 @@
       "dale piedra papel",
       "quiero jugar piedra papel o tijera"
     ],
-    "response": "¡Dale! A la cuenta de tres elegí: piedra, papel o tijera. ¿Listo? ¡Uno, dos, tres!",
+    "response": [
+      "¡Dale! A la cuenta de tres elegí: piedra, papel o tijera. ¿Listo? ¡Uno, dos, tres!",
+      "¡Piedra, papel o tijera! ¿Listo? ¡Uno, dos, tres!",
+      "¡Juguemos! Elegí piedra, papel o tijera. ¡Ya va!"
+    ],
     "game_type": "piedra_papel_tijera"
   },
   "question_curiosity": {
@@ -147,7 +214,11 @@
       "que es",
       "como funciona"
     ],
-    "response": "¡Qué buena pregunta! Me encanta que seas tan curioso. Pensemos juntos... ¿Vos qué pensás que puede ser?"
+    "response": [
+      "¡Qué buena pregunta! Me encanta que seas tan curioso. Pensemos juntos... ¿Vos qué pensás que puede ser?",
+      "¡Me gusta que preguntes! Contame un poquito más y pensamos juntos.",
+      "¡Buena pregunta! ¿Vos qué se te ocurre?"
+    ]
   },
   "song_request": {
     "pilar": "cognitivo",
@@ -159,7 +230,11 @@
       "quiero escuchar musica",
       "pone musica"
     ],
-    "response": "¡Me encanta cantar! La la la... ¿Cuál es tu canción favorita? Podemos escucharla juntos."
+    "response": [
+      "¡Me encanta cantar! ¿Cuál es tu canción favorita? Podemos escucharla juntos.",
+      "¡Música! Dale, ponemos una canción.",
+      "¡Sí! Vamos a escuchar algo rico."
+    ]
   },
   "routine_ack": {
     "pilar": "autonomia",
@@ -172,7 +247,11 @@
       "ya me vesti",
       "termine"
     ],
-    "response": "¡Muy bien! ¡Lo hiciste solito! Eso es genial, estoy muy orgulloso de vos. ¡Chocá los cinco!",
+    "response": [
+      "¡Muy bien! ¡Lo hiciste solito! Eso es genial, estoy muy orgulloso de vos.",
+      "¡Genial! ¡Lo lograste! Sos un campeón.",
+      "¡Listo! Qué bien que lo hiciste vos. ¡Chocá los cinco!"
+    ],
     "routine_action": "acknowledge"
   },
   "routine_resist": {
@@ -185,19 +264,26 @@
       "no quiero hacer eso",
       "cinco minutos mas"
     ],
-    "response": "Entiendo que querés seguir un ratito más. ¿Qué te parece si hacemos una cosa? Jugamos un poquito más y después hacemos lo que toca. ¿Dale?"
+    "response": [
+      "Entiendo que querés seguir un ratito más. ¿Jugamos un poquito más y después hacemos lo que toca?",
+      "Está bien querer un ratito más. ¿Hacemos una cosa más y después seguimos?",
+      "Te entiendo. Un ratito más y después hacemos lo que hay que hacer. ¿Dale?"
+    ]
   },
   "help_request": {
     "pilar": "autonomia",
     "examples": [
-      "no puedo",
       "ayudame",
       "no se como",
       "es muy dificil",
-      "no me sale",
-      "puedes ayudarme"
+      "puedes ayudarme",
+      "necesito ayuda"
     ],
-    "response": "¡Claro que te ayudo! Vamos despacio, paso a paso. Primero contame, ¿qué estás intentando hacer?"
+    "response": [
+      "¡Claro que te ayudo! Vamos despacio, paso a paso. Primero contame, ¿qué estás intentando hacer?",
+      "Te ayudo. De a poquito. ¿Qué parte te cuesta?",
+      "Estoy acá para ayudarte. Contame qué necesitás y lo hacemos juntos."
+    ]
   },
   "autonomy_decision": {
     "pilar": "autonomia",
@@ -209,7 +295,11 @@
       "quiero el otro",
       "ese no ese si"
     ],
-    "response": "¡Qué bien que elegiste vos solito! Me gusta mucho cuando decidís por vos mismo. ¡Sos un campeón!"
+    "response": [
+      "¡Qué bien que elegiste vos solito! Me gusta mucho cuando decidís por vos mismo.",
+      "¡Buena elección! Me encanta que decidas vos.",
+      "¡Genial! Elegiste vos. Eso está buenísimo."
+    ]
   },
   "call_parent": {
     "pilar": "vincular",
@@ -222,7 +312,11 @@
       "decile a mama",
       "decile a papa"
     ],
-    "response": "Entendido, voy a avisarle a mamá o papá que querés hablar. Mientras tanto, estoy acá con vos.",
+    "response": [
+      "Entendido, voy a avisarle a mamá o papá que querés hablar. Mientras tanto, estoy acá con vos.",
+      "Dale, les aviso a mamá o papá. Yo me quedo con vos.",
+      "Ya les aviso. No estás solo, estoy acá."
+    ],
     "emotions": [],
     "emotion_threshold": 0.0
   },
@@ -237,13 +331,13 @@
       "te quiero",
       "te amo",
       "sos mi amigo",
-      "sos mi amiga",
-      "sos lindo",
-      "sos linda",
-      "sos muy bueno",
-      "sos muy buena"
+      "sos mi amiga"
     ],
-    "response": "¡Qué lindo! Me encantan los abrazos y estar con vos. ¡Te quiero mucho!",
+    "response": [
+      "¡Qué lindo! Me encantan los abrazos y estar con vos. ¡Te quiero mucho!",
+      "¡Abrazo grande! Me gusta mucho estar con vos.",
+      "¡Un abrazo fuerte! Sos muy especial para mí."
+    ],
     "emotions": ["feliz", "triste", "neutral"],
     "emotion_threshold": 0.10
   },
@@ -255,11 +349,14 @@
       "me molesta el ruido",
       "está muy fuerte",
       "me duelen los oídos",
-      "me molesta",
       "no me gusta este ruido",
       "hay mucho sonido"
     ],
-    "response": "Tranqui, si te molesta podemos tomarnos un ratito de silencio y respirar despacito.",
+    "response": [
+      "Tranqui, si te molesta podemos tomarnos un ratito de silencio y respirar despacito.",
+      "Bajamos el volumen y hacemos silencio un ratito. Estoy acá.",
+      "Entiendo, el ruido a veces molesta. Vamos más suave."
+    ],
     "emotions": ["triste", "enojado", "neutral"],
     "emotion_threshold": 0.10
   },
@@ -275,7 +372,11 @@
       "me asusté",
       "tengo cuco"
     ],
-    "response": "No tengas miedo, estoy acá cerquita para acompañarte. Todo va a estar bien.",
+    "response": [
+      "No tengas miedo, estoy acá cerquita para acompañarte. Todo va a estar bien.",
+      "Estoy acá con vos. El miedo a veces aparece y después se va. Te acompaño.",
+      "Tranqui, no estás solo. Yo te cuido un ratito."
+    ],
     "emotions": ["triste", "sorprendido", "neutral"],
     "emotion_threshold": 0.10
   },
@@ -289,7 +390,11 @@
       "me quiero acostar",
       "tengo fiaca"
     ],
-    "response": "Descansar hace muy bien cuando tenemos sueño. Ponete cómodo y relajá un ratito.",
+    "response": [
+      "Descansar hace muy bien cuando tenemos sueño. Ponete cómodo y relajá un ratito.",
+      "Qué rico un ratito de calma. Cerrá los ojitos despacito si querés.",
+      "Cuando hay sueño, el cuerpo pide descanso. Te acompaño suave."
+    ],
     "emotions": ["neutral", "triste"],
     "emotion_threshold": 0.10
   },
@@ -298,14 +403,17 @@
     "priority": 10,
     "examples": [
       "no me sale",
-      "no puedo",
-      "es muy difícil",
       "estoy frustrado",
       "estoy frustrada",
       "no quiero intentar más",
-      "no me sale nada"
+      "no me sale nada",
+      "no puedo hacerlo"
     ],
-    "response": "No pasa nada si algo cuesta. A veces lleva tiempo aprender. Lo importante es intentar con calma y sin apuro.",
+    "response": [
+      "No pasa nada si algo cuesta. A veces lleva tiempo aprender. Lo importante es intentar con calma.",
+      "Está bien que cueste. Vamos de a poquito, sin apuro.",
+      "Cuando algo no sale, respiramos y lo intentamos otra vez. Te ayudo."
+    ],
     "emotions": ["enojado", "triste", "neutral"],
     "emotion_threshold": 0.10
   },
@@ -319,7 +427,11 @@
       "tengo ganas de comer",
       "tengo ganas de tomar agua"
     ],
-    "response": "¡Es importante cuidar la pancita! Podés pedirle un vaso de agua o algo de comer a los grandes.",
+    "response": [
+      "¡Es importante cuidar la pancita! Podés pedirle un vaso de agua o algo de comer a los grandes.",
+      "Si tenés hambre o sed, avisales a mamá o papá. El cuerpo te está pidiendo algo.",
+      "Buena idea cuidar el cuerpo. Pedí agua o comida a un grande."
+    ],
     "emotions": [],
     "emotion_threshold": 0.0
   },
@@ -333,7 +445,11 @@
       "me lavo los dientes",
       "a lavarse las manos"
     ],
-    "response": "¡Muy bien por cuidar tu cuerpo y estar limpio! Es un gran hábito.",
+    "response": [
+      "¡Muy bien por cuidar tu cuerpo y estar limpio! Es un gran hábito.",
+      "¡Genial! Ir al baño o lavarse es cuidar el cuerpo.",
+      "¡Buenísimo! Esas cosas nos ayudan a estar bien."
+    ],
     "emotions": [],
     "emotion_threshold": 0.0
   },
@@ -347,7 +463,11 @@
       "guardemos",
       "a guardar"
     ],
-    "response": "¡Genial! Dejar las cosas en su lugar ayuda un montón a que todo esté lindo y ordenado.",
+    "response": [
+      "¡Genial! Dejar las cosas en su lugar ayuda un montón a que todo esté lindo y ordenado.",
+      "¡A guardar! Después es más fácil encontrar todo.",
+      "¡Vamos a ordenar! Vos podés, yo te acompaño."
+    ],
     "emotions": [],
     "emotion_threshold": 0.0
   },
@@ -359,7 +479,11 @@
       "gracias teo",
       "te agradezco"
     ],
-    "response": "¡De nada! Me alegra mucho poder acompañarte siempre.",
+    "response": [
+      "¡De nada! Me alegra mucho poder acompañarte siempre.",
+      "¡Para eso estoy! Me gusta estar con vos.",
+      "¡De nada! Cuando quieras, acá estoy."
+    ],
     "emotions": ["feliz", "neutral"],
     "emotion_threshold": 0.10
   }

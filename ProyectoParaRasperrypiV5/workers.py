@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import queue
+import random
 import re
 import subprocess
 import sys
@@ -45,8 +47,8 @@ except ImportError as exc:  # pragma: no cover - runtime dependency check.
 
 try:
     import spacy
-except ImportError as exc:  # pragma: no cover - runtime dependency check.
-    raise RuntimeError("spacy es requerido para la PoC") from exc
+except ImportError:
+    spacy = None  # type: ignore[assignment]
 
 from debug_logger import get_debug_logger
 
@@ -55,6 +57,14 @@ from debug_logger import get_debug_logger
 class WorkerMessage:
     kind: str
     payload: Any
+
+
+@dataclass(frozen=True)
+class TranscriptionResult:
+    text: str
+    low_confidence: bool = False
+    avg_logprob: float | None = None
+    no_speech_prob: float | None = None
 
 
 def _queue_message(message_queue: queue.Queue[WorkerMessage], kind: str, payload: Any) -> None:
@@ -136,32 +146,39 @@ def discover_output_devices() -> list[tuple[int, str]]:
 
 
 class IntentDispatcher:
+    # Cosine scores from MiniLM are not comparable to spaCy similarity.
+    MIN_CONFIDENCE_EMBEDDINGS: float = 0.58
+    MIN_CONFIDENCE_SPACY: float = 0.45
+    # Reject canned replies when two distinct intents are this close.
+    CONFIDENCE_MARGIN: float = 0.08
+    # Near-exact matches skip the margin/priority tie-break.
+    EXACT_MATCH_THRESHOLD: float = 0.95
+    _EMBEDDING_MODEL_NAME: str = "paraphrase-multilingual-MiniLM-L12-v2"
+
     def __init__(self, intents: dict[str, dict[str, Any]]) -> None:
         self.intents = intents
         self.nlp = self._load_spacy_model()
-        # Current observed emotion context (label, score), updated externally
-        # Example: {"label": "feliz", "score": 0.82}
         self.current_emotion: dict[str, Any] | None = None
-        # Pre-compute spaCy docs for all intent examples to avoid
-        # reprocessing on every dispatch call (significant CPU save).
+        self._sentence_model: Any = self._load_sentence_model()
         self._example_docs: dict[str, list[tuple[str, Any]]] = {}
-        for intent_name, intent_def in self.intents.items():
-            examples = intent_def.get("examples", [])
-            self._example_docs[intent_name] = [
-                (ex, self.nlp(ex)) for ex in examples
-            ]
+        self._example_embeddings: dict[str, list[tuple[str, np.ndarray]]] = {}
+        self._precompute_examples()
+
+    @property
+    def MIN_CONFIDENCE(self) -> float:
+        if self._sentence_model is not None:
+            return self.MIN_CONFIDENCE_EMBEDDINGS
+        return self.MIN_CONFIDENCE_SPACY
 
     @classmethod
     def from_file(cls, path: Path) -> "IntentDispatcher":
         if path.exists():
             intents = json.loads(path.read_text(encoding="utf-8"))
         else:
-            # Default intents now may include optional emotion requirements
             intents = {
                 "greeting": {
                     "examples": ["hola", "buenos dias", "hey"],
                     "response": "Hola, estoy escuchando.",
-                    # Accept when user is neutral or happy (OR logic)
                     "emotions": ["feliz", "neutral"],
                     "emotion_threshold": 0.14,
                 },
@@ -181,21 +198,49 @@ class IntentDispatcher:
             self.current_emotion = {"label": label, "score": float(score or 0.0)}
 
     def _load_spacy_model(self):
-        # Prioritize es_core_news_md (20k word vectors for high-accuracy semantic matching).
-        # Falls back to es_core_news_sm, then blank('es') if not found.
+        if spacy is None:
+            return None
         for model_name in ("es_core_news_md", "es_core_news_sm"):
             try:
                 return spacy.load(model_name)
             except Exception:
                 continue
-        return spacy.blank("es")
+        try:
+            return spacy.blank("es")
+        except Exception:
+            return None
 
-    # Minimum confidence to accept an intent match.  Matches below this
-    # threshold are returned as "unknown" so the fallback LLM can handle them.
-    # 0.45 is calibrated for es_core_news_md: low enough for exact keyword
-    # matches ("hola" → greeting) but high enough to reject spurious semantic
-    # similarities ("el gato fue a la luna" → play @ 0.31).
-    MIN_CONFIDENCE: float = 0.45
+    def _load_sentence_model(self) -> Any:
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            return SentenceTransformer(self._EMBEDDING_MODEL_NAME)
+        except Exception:
+            return None
+
+    def _precompute_examples(self) -> None:
+        for intent_name, intent_def in self.intents.items():
+            examples = [str(ex) for ex in intent_def.get("examples", []) if str(ex).strip()]
+            if self.nlp is not None:
+                self._example_docs[intent_name] = [
+                    (ex, self.nlp(ex)) for ex in examples
+                ]
+            else:
+                self._example_docs[intent_name] = []
+            if self._sentence_model is not None and examples:
+                try:
+                    vectors = self._sentence_model.encode(
+                        examples,
+                        convert_to_numpy=True,
+                        normalize_embeddings=True,
+                        show_progress_bar=False,
+                    )
+                    self._example_embeddings[intent_name] = [
+                        (ex, np.asarray(vec, dtype=np.float32))
+                        for ex, vec in zip(examples, vectors)
+                    ]
+                except Exception:
+                    self._example_embeddings[intent_name] = []
 
     def dispatch(self, text: str, emotion: dict[str, Any] | None = None) -> dict[str, Any]:
         _dlog = get_debug_logger()
@@ -206,57 +251,124 @@ class IntentDispatcher:
         if _dlog:
             _dlog.log_input("INTENT_DISPATCH", f"text=\"{candidate_text}\"")
         _t0 = time.monotonic()
-        source_doc = self.nlp(candidate_text)
-        best_match = {"intent_name": "unknown", "confidence": 0.0, "response": ""}
 
-        # Use provided emotion context or the last observed one
-        emotion_context = emotion if emotion is not None else self.current_emotion
+        intent_scores = self._score_intents(candidate_text)
+        ranked = sorted(intent_scores.items(), key=lambda item: item[1], reverse=True)
+        if not ranked:
+            return {"intent_name": "unknown", "confidence": 0.0, "response": ""}
 
-        for intent_name, intent_definition in self.intents.items():
-            response = intent_definition.get("response", "")
-            required_emotions = intent_definition.get("emotions")
-            emotion_threshold = float(intent_definition.get("emotion_threshold", 0.0))
-            cached_examples = self._example_docs.get(intent_name, [])
-            for _example_text, example_doc in cached_examples:
-                similarity = self._similarity(source_doc, example_doc)
-                # --- DESHABILITADO: el filtro por emociones no funciona bien ---
-                # Si se reactiva, verificar que las emociones detectadas sean
-                # confiables antes de usarlas para filtrar intents.
-                # if required_emotions:
-                #     if not emotion_context:
-                #         # no emotion info -> skip this intent
-                #         continue
-                #     label = str(emotion_context.get("label", "")).lower()
-                #     score = float(emotion_context.get("score", 0.0))
-                #     matches_emotion = any(label == req.lower() and score >= emotion_threshold for req in required_emotions)
-                #     if not matches_emotion:
-                #         continue
-                # --- FIN DESHABILITADO ---
+        top1_name, top1_score = ranked[0]
+        top2_score = ranked[1][1] if len(ranked) > 1 else 0.0
+        chosen_name, chosen_score = top1_name, top1_score
+        reject_reason = ""
 
-                if similarity > best_match["confidence"]:
-                    best_match = {
-                        "intent_name": intent_name,
-                        "confidence": float(similarity),
-                        "response": response,
-                    }
+        if top1_score < self.MIN_CONFIDENCE:
+            reject_reason = (
+                f"rejected={top1_name} conf={top1_score:.3f} "
+                f"< {self.MIN_CONFIDENCE} → unknown"
+            )
+            chosen_name = "unknown"
+        elif top1_score >= self.EXACT_MATCH_THRESHOLD:
+            chosen_name, chosen_score = top1_name, top1_score
+        elif (top1_score - top2_score) < self.CONFIDENCE_MARGIN:
+            near = [
+                (name, score)
+                for name, score in ranked
+                if (top1_score - score) < self.CONFIDENCE_MARGIN
+            ]
+            max_priority = max(self._intent_priority(name) for name, _score in near)
+            winners = [
+                (name, score)
+                for name, score in near
+                if self._intent_priority(name) == max_priority
+            ]
+            if len(winners) == 1:
+                chosen_name, chosen_score = winners[0]
+            else:
+                reject_reason = (
+                    f"ambiguous top1={top1_name}({top1_score:.3f}) "
+                    f"top2={ranked[1][0]}({top2_score:.3f}) margin<{self.CONFIDENCE_MARGIN} → unknown"
+                )
+                chosen_name = "unknown"
 
-        # Reject low-confidence matches — let the fallback LLM handle them
-        if best_match["confidence"] < self.MIN_CONFIDENCE:
+        if chosen_name == "unknown":
             if _dlog:
                 _dlog.log_output(
                     "INTENT_DISPATCH",
-                    f"rejected={best_match['intent_name']} conf={best_match['confidence']:.3f} < {self.MIN_CONFIDENCE} → unknown",
+                    reject_reason or "unknown",
                     elapsed_ms=(time.monotonic() - _t0) * 1000,
                 )
-            return {"intent_name": "unknown", "confidence": best_match["confidence"], "response": ""}
+            return {
+                "intent_name": "unknown",
+                "confidence": float(top1_score),
+                "response": "",
+            }
 
+        intent_definition = self.intents.get(chosen_name, {})
+        result = {
+            "intent_name": chosen_name,
+            "confidence": float(chosen_score),
+            "response": self._pick_response(intent_definition.get("response", "")),
+            "pilar": intent_definition.get("pilar", "general"),
+        }
         if _dlog:
             _dlog.log_output(
                 "INTENT_DISPATCH",
-                f"intent={best_match['intent_name']} conf={best_match['confidence']:.3f}",
+                f"intent={chosen_name} conf={chosen_score:.3f} top2={top2_score:.3f}",
                 elapsed_ms=(time.monotonic() - _t0) * 1000,
             )
-        return best_match
+        return result
+
+    def _score_intents(self, candidate_text: str) -> dict[str, float]:
+        scores: dict[str, float] = {}
+        query_embedding = self._encode_query(candidate_text)
+        source_doc = None
+        if query_embedding is None and self.nlp is not None:
+            source_doc = self.nlp(candidate_text)
+
+        for intent_name in self.intents:
+            best = 0.0
+            if query_embedding is not None:
+                for example_text, example_vec in self._example_embeddings.get(intent_name, []):
+                    cosine = float(np.dot(query_embedding, example_vec))
+                    if np.isnan(cosine):
+                        cosine = 0.0
+                    lexical = self._token_overlap(candidate_text, example_text)
+                    best = max(best, max(0.0, min(1.0, max(cosine, lexical))))
+            else:
+                for _example_text, example_doc in self._example_docs.get(intent_name, []):
+                    best = max(best, self._similarity(source_doc, example_doc))
+            scores[intent_name] = best
+        return scores
+
+    def _encode_query(self, text: str) -> np.ndarray | None:
+        if self._sentence_model is None:
+            return None
+        try:
+            vector = self._sentence_model.encode(
+                [text],
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+                show_progress_bar=False,
+            )[0]
+            return np.asarray(vector, dtype=np.float32)
+        except Exception:
+            return None
+
+    def _intent_priority(self, intent_name: str) -> int:
+        try:
+            return int(self.intents.get(intent_name, {}).get("priority", 0) or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    @staticmethod
+    def _pick_response(response_field: Any) -> str:
+        if isinstance(response_field, list):
+            options = [str(item).strip() for item in response_field if str(item).strip()]
+            if not options:
+                return ""
+            return random.choice(options)
+        return str(response_field or "")
 
     def _similarity(self, left_doc, right_doc) -> float:
         lexical_score = self._token_overlap(left_doc.text, right_doc.text)
@@ -385,7 +497,7 @@ class EmotionReactor:
     EXTENDED_SILENCE_EMOTIONS: frozenset[str] = frozenset({"triste", "enojado"})
 
     # Umbrales de silencio
-    NORMAL_SILENCE: float = 1.8
+    NORMAL_SILENCE: float = 1.2
     EXTENDED_SILENCE: float = 3.0
 
     # Respuestas de crisis (fallback si no hay intención matcheada)
@@ -905,13 +1017,15 @@ class AudioWorker:
 
     def _run(self) -> None:
         sample_rate = 16000
-        block_duration_seconds = 0.5
+        block_duration_seconds = 0.128
         block_size = int(sample_rate * block_duration_seconds)
         # Base silence threshold for toddlers (2-4 years): they produce
         # shorter utterances with longer pauses between words.
         # This is dynamically adjusted by EmotionReactor based on detected emotion.
         silence_threshold_seconds = self.emotion_reactor.NORMAL_SILENCE
-        circular_buffer: deque[np.ndarray] = deque(maxlen=int(sample_rate * 6))
+        circular_maxlen = max(8, int(round(6.0 / block_duration_seconds)))
+        circular_buffer: deque[np.ndarray] = deque(maxlen=circular_maxlen)
+        pre_roll_blocks = max(1, int(round(1.0 / block_duration_seconds)))
         current_segment: list[np.ndarray] = []
         silence_seconds = 0.0
         speech_active = False
@@ -935,19 +1049,30 @@ class AudioWorker:
             )
         vad = self._load_vad(sample_rate)
 
-        # Load fallback LLM sequentially after Whisper + VAD (solo modo local)
+        # LLM en segundo plano: no bloquear la primera escucha (puede tardar 30-60s).
         if not self.cloud_mode and self.fallback_llm is not None:
-            _queue_message_with_semaphore(
-                self.message_queue, self.message_semaphore, "log",
-                "AudioWorker: cargando LLM de fallback...",
-            )
-            try:
-                self.fallback_llm.load()
-            except Exception as exc:
+            def _load_llm_background() -> None:
                 _queue_message_with_semaphore(
                     self.message_queue, self.message_semaphore, "log",
-                    f"AudioWorker: LLM de fallback no disponible: {exc}",
+                    "AudioWorker: cargando LLM de fallback en segundo plano...",
                 )
+                try:
+                    self.fallback_llm.load()
+                    _queue_message_with_semaphore(
+                        self.message_queue, self.message_semaphore, "log",
+                        "AudioWorker: LLM de fallback listo",
+                    )
+                except Exception as exc:
+                    _queue_message_with_semaphore(
+                        self.message_queue, self.message_semaphore, "log",
+                        f"AudioWorker: LLM de fallback no disponible: {exc}",
+                    )
+
+            threading.Thread(
+                target=_load_llm_background,
+                name="LLMLoader",
+                daemon=True,
+            ).start()
 
         _dlog = get_debug_logger()
         if _dlog:
@@ -1041,7 +1166,7 @@ class AudioWorker:
                             # Pre-roll: incluir hasta 2 bloques previos (~1.0s) del buffer circular
                             # para evitar que se corte la primera sílaba o palabra al empezar a hablar
                             buf_list = list(circular_buffer)
-                            pre_roll = buf_list[:-1][-2:] if len(buf_list) > 1 else []
+                            pre_roll = buf_list[:-1][-pre_roll_blocks:] if len(buf_list) > 1 else []
                             current_segment = pre_roll + [audio_block]
                             _queue_message_with_semaphore(
                                 self.message_queue,
@@ -1067,6 +1192,8 @@ class AudioWorker:
                             silence_seconds = 0.0
                             current_segment = []
                             circular_buffer.clear()
+                            if hasattr(vad, "reset"):
+                                vad.reset()
                             self._handle_segment(segment_audio, whisper_model, audio_queue)
 
         except Exception as exc:
@@ -1091,6 +1218,9 @@ class AudioWorker:
         try:
             # 1. Transcribe (cloud o local según modo)
             _t_transcribe = time.monotonic()
+            low_confidence = False
+            avg_logprob: float | None = None
+            no_speech_prob: float | None = None
             if self.cloud_mode and self.cloud_stt is not None:
                 if _dlog:
                     _dlog.log_input("TRANSCRIPTION", f"Audio ({segment_duration_s:.1f}s) [CLOUD]")
@@ -1098,11 +1228,35 @@ class AudioWorker:
             else:
                 if _dlog:
                     _dlog.log_input("TRANSCRIPTION", f"Audio ({segment_duration_s:.1f}s) [LOCAL]")
-                raw_text = self._transcribe(whisper_model, audio_segment)
+                transcription = self._transcribe(whisper_model, audio_segment)
+                raw_text = transcription.text
+                low_confidence = transcription.low_confidence
+                avg_logprob = transcription.avg_logprob
+                no_speech_prob = transcription.no_speech_prob
             if _dlog:
-                _dlog.log_output("TRANSCRIPTION", f"\"{raw_text}\"", elapsed_ms=(time.monotonic() - _t_transcribe) * 1000)
-            
+                conf_bits = []
+                if avg_logprob is not None:
+                    conf_bits.append(f"avg_logprob={avg_logprob:.3f}")
+                if no_speech_prob is not None:
+                    conf_bits.append(f"no_speech={no_speech_prob:.3f}")
+                if low_confidence:
+                    conf_bits.append("LOW_CONFIDENCE")
+                extra = f" ({', '.join(conf_bits)})" if conf_bits else ""
+                _dlog.log_output("TRANSCRIPTION", f"\"{raw_text}\"{extra}", elapsed_ms=(time.monotonic() - _t_transcribe) * 1000)
+
             elapsed_stt_ms = (time.monotonic() - _t_transcribe) * 1000
+            if low_confidence:
+                _queue_message_with_semaphore(
+                    self.message_queue,
+                    self.message_semaphore,
+                    "log",
+                    f"[STT] Baja confianza ({elapsed_stt_ms:.0f}ms)"
+                    f"{f' avg_logprob={avg_logprob:.3f}' if avg_logprob is not None else ''}"
+                    f' text="{raw_text}"',
+                )
+                if segment_duration_s > 1.5 and self.speech_worker is not None:
+                    self.speech_worker.speak_and_wait("No te escuché bien, ¿me lo decís de nuevo?")
+                return
             if raw_text.strip():
                 _queue_message_with_semaphore(
                     self.message_queue,
@@ -1211,6 +1365,12 @@ class AudioWorker:
                         f"response=\"{llm_response}\"" if llm_response else "sin respuesta",
                         elapsed_ms=(time.monotonic() - _t_llm) * 1000,
                     )
+
+            if intent_name == "unknown" and not str(intent_payload.get("response", "")).strip():
+                intent_payload["response"] = (
+                    "¿Querés jugar al veo veo, escuchar música o charlar un rato?"
+                )
+                intent_payload["pilar"] = "general"
 
             # 8.6 Music playback for song_request
             if intent_name == "song_request":
@@ -1480,32 +1640,33 @@ class AudioWorker:
     )
 
     def _load_whisper_model(self):
+        model_size = (os.environ.get("WHISPER_MODEL") or "small").strip() or "small"
         _dlog = get_debug_logger()
         if _dlog:
-            _dlog.log_input("WHISPER", "Cargando modelo medium (int8)...")
+            _dlog.log_input("WHISPER", f"Cargando modelo {model_size} (int8)...")
         _t0 = time.monotonic()
         try:
             from faster_whisper import WhisperModel
 
-            # 'medium' model: ~1.5GB RAM (int8) — 769M params, 10x more than
-            # 'base' (74M) and 3x more than 'small' (244M).  Best accuracy for
-            # Spanish vocabulary including uncommon words ("flamenco", "soleado").
-            # Limitar cpu_threads=4 para evitar saturar el 100% de la CPU (12 hilos)
-            # lo que provocaba cortes térmicos/energéticos en PCs y sobrecalentamiento.
-            # En la Raspberry Pi 5 también es ideal porque tiene exactamente 4 cores.
+            # Default 'small' (~500MB int8): ~3-4x más rápido que medium en CPU
+            # con poca pérdida de español. Override: WHISPER_MODEL=medium.
             model = WhisperModel(
-                "medium",
+                model_size,
                 device="cpu",
                 compute_type="int8",
                 cpu_threads=4,
                 num_workers=1,
             )
             if _dlog:
-                _dlog.log_output("WHISPER", "Modelo cargado", elapsed_ms=(time.monotonic() - _t0) * 1000)
+                _dlog.log_output(
+                    "WHISPER",
+                    f"Modelo {model_size} cargado",
+                    elapsed_ms=(time.monotonic() - _t0) * 1000,
+                )
             return model
         except Exception:
             if _dlog:
-                _dlog.log_output("WHISPER", "ERROR: No se pudo cargar")
+                _dlog.log_output("WHISPER", f"ERROR: No se pudo cargar modelo {model_size}")
             return None
 
     @staticmethod
@@ -1838,42 +1999,30 @@ class AudioWorker:
         audio = self._pad_audio(audio, sample_rate=16000, min_duration_s=1.5)
         return audio
 
-    def _transcribe(self, whisper_model: Any, audio_segment: np.ndarray) -> str:
+    _LOW_LOGPROB_THRESHOLD: float = -0.9
+    _HIGH_NO_SPEECH_THRESHOLD: float = 0.75
+
+    def _transcribe(self, whisper_model: Any, audio_segment: np.ndarray) -> TranscriptionResult:
+        empty = TranscriptionResult(text="")
         if whisper_model is None:
-            return ""
+            return empty
 
         _dlog = get_debug_logger()
 
-        # Solo descartar si es silencio absoluto digital (RMS < 0.0005)
-        # El VAD de Silero ya validó que hay habla. Un umbral alto como 0.005
-        # descartaba voces suaves o micrófonos con baja ganancia.
         raw_rms = float(np.sqrt(np.mean(audio_segment ** 2)))
         if raw_rms < 0.0005:
-            return ""
+            return empty
 
-        # Guardar copia del audio crudo ANTES del pipeline de procesamiento
-        # para debug (solo si modo debug está activo)
         raw_audio_copy = audio_segment.copy() if _dlog else None
-
-        # Full audio preprocessing pipeline:
-        # DC removal → normalize (peak 0.9) → pad (1.5s)
         audio_segment = self._preprocess_audio(audio_segment)
-
-        # Guardar copia del audio procesado DESPUÉS del pipeline (pre-Whisper)
         processed_audio_copy = audio_segment.copy() if _dlog else None
 
         segments, _info = whisper_model.transcribe(
             audio_segment,
             language="es",
-            # vad_filter=False porque SileroVadAdapter ya segmentó el habla.
-            # vad_filter=True dentro de faster-whisper descarta segmentos cortos
-            # con padding de 1.5s, provocando transcripciones vacías.
             vad_filter=False,
-            # Beam search con 2 hipótesis: excelente precisión sin sobrecargar la CPU
-            beam_size=2,
-            # Prompt contextual neutro para español rioplatense
+            beam_size=1,
             initial_prompt=self._WHISPER_INITIAL_PROMPT,
-            # Umbral de no-speech permisivo para no perder frases cortas
             no_speech_threshold=0.6,
             log_prob_threshold=-1.0,
             compression_ratio_threshold=2.4,
@@ -1881,17 +2030,27 @@ class AudioWorker:
             without_timestamps=True,
         )
         text_parts = []
+        logprobs: list[float] = []
+        no_speech_probs: list[float] = []
         for segment in segments:
             text_parts.append(segment.text.strip())
+            avg_lp = getattr(segment, "avg_logprob", None)
+            if avg_lp is not None:
+                logprobs.append(float(avg_lp))
+            nsp = getattr(segment, "no_speech_prob", None)
+            if nsp is not None:
+                no_speech_probs.append(float(nsp))
         transcript = " ".join(part for part in text_parts if part).strip()
-
-        # --- Filtro anti-alucinaciones de Whisper ---
-        # Whisper inventa frases cuando recibe audio corto, ruidoso o casi
-        # silencioso.  Las más comunes son créditos de subtítulos, agradecimientos,
-        # y repeticiones en bucle.  Las descartamos antes de pasar al LLM.
         transcript = self._filter_hallucinations(transcript)
 
-        # Guardar audios de debug (crudo + procesado + transcripción)
+        avg_logprob = float(np.mean(logprobs)) if logprobs else None
+        no_speech_prob = float(np.mean(no_speech_probs)) if no_speech_probs else None
+        low_confidence = False
+        if transcript and avg_logprob is not None and avg_logprob < self._LOW_LOGPROB_THRESHOLD:
+            low_confidence = True
+        if transcript and no_speech_prob is not None and no_speech_prob > self._HIGH_NO_SPEECH_THRESHOLD:
+            low_confidence = True
+
         if _dlog and raw_audio_copy is not None and processed_audio_copy is not None:
             _dlog.save_debug_audio(
                 raw_audio=raw_audio_copy,
@@ -1900,7 +2059,12 @@ class AudioWorker:
                 sample_rate=16000,
             )
 
-        return transcript
+        return TranscriptionResult(
+            text=transcript,
+            low_confidence=low_confidence,
+            avg_logprob=avg_logprob,
+            no_speech_prob=no_speech_prob,
+        )
 
     @staticmethod
     def _filter_hallucinations(text: str) -> str:
@@ -2457,39 +2621,80 @@ class SpeechWorker:
 
 
 class SileroVadAdapter:
+    """Voice activity detection with streaming hysteresis.
+
+    Uses Silero's 512-sample (32 ms @ 16 kHz) probability head instead of
+    ``get_speech_timestamps`` (batch API). Falls back to RMS energy.
+    """
+
+    CHUNK_SAMPLES = 512
+    START_THRESHOLD = 0.50
+    CONTINUE_THRESHOLD = 0.35
+    ENERGY_START = 0.012
+    ENERGY_CONTINUE = 0.006
+
     def __init__(self, sample_rate: int) -> None:
         self.sample_rate = sample_rate
         self._mode = "energy"
         self._model = None
-        self._get_speech_timestamps = None
+        self._in_speech = False
+        self._remainder = np.zeros(0, dtype=np.float32)
         self._load()
+
+    def reset(self) -> None:
+        self._in_speech = False
+        self._remainder = np.zeros(0, dtype=np.float32)
 
     def _load(self) -> None:
         try:
-            from silero_vad import get_speech_timestamps, load_silero_vad
+            from silero_vad import load_silero_vad
 
             self._model = load_silero_vad()
-            self._get_speech_timestamps = get_speech_timestamps
             self._mode = "silero"
         except Exception:
             self._mode = "energy"
 
     def has_speech(self, audio_block: np.ndarray) -> bool:
-        if self._mode == "silero" and self._model is not None and self._get_speech_timestamps is not None:
+        if self._mode == "silero" and self._model is not None:
             try:
-                tensor_block = self._to_tensor(audio_block)
-                timestamps = self._get_speech_timestamps(tensor_block, self._model, sampling_rate=self.sample_rate)
-                return len(timestamps) > 0
+                return self._streaming_speech(audio_block)
             except Exception:
-                return self._energy_fallback(audio_block)
-        return self._energy_fallback(audio_block)
+                return self._energy_speech(audio_block)
+        return self._energy_speech(audio_block)
 
-    @staticmethod
-    def _energy_fallback(audio_block: np.ndarray) -> bool:
+    def _streaming_speech(self, audio_block: np.ndarray) -> bool:
+        audio = np.concatenate(
+            [self._remainder, np.asarray(audio_block, dtype=np.float32).reshape(-1)]
+        )
+        chunk = self.CHUNK_SAMPLES
+        n_full = (len(audio) // chunk) * chunk
+        self._remainder = audio[n_full:]
+        if n_full == 0:
+            return self._in_speech
+
+        max_prob = 0.0
+        for start in range(0, n_full, chunk):
+            piece = audio[start:start + chunk]
+            tensor = self._to_tensor(piece)
+            prob = self._model(tensor, self.sample_rate)
+            if hasattr(prob, "item"):
+                prob = float(prob.item())
+            else:
+                prob = float(prob)
+            if prob > max_prob:
+                max_prob = prob
+
+        threshold = self.CONTINUE_THRESHOLD if self._in_speech else self.START_THRESHOLD
+        self._in_speech = max_prob >= threshold
+        return self._in_speech
+
+    def _energy_speech(self, audio_block: np.ndarray) -> bool:
         if audio_block.size == 0:
             return False
         rms = float(np.sqrt(np.mean(np.square(audio_block), dtype=np.float32)))
-        return rms > 0.01
+        threshold = self.ENERGY_CONTINUE if self._in_speech else self.ENERGY_START
+        self._in_speech = rms > threshold
+        return self._in_speech
 
     @staticmethod
     def _to_tensor(audio_block: np.ndarray):

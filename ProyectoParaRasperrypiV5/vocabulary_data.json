@@ -27,6 +27,7 @@
     "amigo",
     "amiguito",
     "amor",
+    "anillo",
     "ano",
     "anos",
     "anterior",
@@ -77,6 +78,7 @@
     "caniche",
     "canta",
     "capel",
+    "caray",
     "carton",
     "celular",
     "chame",
@@ -414,11 +416,13 @@
     "pitoforo",
     "playa",
     "poco",
+    "podemos",
     "podes",
     "poncierame",
     "pone",
     "poner",
     "ponerte",
+    "ponga",
     "ponte",
     "poquito",
     "porque",
@@ -3535,11 +3539,31 @@
       "word": "rompio",
       "date": "2026-08-22",
       "timestamp": "2026-08-22T10:07:48.178917"
+    },
+    {
+      "word": "podemos",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T19:30:21.053218"
+    },
+    {
+      "word": "ponga",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T19:46:05.111047"
+    },
+    {
+      "word": "anillo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T19:46:05.111047"
+    },
+    {
+      "word": "caray",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T19:47:28.990482"
     }
   ],
   "stats": {
-    "total_words": 589,
-    "new_words_today": 53,
-    "history_count": 589
+    "total_words": 593,
+    "new_words_today": 57,
+    "history_count": 593
   }
 }
