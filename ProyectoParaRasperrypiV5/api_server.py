@@ -40,6 +40,10 @@ class RobotState:
         self.current_emotion_score: float = 0.0
         self._lock = threading.Lock()
 
+        # Cola de notificaciones para la app Android (crisis, logros, pedidos)
+        self._notifications: list[dict[str, Any]] = []
+        self._notifications_lock = threading.Lock()
+
         # Callbacks inyectados desde app.py
         self.on_celebrate: Callable[[], None] | None = None
         self.on_config_changed: Callable[[dict], None] | None = None
@@ -88,6 +92,40 @@ class RobotState:
             self.power_on = on
         if self.on_power_changed:
             self.on_power_changed(on)
+
+    def push_notification(
+        self,
+        notif_type: str,
+        message: str,
+        extra: dict[str, Any] | None = None,
+    ) -> None:
+        """Encola una notificación para la app Android.
+
+        Args:
+            notif_type: Tipo de notificación (crisis, logro, pedido, info).
+            message: Descripción legible del evento.
+            extra: Datos adicionales opcionales.
+        """
+        notif = {
+            "type": notif_type,
+            "message": message,
+            "timestamp": datetime.now().isoformat(),
+        }
+        if extra:
+            notif["extra"] = extra
+        with self._notifications_lock:
+            # Máximo 50 notificaciones en cola (evitar memory leak)
+            if len(self._notifications) >= 50:
+                self._notifications.pop(0)
+            self._notifications.append(notif)
+        print(f"[API] Notificación encolada: [{notif_type}] {message}", flush=True)
+
+    def pop_notifications(self) -> list[dict[str, Any]]:
+        """Devuelve y vacía las notificaciones pendientes."""
+        with self._notifications_lock:
+            pending = list(self._notifications)
+            self._notifications.clear()
+        return pending
 
 
 # Instancia global del estado del robot
@@ -161,6 +199,8 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
             self._handle_get_routines()
         elif path == "/api/music":
             self._handle_get_music()
+        elif path == "/api/notifications":
+            self._handle_get_notifications()
         else:
             self._send_error_json(404, "Endpoint no encontrado")
 
@@ -280,6 +320,15 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
                         "modified": datetime.fromtimestamp(f.stat().st_mtime).isoformat(),
                     })
         self._send_json({"songs": songs})
+
+    def _handle_get_notifications(self) -> None:
+        """Devuelve y vacía las notificaciones pendientes.
+
+        La app Android debería hacer polling a este endpoint cada 10-15s.
+        Si hay notificaciones de tipo 'crisis', mostrar alerta inmediata.
+        """
+        pending = robot_state.pop_notifications()
+        self._send_json({"notifications": pending, "count": len(pending)})
 
     # ------------------------------------------------------------------
     # POST endpoints
@@ -468,7 +517,7 @@ class _DiscoveryBeacon:
 
     BEACON_PORT = 5555
 
-    def __init__(self, api_port: int, interval: float = 3.0) -> None:
+    def __init__(self, api_port: int, interval: float = 1.5) -> None:
         self.api_port = api_port
         self.interval = interval
         self._running = False
@@ -520,15 +569,41 @@ class _DiscoveryBeacon:
 
         print(
             f"[API] Beacon de descubrimiento activo en UDP :{self.BEACON_PORT} "
-            f"(IP local: {local_ip})",
+            f"(intervalo: {self.interval}s, IP local: {local_ip})",
             flush=True,
         )
+
+        _reminder_counter = 0
+        _reminder_interval = int(60 / self.interval)  # cada ~60 segundos
 
         while self._running:
             try:
                 sock.sendto(beacon_data, ("<broadcast>", self.BEACON_PORT))
             except Exception:
                 pass
+
+            # Recordatorio periódico de IP en consola (cada ~60 segundos)
+            _reminder_counter += 1
+            if _reminder_counter >= _reminder_interval:
+                _reminder_counter = 0
+                # Re-obtener la IP por si cambió (ej: reconexión WiFi)
+                current_ip = self._get_local_ip()
+                if current_ip != local_ip:
+                    local_ip = current_ip
+                    beacon_data = json.dumps({
+                        "device_id": "micompanero_robot",
+                        "device_name": "MiCompañero Peluche",
+                        "api_port": self.api_port,
+                        "local_ip": local_ip,
+                    }, ensure_ascii=False).encode("utf-8")
+                print(
+                    f"\n┌─────────────────────────────────────────┐\n"
+                    f"│  🌐 IP del robot:  {local_ip:<22s}│\n"
+                    f"│  Puerto API:       {self.api_port:<22d}│\n"
+                    f"└─────────────────────────────────────────┘",
+                    flush=True,
+                )
+
             time.sleep(self.interval)
 
         sock.close()
@@ -575,6 +650,8 @@ class ApiServer:
         print("╠══════════════════════════════════════════════════╣", flush=True)
         print(f"║  👉 En la app Android, ingresá: {local_ip:<17s}║", flush=True)
         print("║  👉 En emulador Android, usá:   10.0.2.2        ║", flush=True)
+        print("╠══════════════════════════════════════════════════╣", flush=True)
+        print("║  ℹ️  La IP se repetirá en consola cada 60 seg   ║", flush=True)
         print("╚══════════════════════════════════════════════════╝", flush=True)
         print(flush=True)
 

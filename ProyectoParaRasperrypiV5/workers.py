@@ -851,6 +851,7 @@ class AudioWorker:
         cloud_mode: bool = False,
         cloud_stt: Any = None,
         cloud_llm: Any = None,
+        eye_display: Any = None,
     ) -> None:
         self.microphone_device_index = microphone_device_index
         self.message_queue = message_queue
@@ -875,6 +876,16 @@ class AudioWorker:
         self.cloud_mode = cloud_mode
         self.cloud_stt = cloud_stt
         self.cloud_llm = cloud_llm
+
+        # Eye display reference for action tags (#LLM-SKILLS)
+        self.eye_display = eye_display
+
+        # Robot state for notifications (#LLM-SKILLS)
+        try:
+            from api_server import robot_state as _rs
+            self._robot_state = _rs
+        except ImportError:
+            self._robot_state = None
 
         # Game engine for multi-turn interactive games (#EPIC-006)
         try:
@@ -1218,6 +1229,15 @@ class AudioWorker:
                 else:
                     intent_payload["response"] = "Todavía no tenés canciones guardadas. ¡Pedile a mamá o papá que te suban una desde el celular!"
 
+            # 8.7 Parse and execute LLM action tags (#LLM-SKILLS)
+            response_text_raw = str(intent_payload.get("response", ""))
+            actions, clean_response = self._parse_action_tags(response_text_raw)
+            if actions:
+                intent_payload["response"] = clean_response
+                self._execute_actions(actions, intent_payload)
+                if _dlog:
+                    _dlog.log_output("LLM_ACTIONS", f"actions={[a['action'] for a in actions]}")
+
             # 9. Determine pilar for telemetry
             pilar = intent_payload.get("pilar", "general")
 
@@ -1252,6 +1272,18 @@ class AudioWorker:
                             emotion_score=float(emotion_context.get("score", 0.0)),
                             response=intent_payload.get("response", ""),
                         )
+                        # Auto-notify parent on crisis (#LLM-SKILLS)
+                        if self._robot_state is not None:
+                            self._robot_state.push_notification(
+                                "crisis",
+                                f"Crisis emocional detectada: {emotion_context.get('label', 'desconocida')} "
+                                f"(intensidad: {emotion_context.get('score', 0):.0%})",
+                                extra={
+                                    "emotion": emotion_context.get("label"),
+                                    "score": float(emotion_context.get("score", 0.0)),
+                                    "response_given": intent_payload.get("response", ""),
+                                },
+                            )
                     if new_words and self.vocabulary_tracker is not None:
                         stats = self.vocabulary_tracker.get_stats()
                         self.telemetry.log_vocabulary_update(
@@ -1260,6 +1292,14 @@ class AudioWorker:
                         )
                 except Exception:
                     pass
+
+            # 11.5 Auto-notify parent for call_parent intent (#LLM-SKILLS)
+            if intent_name == "call_parent" and self._robot_state is not None:
+                self._robot_state.push_notification(
+                    "pedido",
+                    "El nene está pidiendo hablar con mamá o papá.",
+                    extra={"intent": "call_parent", "text": sanitized_text},
+                )
 
             # 12. TTS — speak the response and block until playback finishes.
             response_text = str(intent_payload.get("response", "")).strip()
@@ -1313,6 +1353,117 @@ class AudioWorker:
         # Sin límite de oración encontrado — cortar y agregar puntos suspensivos
         return truncated.rstrip(",;: ") + "."
 
+    # ------------------------------------------------------------------
+    # LLM Action Tags — Parser & Executor (#LLM-SKILLS)
+    # ------------------------------------------------------------------
+
+    # Regex to match action tags like [PLAY_MUSIC], [EXPRESSION:feliz],
+    # [NOTIFY_PARENT:razón del aviso], etc.
+    _ACTION_TAG_RE = re.compile(
+        r"\["
+        r"(PLAY_MUSIC|STOP_MUSIC|NOTIFY_PARENT|EXPRESSION|CELEBRATE|CALM_MODE)"
+        r"(?::([^\]]*))?"
+        r"\]",
+        re.IGNORECASE,
+    )
+
+    def _parse_action_tags(self, text: str) -> tuple[list[dict[str, str]], str]:
+        """Extrae action tags del texto de respuesta de la LLM.
+
+        Returns:
+            Tupla (lista de acciones, texto limpio sin tags).
+            Cada acción es un dict {"action": "PLAY_MUSIC", "param": "..."}.
+        """
+        actions: list[dict[str, str]] = []
+        for match in self._ACTION_TAG_RE.finditer(text):
+            action_name = match.group(1).upper()
+            param = (match.group(2) or "").strip()
+            actions.append({"action": action_name, "param": param})
+
+        # Limpiar tags del texto para que el TTS no los "diga"
+        clean_text = self._ACTION_TAG_RE.sub("", text).strip()
+        # Limpiar espacios dobles que quedan
+        clean_text = re.sub(r"\s{2,}", " ", clean_text).strip()
+
+        return actions, clean_text
+
+    def _execute_actions(self, actions: list[dict[str, str]], intent_payload: dict) -> None:
+        """Ejecuta las acciones parseadas de los tags de la LLM.
+
+        Cada acción interactúa con un subsistema del robot:
+        - PLAY_MUSIC: reproduce música de la carpeta music/
+        - STOP_MUSIC: detiene la música en curso
+        - NOTIFY_PARENT: encola notificación para la app Android
+        - EXPRESSION: cambia la expresión de los ojos
+        - CELEBRATE: celebración visual + notifica al padre
+        - CALM_MODE: baja volumen y expresión tranquila
+        """
+        _dlog = get_debug_logger()
+
+        for action_info in actions:
+            action = action_info["action"]
+            param = action_info["param"]
+
+            try:
+                if action == "PLAY_MUSIC":
+                    # Reproducir una canción al azar de music/
+                    music_dir = Path(__file__).resolve().parent / "music"
+                    if music_dir.exists():
+                        import random
+                        allowed_ext = {".mp3", ".wav", ".ogg", ".m4a", ".flac"}
+                        music_files = [f for f in sorted(music_dir.iterdir()) if f.suffix.lower() in allowed_ext]
+                        if music_files:
+                            chosen = random.choice(music_files)
+                            intent_payload["play_music_file"] = str(chosen)
+                            if _dlog:
+                                _dlog.log_output("ACTION", f"PLAY_MUSIC -> {chosen.name}")
+
+                elif action == "STOP_MUSIC":
+                    if self.speech_worker is not None:
+                        self.speech_worker.stop_music()
+                        if _dlog:
+                            _dlog.log_output("ACTION", "STOP_MUSIC ejecutado")
+
+                elif action == "NOTIFY_PARENT":
+                    reason = param or "TEO quiere avisar algo"
+                    if self._robot_state is not None:
+                        self._robot_state.push_notification(
+                            "aviso",
+                            reason,
+                        )
+                        if _dlog:
+                            _dlog.log_output("ACTION", f"NOTIFY_PARENT -> {reason}")
+
+                elif action == "EXPRESSION":
+                    valid_expressions = {"feliz", "triste", "sorprendido", "enojado", "neutral"}
+                    expr = param.lower() if param else "neutral"
+                    if expr in valid_expressions and self.eye_display is not None:
+                        self.eye_display.set_expression(expr)
+                        if _dlog:
+                            _dlog.log_output("ACTION", f"EXPRESSION -> {expr}")
+
+                elif action == "CELEBRATE":
+                    # Expresión feliz + notificar padre del logro
+                    if self.eye_display is not None:
+                        self.eye_display.set_expression("feliz")
+                    if self._robot_state is not None:
+                        self._robot_state.push_notification(
+                            "logro",
+                            param or "¡El nene logró algo importante!",
+                        )
+                    if _dlog:
+                        _dlog.log_output("ACTION", "CELEBRATE ejecutado")
+
+                elif action == "CALM_MODE":
+                    # Expresión tranquila
+                    if self.eye_display is not None:
+                        self.eye_display.set_expression("neutral")
+                    if _dlog:
+                        _dlog.log_output("ACTION", "CALM_MODE ejecutado")
+
+            except Exception as exc:
+                if _dlog:
+                    _dlog.log_output("ACTION", f"ERROR en {action}: {exc}")
 
     # Contextual prompt that primes Whisper for Argentine Spanish.
     # Neutral prompt — avoids biasing towards toddler vocabulary which caused

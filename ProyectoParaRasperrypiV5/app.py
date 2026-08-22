@@ -524,6 +524,7 @@ class EyeModeApp(tk.Tk):
             cloud_mode=self._cloud_mode,
             cloud_stt=cloud_stt,
             cloud_llm=cloud_llm,
+            eye_display=self._eye_display,
         )
 
         self.camera_worker.start()
@@ -761,6 +762,7 @@ class EdgeAiDesktopApp(tk.Tk):
         self.audio_worker: AudioWorker | None = None
         self.intent_dispatcher: IntentDispatcher | None = None
         self.speech_worker: SpeechWorker | None = None
+        self.api_server: object | None = None
         self._mic_test_stop = threading.Event()
         self._mic_test_thread: threading.Thread | None = None
 
@@ -1123,11 +1125,37 @@ class EdgeAiDesktopApp(tk.Tk):
         self.start_button.configure(state="disabled")
         self.stop_button.configure(state="normal")
 
+        # Start API server for Android app communication
+        self._start_api_server()
+
+    def _start_api_server(self) -> None:
+        """Initialize and start the REST API server for the parental app."""
+        if ApiServer is None or robot_state is None:
+            print("[Debug] API server no disponible", flush=True)
+            return
+
+        # Wire up robot state with subsystems
+        robot_state.telemetry = self.telemetry
+        robot_state.routine_scheduler = self.routine_scheduler
+        robot_state.speech_worker = self.speech_worker
+        robot_state.volume_limit = self._volume_var.get()
+
+        try:
+            self.api_server = ApiServer()
+            self.api_server.start()
+            self._append_log("API Server + Beacon UDP iniciados")
+        except Exception as exc:
+            print(f"[Debug] Error al iniciar API server: {exc}", flush=True)
+            self._append_log(f"⚠️ Error al iniciar API server: {exc}")
+
     def stop_workers(self) -> None:
         _dlog = get_debug_logger()
         if _dlog:
             _dlog.log_input("WORKERS", "Deteniendo workers...")
         _t0 = time.monotonic()
+        if hasattr(self, 'api_server') and self.api_server:
+            self.api_server.stop()
+            self.api_server = None
         if self.camera_worker:
             self.camera_worker.stop()
             self.camera_worker = None
