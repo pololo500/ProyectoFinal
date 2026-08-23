@@ -33,20 +33,27 @@ import numpy as np
 class DebugLogger:
     """Logger thread-safe que escribe a un archivo .txt con timestamps."""
 
-    def __init__(self, log_dir: Path | None = None) -> None:
+    def __init__(
+        self,
+        log_dir: Path | None = None,
+        capture_audio: bool = False,
+        prefix: str = "sistema",
+    ) -> None:
         self._lock = threading.Lock()
         self._audio_counter = 0
         self._audio_counter_lock = threading.Lock()
+        self.capture_audio = capture_audio
         app_dir = Path(__file__).resolve().parent
         self._log_dir = log_dir or (app_dir / "logs")
         self._log_dir.mkdir(parents=True, exist_ok=True)
 
         # Carpeta de audios de debug (hermana de logs/)
         self._audio_dir = app_dir / "audios"
-        self._audio_dir.mkdir(parents=True, exist_ok=True)
+        if capture_audio:
+            self._audio_dir.mkdir(parents=True, exist_ok=True)
 
         now = datetime.now()
-        filename = f"debug_{now.strftime('%Y-%m-%d_%H-%M-%S')}.txt"
+        filename = f"{prefix}_{now.strftime('%Y-%m-%d_%H-%M-%S')}.txt"
         self._log_path = self._log_dir / filename
         self._start_time = time.monotonic()
 
@@ -98,6 +105,16 @@ class DebugLogger:
         suffix = f" ({elapsed_ms:.0f}ms)" if elapsed_ms is not None else ""
         self._write(f"<<< [{component}] {description}{suffix}")
 
+    def log_action(
+        self,
+        component: str,
+        message: str,
+        elapsed_ms: float | None = None,
+    ) -> None:
+        """Registra un evento de sistema (API, workers, rutinas, etc.)."""
+        suffix = f" ({elapsed_ms:.0f}ms)" if elapsed_ms is not None else ""
+        self._write(f"[{component}] {message}{suffix}")
+
     # ------------------------------------------------------------------
     # Audio debug — guardar WAV crudos y procesados junto a transcripción
     # ------------------------------------------------------------------
@@ -123,6 +140,8 @@ class DebugLogger:
 
         Nunca lanza excepciones para no afectar el pipeline principal.
         """
+        if not self.capture_audio:
+            return
         try:
             now = datetime.now()
             ts_str = now.strftime("%Y-%m-%d_%H-%M-%S")
@@ -228,12 +247,21 @@ class DebugLogger:
 _global_logger: DebugLogger | None = None
 
 
-def init_debug_logger(log_dir: Path | None = None) -> DebugLogger:
+def init_debug_logger(
+    log_dir: Path | None = None,
+    capture_audio: bool = False,
+    prefix: str = "sistema",
+) -> DebugLogger:
     """Inicializa el logger global.  Llamar solo una vez desde ``main()``."""
     global _global_logger
-    _global_logger = DebugLogger(log_dir=log_dir)
+    _global_logger = DebugLogger(
+        log_dir=log_dir,
+        capture_audio=capture_audio,
+        prefix=prefix,
+    )
     _global_logger.log(
-        f"Modo debug activado, log: {_global_logger.log_path}"
+        f"Logger iniciado (audio_debug={'on' if capture_audio else 'off'}), "
+        f"archivo: {_global_logger.log_path}"
     )
     return _global_logger
 
@@ -241,3 +269,15 @@ def init_debug_logger(log_dir: Path | None = None) -> DebugLogger:
 def get_debug_logger() -> DebugLogger | None:
     """Retorna el logger global o ``None`` si no fue inicializado."""
     return _global_logger
+
+
+def log_action(
+    component: str,
+    message: str,
+    elapsed_ms: float | None = None,
+) -> None:
+    """Escribe un evento de sistema. No-op si el logger no está iniciado."""
+    logger = _global_logger
+    if logger is None:
+        return
+    logger.log_action(component, message, elapsed_ms)

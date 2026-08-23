@@ -83,6 +83,7 @@
     <string name="config_songs_title">Catálogo de Canciones</string>
     <string name="config_songs_subtitle">Gestioná las canciones que el peluche puede reproducir</string>
     <string name="config_songs_manage">Administrar canciones</string>
+    <string name="config_songs_stop">⏹ Parar canción</string>
     <string name="config_connection_title">Conexión</string>
     <string name="config_connection_wifi">Red Wi-Fi</string>
     <string name="config_connection_bluetooth">Bluetooth</string>

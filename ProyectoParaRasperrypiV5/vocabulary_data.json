@@ -2,13 +2,20 @@
   "known_words": [
     "10",
     "100",
+    "15",
     "200",
     "73",
+    "abandono",
+    "aburrido",
     "acasio",
+    "acompanara",
     "acostumbrada",
+    "acostumbrados",
+    "activar",
     "acuerdo",
     "adelina",
     "adentro",
+    "adivina",
     "adivinaste",
     "advirtio",
     "agarre",
@@ -21,12 +28,17 @@
     "ala",
     "album",
     "algo",
+    "alguien",
     "algun",
+    "alguna",
     "alguno",
+    "amenazaron",
     "amenco",
     "amigo",
+    "amigue",
     "amiguito",
     "amor",
+    "andas",
     "anillo",
     "ano",
     "anos",
@@ -34,19 +46,31 @@
     "antes",
     "apa",
     "aparate",
+    "aparecer",
+    "aparecieron",
+    "aparecio",
     "aparto",
     "aporta",
     "aprende",
+    "arbol",
     "archivos",
+    "arranco",
     "artificial",
     "asi",
     "atencion",
     "atras",
     "audio",
+    "audios",
     "aunque",
     "autismo",
     "autista",
+    "autotontalada",
+    "avisa",
+    "avisar",
+    "ay",
     "ayudar",
+    "bailar",
+    "ballera",
     "banda",
     "basta",
     "bastante",
@@ -57,11 +81,17 @@
     "bolqueras",
     "boludo",
     "bonita",
+    "bronca",
     "buen",
     "buena",
+    "buenas",
+    "buenisimo",
     "bueno",
     "buenos",
+    "buscaba",
     "bytes",
+    "cada",
+    "cagate",
     "caldo",
     "calladita",
     "callate",
@@ -78,15 +108,22 @@
     "caniche",
     "canta",
     "capel",
+    "carajo",
     "caray",
+    "cargando",
+    "carne",
+    "carrera",
     "carton",
+    "casado",
     "celular",
+    "cem",
     "chame",
     "chao",
     "chas",
     "che",
     "cheto",
     "chique",
+    "chisita",
     "chocolate",
     "chundo",
     "chupa",
@@ -95,19 +132,27 @@
     "ciudad",
     "claro",
     "climatico",
+    "coba",
     "cocaina",
     "coclan",
+    "coger",
     "color",
     "comentarios",
     "comica",
     "comparador",
     "comparar",
+    "comprame",
+    "computadora",
     "concha",
     "conectado",
     "conectarme",
+    "confiacion",
     "conmigo",
+    "conoci",
+    "conocias",
     "contemplando",
     "contestaba",
+    "continuacion",
     "corresponde",
     "cortar",
     "corto",
@@ -117,33 +162,44 @@
     "crees",
     "creo",
     "crisis",
+    "cruzando",
     "cuadritos",
     "cuadro",
+    "cual",
     "cualquier",
     "cuando",
     "cuantas",
     "cuantos",
     "cuatro",
     "cubre",
+    "cuenta",
     "cuentes",
     "cuento",
     "cuesta",
+    "culo",
+    "da",
     "dale",
     "dame",
     "danas",
+    "darle",
     "das",
     "debo",
     "decente",
     "decentes",
     "decir",
+    "decirle",
     "decis",
     "deja",
+    "dejado",
     "dejame",
     "deje",
+    "dejo",
     "delirio",
     "dentro",
+    "desarrollado",
     "desde",
     "desmonto",
+    "despearlo",
     "despues",
     "detecta",
     "detectas",
@@ -154,6 +210,7 @@
     "dice",
     "dicera",
     "dices",
+    "dicho",
     "digo",
     "dije",
     "dijera",
@@ -163,11 +220,14 @@
     "doblar",
     "dominar",
     "donde",
+    "dormen",
     "dos",
+    "doy",
     "dragon",
     "droga",
     "drunk",
     "duele",
+    "edad",
     "efectivamente",
     "eh",
     "ejemplo",
@@ -176,25 +236,36 @@
     "emocional",
     "empanada",
     "empezamos",
+    "empezo",
     "empieza",
     "encanta",
+    "encima",
+    "encontrar",
     "enojado",
     "enojo",
     "entendi",
     "entera",
     "entiende",
     "entiendes",
+    "entonces",
     "entra",
     "entre",
+    "entrega",
+    "entusias",
+    "equipo",
+    "equipos",
     "era",
+    "eramos",
     "eres",
     "erre",
     "errodeas",
     "errores",
     "escenario",
     "escolenta",
+    "esconderar",
     "escucha",
     "escuchame",
+    "escuchandote",
     "escuchar",
     "escuchas",
     "escucho",
@@ -202,11 +273,17 @@
     "espacio",
     "espacisto",
     "espalda",
+    "especial",
+    "estaba",
+    "estaban",
     "estamos",
+    "estando",
     "estar",
     "estas",
+    "esten",
     "estoy",
     "estupido",
+    "existian",
     "ey",
     "fato",
     "favor",
@@ -214,13 +291,19 @@
     "feliz",
     "femenina",
     "feo",
+    "ferrocarril",
+    "fija",
     "fin",
     "flaco",
     "flamenco",
+    "fondo",
     "forma",
+    "formas",
     "fotos",
+    "frase",
     "funciona",
     "funcionaba",
+    "fundita",
     "futuro",
     "gallego",
     "games",
@@ -228,34 +311,55 @@
     "gaste",
     "gato",
     "genapo",
+    "general",
     "girafa",
     "github",
     "globo",
+    "goba",
     "goma",
+    "grabar",
+    "grabarle",
     "gracias",
+    "gran",
+    "grave",
     "grite",
+    "grupo",
     "guacho",
     "guau",
     "guay",
+    "guerra",
     "gusta",
     "ha",
     "haber",
     "habia",
+    "habian",
+    "habla",
     "hablado",
     "hablan",
     "hablar",
+    "hablemos",
     "hablen",
     "hablo",
+    "habria",
     "hace",
+    "hacen",
     "hacer",
     "haces",
+    "hacia",
+    "hacian",
     "haciendo",
+    "hagan",
     "hago",
     "hamburguesa",
     "han",
+    "hare",
+    "haria",
     "has",
     "haz",
     "hazme",
+    "he",
+    "hemos",
+    "heroes",
     "hicieron",
     "hiciste",
     "hijo",
@@ -263,6 +367,9 @@
     "hizo",
     "hoja",
     "hola",
+    "horrible",
+    "iban",
+    "idea",
     "igual",
     "imagine",
     "implementado",
@@ -270,8 +377,10 @@
     "incluso",
     "informacion",
     "inhalar",
+    "intentabas",
     "intentando",
     "interno",
+    "intervalle",
     "inventa",
     "ito",
     "jajaja",
@@ -282,16 +391,21 @@
     "jugamos",
     "jugando",
     "jugar",
+    "juntos",
     "kamos",
     "karno",
+    "kilo",
+    "laburaba",
     "lael",
     "lampara",
+    "lechuroteo",
     "lee",
     "leer",
     "leerlo",
     "lenguaje",
     "letra",
     "libre",
+    "limite",
     "listazo",
     "listo",
     "literal",
@@ -299,6 +413,7 @@
     "llama",
     "llamas",
     "llamo",
+    "llegando",
     "llegue",
     "lleguero",
     "lleno",
@@ -313,18 +428,29 @@
     "magico",
     "maguete",
     "mal",
+    "malo",
     "mama",
     "manco",
+    "mando",
     "manga",
+    "manghiro",
+    "mantienes",
     "manzana",
     "mar",
+    "marcha",
+    "mariano",
     "mata",
     "materia",
+    "materias",
+    "mayoria",
     "medio",
     "mejor",
     "mejoro",
     "menor",
     "menos",
+    "mensaje",
+    "merismo",
+    "meter",
     "mia",
     "miedo",
     "mientras",
@@ -332,16 +458,20 @@
     "mira",
     "mirando",
     "miras",
+    "miren",
     "mis",
     "misma",
     "mismo",
+    "mitad",
     "mitico",
     "mo",
     "modelo",
+    "modo",
     "momento",
     "monton",
     "morder",
     "mp3",
+    "ms",
     "muchas",
     "mucho",
     "mueves",
@@ -352,51 +482,68 @@
     "nariz",
     "nasty",
     "necesitas",
+    "necesite",
     "necesito",
     "negro",
     "nene",
     "ni",
     "nieve",
+    "nigeriano",
+    "ninguna",
     "nio",
     "nl",
     "noche",
     "nombrarla",
     "nombre",
     "non",
+    "nos",
     "nosotros",
+    "nube",
     "nueva",
     "nuevo",
     "numero",
     "numeros",
+    "nunca",
     "ok",
+    "oral",
     "ordenadas",
     "otra",
     "otras",
     "otro",
+    "otros",
     "pa",
+    "pachame",
+    "paciencia",
     "paga",
     "pagaste",
     "pagina",
     "palas",
     "pame",
+    "pan",
     "pancita",
     "papa",
     "pape",
     "papel",
     "papi",
     "parece",
+    "parecen",
+    "parezco",
     "parido",
+    "paro",
     "parroquia",
     "pasa",
+    "pasado",
     "pasapalda",
     "pase",
     "pasear",
     "pases",
+    "pasto",
     "patitas",
     "pel",
     "pelicula",
     "pelotudo",
     "peluche",
+    "pense",
     "peor",
     "perfectamente",
     "perfecto",
@@ -409,6 +556,7 @@
     "pienso",
     "piero",
     "pies",
+    "pigadas",
     "pija",
     "piloz",
     "pipi",
@@ -421,18 +569,26 @@
     "poncierame",
     "pone",
     "poner",
+    "ponerle",
     "ponerte",
     "ponga",
+    "pongo",
     "ponte",
     "poquito",
     "porque",
+    "practicamente",
     "pregunta",
     "preguntaste",
+    "presentacion",
+    "pretequita",
     "primer",
+    "primeros",
     "probando",
+    "probar",
     "problema",
     "problemitas",
     "procesamiento",
+    "proyecto",
     "prueba",
     "prueba123",
     "pudiendo",
@@ -441,15 +597,20 @@
     "puedes",
     "puedo",
     "pues",
+    "pulidito",
+    "punto",
     "puta",
     "puto",
     "queda",
     "quedaba",
+    "quedamos",
     "quedas",
     "quede",
     "quedes",
     "quejadas",
     "queria",
+    "querias",
+    "querida",
     "queso",
     "quiera",
     "quieras",
@@ -459,6 +620,7 @@
     "quieta",
     "quita",
     "quitar",
+    "quizas",
     "racon",
     "ram",
     "rampidito",
@@ -471,24 +633,40 @@
     "re",
     "reaccion",
     "reaccionaste",
+    "realidad",
     "rearemos",
+    "recien",
+    "recorrer",
+    "recuerdo",
+    "refecto",
     "refuele",
     "reis",
+    "repetir",
     "repiola",
+    "repiti",
+    "representacion",
+    "reprobusco",
     "reproducir",
     "reprodujiste",
     "reproduzcas",
+    "reprunsame",
+    "respeto",
     "responde",
     "responder",
     "respondes",
     "respondiendo",
     "respondio",
     "respuesta",
+    "respuestas",
     "revolver",
     "reyan",
     "reyes",
     "rica",
     "rico",
+    "rie",
+    "riendo",
+    "rimando",
+    "ritmo",
     "robotica",
     "rocoso",
     "rollo",
@@ -498,27 +676,42 @@
     "roto",
     "ruido",
     "ruri",
+    "saben",
+    "saber",
     "sabes",
+    "sabias",
+    "sacado",
     "sacar",
     "sacaria",
+    "sacate",
     "sal",
     "sale",
+    "salga",
     "saltar",
     "salto",
     "sapas",
     "sea",
+    "seguira",
+    "segundos",
     "seis",
+    "semanas",
     "sentir",
     "serpiente",
     "show",
+    "sido",
     "siempre",
     "siendo",
     "sienta",
+    "siga",
     "sigues",
+    "siguieron",
     "silencio",
     "sin",
     "siquiera",
     "slm",
+    "sobre",
+    "social",
+    "sola",
     "solamente",
     "solo",
     "son",
@@ -528,28 +721,47 @@
     "suena",
     "sueno",
     "switch",
+    "tal",
     "tambien",
     "tan",
+    "tanto",
+    "tardes",
     "tarta",
     "temer",
+    "tenemos",
+    "tener",
     "tenes",
     "tengo",
+    "teniamos",
+    "tenias",
+    "tenido",
     "teo",
+    "terminando",
     "texta",
+    "texto",
     "theo",
+    "tibia",
     "tiempo",
     "tiene",
     "tienes",
     "tijera",
     "tijeras",
+    "tio",
+    "tipo",
     "tirar",
     "tiraria",
     "toda",
+    "todas",
+    "todavia",
     "todo",
+    "todos",
     "toma",
     "tomar",
     "tomas",
+    "total",
+    "trabajaban",
     "trabajan",
+    "trabajos",
     "traduccion",
     "trampa",
     "tranquilo",
@@ -561,9 +773,11 @@
     "truco",
     "tus",
     "tuyo",
+    "ultimamente",
     "unico",
     "uno",
     "usar",
+    "uso",
     "uy",
     "va",
     "vale",
@@ -576,9 +790,12 @@
     "veces",
     "vecino",
     "vela",
+    "vender",
     "veni",
     "venir",
     "veo",
+    "veoveo",
+    "veras",
     "verdad",
     "verde",
     "ves",
@@ -586,13 +803,16 @@
     "vez",
     "vida",
     "video",
+    "videos",
     "viendo",
     "viste",
     "volver",
     "vos",
     "voy",
     "voz",
-    "wifi"
+    "vuelves",
+    "wifi",
+    "yudica"
   ],
   "history": [
     {
@@ -3559,11 +3779,1111 @@
       "word": "caray",
       "date": "2026-08-22",
       "timestamp": "2026-08-22T19:47:28.990482"
+    },
+    {
+      "word": "refecto",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:14:13.715260"
+    },
+    {
+      "word": "todavia",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "semanas",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "tenemos",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "presentacion",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "social",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "doy",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "pulidito",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "proyecto",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "saber",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "carajo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "vender",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "hacen",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "encima",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "nos",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "amenazaron",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "recien",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "arranco",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "pongo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "hagan",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "equipo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "cuenta",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "miren",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "recorrer",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "entonces",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "saben",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "cagate",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "seguira",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "vuelves",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "sola",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "da",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "bronca",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "acostumbrados",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "carrera",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "conocias",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "laburaba",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "intentabas",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "cem",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "general",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "alguna",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "mayoria",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "realidad",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "hacian",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "autotontalada",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "aparecieron",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "sabias",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "existian",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "estaban",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "cruzando",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "habian",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "dejado",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "esten",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "terminando",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "pasado",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "casado",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "estaba",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "eramos",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "grupo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "nunca",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "aparecio",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "abandono",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "cada",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "tanto",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "mitad",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "ms",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "mando",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "tipo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "dejo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "quedamos",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "entrega",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "mensaje",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "fija",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "teniamos",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "representacion",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "oral",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "hare",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "veras",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "sobre",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "marcha",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "parecen",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "horrible",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "todos",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "trabajos",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "ultimamente",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "guerra",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "encontrar",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "alguien",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "siga",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "ritmo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "conoci",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "llegando",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "empezo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "equipos",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "juntos",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "primeros",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "hacia",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "ballera",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "practicamente",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "quizas",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "buscaba",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "otros",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "trabajaban",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "siguieron",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "merismo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "uso",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "materias",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "kilo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "pense",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "iban",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "pigadas",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "tenido",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:36.522277"
+    },
+    {
+      "word": "ponerle",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:57.196107"
+    },
+    {
+      "word": "limite",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:57.196107"
+    },
+    {
+      "word": "texto",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:57.196107"
+    },
+    {
+      "word": "15",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:57.196107"
+    },
+    {
+      "word": "segundos",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:57.196107"
+    },
+    {
+      "word": "punto",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:18:57.196107"
+    },
+    {
+      "word": "coger",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:23:43.693738"
+    },
+    {
+      "word": "paro",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:25:10.410762"
+    },
+    {
+      "word": "reprunsame",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:25:10.410762"
+    },
+    {
+      "word": "malo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:34:02.079790"
+    },
+    {
+      "word": "pachame",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:34:02.079790"
+    },
+    {
+      "word": "dormen",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:34:02.079790"
+    },
+    {
+      "word": "habria",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:34:25.328557"
+    },
+    {
+      "word": "despearlo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:34:25.328557"
+    },
+    {
+      "word": "total",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:38:18.135033"
+    },
+    {
+      "word": "computadora",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:38:18.135033"
+    },
+    {
+      "word": "aburrido",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:38:54.795617"
+    },
+    {
+      "word": "meter",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:38:54.795617"
+    },
+    {
+      "word": "probar",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:58:25.337656"
+    },
+    {
+      "word": "necesite",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:58:25.337656"
+    },
+    {
+      "word": "querias",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:58:25.337656"
+    },
+    {
+      "word": "modo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:58:25.337656"
+    },
+    {
+      "word": "desarrollado",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:58:25.337656"
+    },
+    {
+      "word": "activar",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:58:25.337656"
+    },
+    {
+      "word": "carne",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:58:58.880060"
+    },
+    {
+      "word": "esconderar",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:58:58.880060"
+    },
+    {
+      "word": "tener",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:58:58.880060"
+    },
+    {
+      "word": "confiacion",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:58:58.880060"
+    },
+    {
+      "word": "gran",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:58:58.880060"
+    },
+    {
+      "word": "intervalle",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T20:58:58.880060"
+    },
+    {
+      "word": "andas",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:09:39.968727"
+    },
+    {
+      "word": "mariano",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:09:59.952084"
+    },
+    {
+      "word": "yudica",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:09:59.952084"
+    },
+    {
+      "word": "parezco",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:13:48.971837"
+    },
+    {
+      "word": "nigeriano",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:14:17.597638"
+    },
+    {
+      "word": "nube",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:14:31.518844"
+    },
+    {
+      "word": "pasto",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:14:58.198963"
+    },
+    {
+      "word": "buenas",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:15:12.608869"
+    },
+    {
+      "word": "tardes",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:15:12.608869"
+    },
+    {
+      "word": "goba",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:15:25.533204"
+    },
+    {
+      "word": "amigue",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:15:25.533204"
+    },
+    {
+      "word": "coba",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:15:25.533204"
+    },
+    {
+      "word": "reprobusco",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:16:07.598867"
+    },
+    {
+      "word": "buenisimo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:16:27.817643"
+    },
+    {
+      "word": "bailar",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:16:43.442085"
+    },
+    {
+      "word": "hablemos",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:16:43.442085"
+    },
+    {
+      "word": "rimando",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:16:43.442085"
+    },
+    {
+      "word": "ferrocarril",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:17:03.659654"
+    },
+    {
+      "word": "arbol",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:17:19.660425"
+    },
+    {
+      "word": "rie",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:17:38.551839"
+    },
+    {
+      "word": "tio",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:18:05.555386"
+    },
+    {
+      "word": "riendo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:18:05.555386"
+    },
+    {
+      "word": "grabar",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:18:05.555386"
+    },
+    {
+      "word": "videos",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:18:05.555386"
+    },
+    {
+      "word": "audios",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:18:05.555386"
+    },
+    {
+      "word": "salga",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:18:05.555386"
+    },
+    {
+      "word": "decirle",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:18:35.402853"
+    },
+    {
+      "word": "repetir",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:18:35.402853"
+    },
+    {
+      "word": "frase",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:18:35.402853"
+    },
+    {
+      "word": "continuacion",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:18:35.402853"
+    },
+    {
+      "word": "especial",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:18:59.684820"
+    },
+    {
+      "word": "tenias",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:19:21.379396"
+    },
+    {
+      "word": "tal",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:19:21.379396"
+    },
+    {
+      "word": "cual",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:19:21.379396"
+    },
+    {
+      "word": "dicho",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:19:21.379396"
+    },
+    {
+      "word": "entusias",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:19:41.295795"
+    },
+    {
+      "word": "repiti",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:19:41.295795"
+    },
+    {
+      "word": "acompanara",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:19:41.295795"
+    },
+    {
+      "word": "haria",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:20:11.644383"
+    },
+    {
+      "word": "fondo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:20:11.644383"
+    },
+    {
+      "word": "grave",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:20:11.644383"
+    },
+    {
+      "word": "grabarle",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:20:11.644383"
+    },
+    {
+      "word": "darle",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:20:11.644383"
+    },
+    {
+      "word": "culo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:20:11.644383"
+    },
+    {
+      "word": "respuestas",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:20:11.644383"
+    },
+    {
+      "word": "heroes",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:20:11.644383"
+    },
+    {
+      "word": "pretequita",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:26:45.665044"
+    },
+    {
+      "word": "sacate",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:26:45.665044"
+    },
+    {
+      "word": "hemos",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:26:45.665044"
+    },
+    {
+      "word": "sido",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:26:45.665044"
+    },
+    {
+      "word": "estando",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:26:45.665044"
+    },
+    {
+      "word": "habla",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:26:45.665044"
+    },
+    {
+      "word": "querida",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:27:10.689688"
+    },
+    {
+      "word": "ay",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:27:45.042459"
+    },
+    {
+      "word": "recuerdo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:28:47.308963"
+    },
+    {
+      "word": "veoveo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:28:47.308963"
+    },
+    {
+      "word": "edad",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:28:47.308963"
+    },
+    {
+      "word": "cargando",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:30:09.394756"
+    },
+    {
+      "word": "tibia",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:30:09.394756"
+    },
+    {
+      "word": "lechuroteo",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:31:18.488127"
+    },
+    {
+      "word": "he",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:31:18.488127"
+    },
+    {
+      "word": "sacado",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:31:18.488127"
+    },
+    {
+      "word": "paciencia",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:31:18.488127"
+    },
+    {
+      "word": "respeto",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:31:45.703010"
+    },
+    {
+      "word": "avisar",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:31:45.703010"
+    },
+    {
+      "word": "avisa",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:32:10.564172"
+    },
+    {
+      "word": "adivina",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T21:32:25.387549"
+    },
+    {
+      "word": "pan",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T23:30:29.821221"
+    },
+    {
+      "word": "mantienes",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T23:30:29.821221"
+    },
+    {
+      "word": "ninguna",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T23:30:29.821221"
+    },
+    {
+      "word": "chisita",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T23:30:29.821221"
+    },
+    {
+      "word": "manghiro",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T23:30:29.821221"
+    },
+    {
+      "word": "comprame",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T23:30:29.821221"
+    },
+    {
+      "word": "fundita",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T23:30:29.821221"
+    },
+    {
+      "word": "idea",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T23:30:29.821221"
+    },
+    {
+      "word": "aparecer",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T23:30:29.821221"
+    },
+    {
+      "word": "todas",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T23:30:29.821221"
+    },
+    {
+      "word": "formas",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T23:30:29.821221"
+    },
+    {
+      "word": "escuchandote",
+      "date": "2026-08-22",
+      "timestamp": "2026-08-22T23:30:29.821221"
     }
   ],
   "stats": {
-    "total_words": 593,
-    "new_words_today": 57,
-    "history_count": 593
+    "total_words": 813,
+    "new_words_today": 277,
+    "history_count": 813
   }
 }

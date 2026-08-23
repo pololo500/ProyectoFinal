@@ -50,7 +50,7 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import messagebox, ttk
 
-from debug_logger import get_debug_logger, init_debug_logger
+from debug_logger import get_debug_logger, init_debug_logger, log_action
 
 try:
     from PIL import Image, ImageTk
@@ -530,6 +530,10 @@ class EyeModeApp(tk.Tk):
         self.camera_worker.start()
         self.audio_worker.start()
         print("[EyeMode] Workers iniciados", flush=True)
+        log_action(
+            "APP",
+            f"EyeMode workers iniciados (cam={cam_idx}, mic={mic_idx}, out={out_idx}, cloud={self._cloud_mode})",
+        )
 
     def _start_api_server(self) -> None:
         """Initialize and start the REST API server for the parental app."""
@@ -546,6 +550,7 @@ class EyeModeApp(tk.Tk):
 
         # Callbacks from Android app → robot
         def _on_celebrate() -> None:
+            log_action("APP", "celebración disparada desde API")
             if self.speech_worker:
                 self.speech_worker.speak("¡Felicitaciones! ¡Lo lograste! ¡Sos increíble!")
             if self._eye_display is not None:
@@ -553,6 +558,7 @@ class EyeModeApp(tk.Tk):
                 self.after(5000, lambda: self._eye_display.set_expression("neutral"))
 
         def _on_config_changed(cfg: dict) -> None:
+            log_action("APP", f"config sensorial actualizada: {cfg}")
             if "volume_limit" in cfg:
                 self._volume_limit = cfg["volume_limit"]
             if "brightness" in cfg:
@@ -561,6 +567,7 @@ class EyeModeApp(tk.Tk):
                     self.after(0, lambda: self._eye_display.set_brightness(cfg["brightness"]))
 
         def _on_night_mode(enabled: bool) -> None:
+            log_action("APP", f"modo noche={'ON' if enabled else 'OFF'}")
             self._night_mode = enabled
             if enabled:
                 if self.speech_worker:
@@ -574,6 +581,7 @@ class EyeModeApp(tk.Tk):
                     self.after(0, lambda: self._eye_display.set_expression("neutral"))
 
         def _on_power(on: bool) -> None:
+            log_action("APP", f"power={'ON' if on else 'OFF'}")
             self._power_on = on
             if not on:
                 self.stop_workers()
@@ -722,6 +730,7 @@ class EyeModeApp(tk.Tk):
         self.after(30000, self._check_routines)
 
     def stop_workers(self) -> None:
+        log_action("APP", "EyeMode deteniendo workers")
         if self.camera_worker:
             self.camera_worker.stop()
             self.camera_worker = None
@@ -1142,6 +1151,36 @@ class EdgeAiDesktopApp(tk.Tk):
         robot_state.on_play_music = self.speech_worker.play_music if self.speech_worker else None
         robot_state.on_stop_music = self.speech_worker.stop_music if self.speech_worker else None
 
+        def _on_celebrate() -> None:
+            log_action("APP", "celebración disparada desde API")
+            phrase = "¡Felicitaciones! ¡Lo lograste! ¡Sos increíble!"
+            self.after(0, lambda: self._append_log("🎉 Celebración enviada desde la app"))
+            if self.speech_worker:
+                self.speech_worker.speak(phrase)
+
+        def _on_config_changed(cfg: dict) -> None:
+            log_action("APP", f"config sensorial actualizada: {cfg}")
+            if "volume_limit" in cfg:
+                self.after(0, lambda v=cfg["volume_limit"]: self._volume_var.set(v))
+
+        def _on_night_mode(enabled: bool) -> None:
+            log_action("APP", f"modo noche={'ON' if enabled else 'OFF'}")
+            if self.speech_worker:
+                if enabled:
+                    self.speech_worker.speak("Buenas noches. Voy a descansar un ratito.")
+                else:
+                    self.speech_worker.speak("¡Buenos días! ¡Qué lindo verte!")
+
+        def _on_power(on: bool) -> None:
+            log_action("APP", f"power={'ON' if on else 'OFF'}")
+            if not on:
+                self.after(0, self.stop_workers)
+
+        robot_state.on_celebrate = _on_celebrate
+        robot_state.on_config_changed = _on_config_changed
+        robot_state.on_night_mode_changed = _on_night_mode
+        robot_state.on_power_changed = _on_power
+
         try:
             self.api_server = ApiServer()
             self.api_server.start()
@@ -1363,9 +1402,14 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    logger = init_debug_logger(
+        capture_audio=args.debug,
+        prefix="debug" if args.debug else "sistema",
+    )
+    print(f"[LOG] Archivo: {logger.log_path}", flush=True)
+    log_action("APP", f"inicio ({'debug' if args.debug else 'ojos'})")
+
     if args.debug:
-        logger = init_debug_logger()
-        print(f"[DEBUG] Log file: {logger.log_path}", flush=True)
         app = EdgeAiDesktopApp()
     else:
         app = EyeModeApp()

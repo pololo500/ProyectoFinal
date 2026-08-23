@@ -356,6 +356,15 @@
                     android:orientation="vertical" />
 
                 <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btn_stop_song"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="@string/config_songs_stop"
+                    app:cornerRadius="8dp" />
+
+                <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_upload_song"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="match_parent"

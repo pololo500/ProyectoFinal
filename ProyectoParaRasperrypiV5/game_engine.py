@@ -15,6 +15,8 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
+from debug_logger import log_action
+
 
 def _normalize_letter(char: str) -> str:
     """Quita acentos de una letra para las pistas (á → a, ñ se preserva)."""
@@ -349,9 +351,11 @@ class GameEngine:
             session = VeoVeoSession()
             opening = session.start_round()
             self._session = session
+            log_action("GAME", "inicio veo_veo")
             return f"¡Dale, juguemos al Veo-veo! {opening}"
         elif game_type == "piedra_papel_tijera":
             self._session = PiedraPapelTijeraSession()
+            log_action("GAME", "inicio piedra_papel_tijera")
             return (
                 "¡Dale, juguemos a Piedra, papel o tijera! "
                 "¿Listo? ¡Uno, dos, tres!"
@@ -369,6 +373,7 @@ class GameEngine:
 
         response = self._session.process_input(text)
         if response.game_over:
+            log_action("GAME", f"fin {self.game_type or 'juego'}")
             self._session = None
         return response
 

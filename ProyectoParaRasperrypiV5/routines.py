@@ -15,6 +15,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from debug_logger import log_action
+
 
 class Routine:
     """Representación de una rutina individual."""
@@ -88,8 +90,10 @@ class RoutineScheduler:
             data = json.loads(self.config_path.read_text(encoding="utf-8"))
             routines_data = data.get("routines", [])
             self.routines = [Routine(r) for r in routines_data]
+            log_action("ROUTINE", f"config cargada: {len(self.routines)} rutinas")
         except Exception:
             self.routines = []
+            log_action("ROUTINE", "ERROR al cargar routines_config.json")
 
     def reload_config(self) -> None:
         """Recarga la configuración (para hot-reload desde la app)."""
@@ -126,6 +130,7 @@ class RoutineScheduler:
                         f"a {routine.transition_to}. "
                         f"¡Vamos terminando de a poquito!"
                     )
+                    log_action("ROUTINE", f"pre-recordatorio: {routine.name}")
 
             # Recordatorio principal
             if not routine._reminded_today and now >= routine_time:
@@ -133,6 +138,7 @@ class RoutineScheduler:
                 if (now - routine_time).total_seconds() < 1800:
                     routine._reminded_today = True
                     messages.append(routine.reminder_message)
+                    log_action("ROUTINE", f"recordatorio: {routine.name} ({routine.time})")
 
         return messages
 
@@ -146,6 +152,7 @@ class RoutineScheduler:
         for routine in self.routines:
             if routine.id == routine_id and routine._reminded_today and not routine._completed_today:
                 routine._completed_today = True
+                log_action("ROUTINE", f"completada: {routine.name}")
                 return routine.success_message
 
         # Si no se especifica ID, completar la primera rutina pendiente
@@ -153,6 +160,7 @@ class RoutineScheduler:
             for routine in self.routines:
                 if routine._reminded_today and not routine._completed_today:
                     routine._completed_today = True
+                    log_action("ROUTINE", f"completada: {routine.name}")
                     return routine.success_message
 
         return None

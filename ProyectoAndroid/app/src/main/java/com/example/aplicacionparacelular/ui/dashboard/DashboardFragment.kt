@@ -43,13 +43,14 @@ class DashboardFragment : Fragment() {
             }
         }
 
-        // Observe robot status for power state
+        // Observe robot status for power state and alerts
         RobotConnectionManager.robotStatus.observe(viewLifecycleOwner) { status ->
             if (status != null) {
                 val powerOn = status.optBoolean("power_on", true)
                 val nightMode = status.optBoolean("night_mode", false)
                 updatePowerUI(powerOn, nightMode)
             }
+            refreshAlerts()
         }
 
         // Observe ViewModel data
@@ -65,8 +66,12 @@ class DashboardFragment : Fragment() {
             binding.txtMoodValue.text = value
         }
 
-        viewModel.alertMessages.observe(viewLifecycleOwner) { alerts ->
-            updateAlerts(alerts)
+        viewModel.alertMessages.observe(viewLifecycleOwner) {
+            refreshAlerts()
+        }
+
+        RobotConnectionManager.parentAlerts.observe(viewLifecycleOwner) {
+            refreshAlerts()
         }
 
         // Celebrate button
@@ -106,6 +111,16 @@ class DashboardFragment : Fragment() {
         } else {
             binding.btnPowerToggle.text = "⏻ Apagado"
         }
+    }
+
+    private fun refreshAlerts() {
+        val playing = RobotConnectionManager.robotStatus.value?.let { status ->
+            if (status.isNull("currently_playing")) "" else status.optString("currently_playing", "")
+        }.orEmpty()
+        val nowPlaying = if (playing.isNotBlank()) listOf("🎵 Reproduciendo ahora: $playing") else emptyList()
+        val live = RobotConnectionManager.parentAlerts.value ?: emptyList()
+        val telemetry = viewModel.alertMessages.value ?: emptyList()
+        updateAlerts(nowPlaying + live + telemetry)
     }
 
     private fun updateAlerts(alerts: List<String>) {

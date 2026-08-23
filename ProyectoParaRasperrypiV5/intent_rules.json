@@ -193,7 +193,11 @@
       "piedra papel o tijera",
       "juguemos piedra papel tijera",
       "dale piedra papel",
-      "quiero jugar piedra papel o tijera"
+      "quiero jugar piedra papel o tijera",
+      "quiero jugar al piedra papel o tijera",
+      "juguemos a piedra papel o tijera",
+      "al piedra papel tijera",
+      "piedra, papel o tijera"
     ],
     "response": [
       "¡Dale! A la cuenta de tres elegí: piedra, papel o tijera. ¿Listo? ¡Uno, dos, tres!",

@@ -14,6 +14,8 @@ from datetime import datetime, date
 from pathlib import Path
 from typing import Any
 
+from debug_logger import log_action
+
 
 class TelemetryCollector:
     """Recolecta métricas de cada interacción y genera resúmenes diarios.
@@ -63,6 +65,10 @@ class TelemetryCollector:
         self._today_data["summary"]["total_interactions"] += 1
         self._today_data["summary"]["total_duration_s"] += duration_s
         self._save()
+        log_action(
+            "TELEMETRY",
+            f"interacción pilar={pilar or 'general'} intent={intent_name}",
+        )
 
     def log_crisis_event(
         self,
@@ -84,6 +90,7 @@ class TelemetryCollector:
             self._today_data["summary"].get("crisis_count", 0) + 1
         )
         self._save()
+        log_action("TELEMETRY", f"CRISIS emoción={emotion} score={emotion_score:.2f}")
 
     def log_game_session(
         self,
@@ -105,6 +112,7 @@ class TelemetryCollector:
             self._today_data["summary"].get("games_played", 0) + 1
         )
         self._save()
+        log_action("TELEMETRY", f"juego={game_type} rondas={rounds_played}")
 
     def log_routine_completed(self, routine_id: str, routine_name: str) -> None:
         """Registra la finalización exitosa de una rutina."""

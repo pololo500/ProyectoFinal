@@ -23,6 +23,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Callable
 
+from debug_logger import log_action
+
 APP_DIR = Path(__file__).resolve().parent
 MUSIC_DIR = APP_DIR / "music"
 MUSIC_DIR.mkdir(exist_ok=True)
@@ -59,6 +61,10 @@ class RobotState:
         self.speech_worker: Any = None
 
     def to_dict(self) -> dict[str, Any]:
+        playing = None
+        sw = self.speech_worker
+        if sw is not None and getattr(sw, "_is_playing_music", False):
+            playing = getattr(sw, "_current_song_name", None)
         with self._lock:
             return {
                 "power_on": self.power_on,
@@ -67,6 +73,7 @@ class RobotState:
                 "brightness": self.brightness,
                 "current_emotion": self.current_emotion,
                 "current_emotion_score": self.current_emotion_score,
+                "currently_playing": playing,
                 "timestamp": datetime.now().isoformat(),
             }
 
@@ -119,6 +126,7 @@ class RobotState:
             if len(self._notifications) >= 50:
                 self._notifications.pop(0)
             self._notifications.append(notif)
+        log_action("NOTIFY", f"{notif_type}: {message}")
         print(f"[API] Notificación encolada: [{notif_type}] {message}", flush=True)
 
     def pop_notifications(self) -> list[dict[str, Any]]:
@@ -156,9 +164,25 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
         self._set_headers(status)
         body = json.dumps(data, ensure_ascii=False, indent=2)
         self.wfile.write(body.encode("utf-8"))
+        self._log_api_result(status)
 
     def _send_error_json(self, status: int, message: str) -> None:
         self._send_json({"error": message}, status)
+
+    def _log_api_result(self, status: int) -> None:
+        elapsed_ms = (time.monotonic() - getattr(self, "_req_t0", time.monotonic())) * 1000
+        client = self.client_address[0] if self.client_address else "?"
+        length = self.headers.get("Content-Length")
+        size_bit = f" in={length}B" if length else ""
+        log_action(
+            "API",
+            f"{self.command} {self.path} from {client} → {status}{size_bit}",
+            elapsed_ms=elapsed_ms,
+        )
+
+    def setup(self) -> None:
+        super().setup()
+        self._req_t0 = time.monotonic()
 
     def _read_body(self) -> bytes:
         length = int(self.headers.get("Content-Length", 0))
@@ -179,6 +203,8 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
 
     def do_OPTIONS(self) -> None:
         self._set_headers(204)
+        client = self.client_address[0] if self.client_address else "?"
+        log_action("API", f"OPTIONS {self.path} from {client} → 204")
 
     # ------------------------------------------------------------------
     # GET endpoints
@@ -402,8 +428,12 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
     def _handle_post_celebrate(self) -> None:
         callback = robot_state.on_celebrate
         if callback:
+            log_action("API", "celebrar logro")
             callback()
-        self._send_json({"status": "ok", "message": "¡Celebración enviada!"})
+            self._send_json({"status": "ok", "message": "¡Celebración enviada!"})
+        else:
+            log_action("API", "celebrar logro RECHAZADO: callback no configurado")
+            self._send_error_json(503, "Celebración no disponible")
 
     def _handle_post_night_mode(self) -> None:
         body = self._parse_json_body()
@@ -554,12 +584,14 @@ class _DiscoveryBeacon:
             name="DiscoveryBeacon",
         )
         self._thread.start()
+        log_action("BEACON", f"inicio UDP :{self.BEACON_PORT} cada {self.interval}s")
 
     def stop(self) -> None:
         self._running = False
         if self._thread:
             self._thread.join(timeout=2)
             self._thread = None
+        log_action("BEACON", "detenido")
 
     def _broadcast_loop(self) -> None:
         import socket as _socket
@@ -666,6 +698,7 @@ class ApiServer:
         # UDP discovery beacon
         self._beacon = _DiscoveryBeacon(api_port=self.port)
         self._beacon.start()
+        log_action("API", f"servidor REST escuchando en {self.host}:{self.port} (IP {local_ip})")
 
     def stop(self) -> None:
         """Detiene el servidor y el beacon."""
@@ -679,6 +712,7 @@ class ApiServer:
             self._thread.join(timeout=3)
             self._thread = None
         print("[API] Servidor REST detenido", flush=True)
+        log_action("API", "servidor REST detenido")
 
 
 # ------------------------------------------------------------------

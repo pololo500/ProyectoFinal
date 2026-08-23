@@ -356,6 +356,10 @@ class ConfigFragment : Fragment() {
     // ------------------------------------------------------------------
 
     private fun setupSongsSection() {
+        binding.btnStopSong.setOnClickListener {
+            viewModel.stopMusic()
+        }
+
         binding.btnUploadSong.setOnClickListener {
             val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
                 type = "audio/*"

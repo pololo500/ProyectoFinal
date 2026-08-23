@@ -1,9 +1,13 @@
 package com.example.aplicacionparacelular.network
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.content.Context
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import org.json.JSONObject
@@ -26,13 +30,19 @@ import java.util.concurrent.TimeUnit
 object RobotConnectionManager {
 
     private const val TAG = "RobotConnMgr"
+    private const val CHANNEL_ID = "teo_parent_alerts"
 
     private val executor = Executors.newScheduledThreadPool(2)
     private val mainHandler = Handler(Looper.getMainLooper())
     private var pollingFuture: ScheduledFuture<*>? = null
 
-    /** Indica si init() ya fue llamado para evitar registrar observers duplicados. */
+    private var appContext: Context? = null
     private var initialized = false
+
+    private val _parentAlerts = MutableLiveData<List<String>>(emptyList())
+    val parentAlerts: LiveData<List<String>> = _parentAlerts
+
+    private val recentAlerts = mutableListOf<String>()
 
     // ------------------------------------------------------------------
     // LiveData observables
@@ -65,8 +75,10 @@ object RobotConnectionManager {
         }
         initialized = true
 
-        val appContext = context.applicationContext
-        RobotApiClient.init(appContext)
+        val ctx = context.applicationContext
+        appContext = ctx
+        RobotApiClient.init(ctx)
+        ensureNotificationChannel(ctx)
 
         if (RobotApiClient.isConfigured()) {
             // Ya tenemos IP guardada, arrancar polling de inmediato
@@ -79,11 +91,11 @@ object RobotConnectionManager {
             RobotDiscovery.discoveredRobot.observeForever { robot ->
                 if (robot != null && !RobotApiClient.isConfigured()) {
                     Log.d(TAG, "Robot descubierto: ${robot.ip}:${robot.port} (${robot.deviceName})")
-                    RobotApiClient.setRobotAddress(appContext, robot.ip, robot.port)
+                    RobotApiClient.setRobotAddress(ctx, robot.ip, robot.port)
                     startPolling()
                 }
             }
-            RobotDiscovery.startScan(appContext)
+            RobotDiscovery.startScan(ctx)
         }
     }
 
@@ -137,6 +149,7 @@ object RobotConnectionManager {
                     _robotStatus.value = result.data
                     _lastError.value = null
                 }
+                pollNotifications()
             }
             is ApiResult.Error -> {
                 Log.d(TAG, "Poll falló: ${result.message}")
@@ -255,6 +268,84 @@ object RobotConnectionManager {
      */
     fun stopMusic(onResult: (ApiResult<JSONObject>) -> Unit = {}) {
         executeAsync({ RobotApiClient.stopMusic() }, onResult)
+    }
+
+    // ------------------------------------------------------------------
+    // Notificaciones Raspberry → celular
+    // ------------------------------------------------------------------
+
+    private fun pollNotifications() {
+        when (val result = RobotApiClient.getNotifications()) {
+            is ApiResult.Success -> {
+                val arr = result.data.optJSONArray("notifications") ?: return
+                if (arr.length() == 0) return
+                val incoming = mutableListOf<String>()
+                for (i in 0 until arr.length()) {
+                    val obj = arr.optJSONObject(i) ?: continue
+                    val type = obj.optString("type", "aviso")
+                    val message = obj.optString("message", "")
+                    if (message.isBlank()) continue
+                    val line = formatAlert(type, message)
+                    incoming.add(line)
+                    showSystemNotification(type, message)
+                }
+                if (incoming.isEmpty()) return
+                postToMain {
+                    recentAlerts.addAll(0, incoming)
+                    while (recentAlerts.size > 20) {
+                        recentAlerts.removeAt(recentAlerts.lastIndex)
+                    }
+                    _parentAlerts.value = recentAlerts.toList()
+                }
+            }
+            is ApiResult.Error -> {
+                Log.d(TAG, "Poll notificaciones falló: ${result.message}")
+            }
+        }
+    }
+
+    private fun formatAlert(type: String, message: String): String {
+        val prefix = when (type.lowercase()) {
+            "crisis" -> "⚠️ Crisis"
+            "pedido" -> "📞 Pedido"
+            "musica" -> "🎵 Música"
+            "logro" -> "🎉 Logro"
+            else -> "ℹ️ Aviso"
+        }
+        return "$prefix: $message"
+    }
+
+    private fun ensureNotificationChannel(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "Avisos de TEO",
+            NotificationManager.IMPORTANCE_HIGH
+        )
+        channel.description = "Crisis, pedidos del nene, música y logros"
+        manager.createNotificationChannel(channel)
+    }
+
+    private fun showSystemNotification(type: String, message: String) {
+        val context = appContext ?: return
+        val title = when (type.lowercase()) {
+            "crisis" -> "TEO: atención recomendada"
+            "pedido" -> "TEO: el nene te necesita"
+            "musica" -> "TEO está reproduciendo música"
+            "logro" -> "TEO: logro"
+            else -> "Aviso de TEO"
+        }
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        manager.notify((System.currentTimeMillis() % Int.MAX_VALUE).toInt(), notification)
     }
 
     // ------------------------------------------------------------------

@@ -71,6 +71,8 @@ CASES: list[tuple[str, str]] = [
     ("dale veo veo", "play_veo_veo"),
     ("piedra papel o tijera", "play_piedra_papel"),
     ("juguemos piedra papel tijera", "play_piedra_papel"),
+    ("quiero jugar al Piedra, papel o tijera", "play_piedra_papel"),
+    ("paro la musica", "stop_music_request"),
     # curiosity
     ("que es eso", "question_curiosity"),
     ("como se llama", "question_curiosity"),

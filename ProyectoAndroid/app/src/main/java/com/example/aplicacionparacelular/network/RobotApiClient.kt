@@ -76,6 +76,9 @@ object RobotApiClient {
     /** Obtiene la lista de rutinas configuradas. */
     fun getRoutines(): ApiResult<JSONObject> = doGet("/api/routines")
 
+    /** Obtiene y vacía las notificaciones pendientes del robot. */
+    fun getNotifications(): ApiResult<JSONObject> = doGet("/api/notifications")
+
     /** Obtiene la lista de canciones. */
     fun getMusic(): ApiResult<JSONObject> = doGet("/api/music")
 
