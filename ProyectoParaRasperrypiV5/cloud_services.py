@@ -185,7 +185,9 @@ class CloudLLM:
         "- [NOTIFY_PARENT:razón] — Avisa a mamá/papá. Usalo si el nene pide llamar a sus padres, tiene mucho miedo, "
         "está en crisis o dice algo preocupante. La razón debe ser breve.\n"
         "- [EXPRESSION:nombre] — Cambia tu cara. Opciones: feliz, triste, sorprendido, enojado, neutral.\n"
-        "- [CELEBRATE] — Celebración especial. Usalo cuando el nene cuenta un logro o hizo algo muy bien.\n"
+        "- [CELEBRATE:qué hizo] — Celebración. En el tag explicá BREVE qué logró "
+        "(ej. [CELEBRATE:ganó al veo veo] o [CELEBRATE:contó que armó un rompecabezas]). "
+        "NO uses [CELEBRATE] vacío. NO lo uses por palabras nuevas de vocabulario.\n"
         "- [CALM_MODE] — Modo calma. Usalo si el nene tiene sueño o está muy cansado.\n"
     )
 

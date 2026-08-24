@@ -541,9 +541,10 @@ class EmotionReactor:
     # Emociones que requieren silencio extendido para que el niño se exprese
     EXTENDED_SILENCE_EMOTIONS: frozenset[str] = frozenset({"triste", "enojado"})
 
-    # Umbrales de silencio
-    NORMAL_SILENCE: float = 1.2
-    EXTENDED_SILENCE: float = 3.0
+    # Umbrales de silencio (LATENCIA: ver docs/LATENCIA_AUDIO_CAMARA.md punto 1)
+    # Antes: 1.2s / 3.0s. Revertir esos valores si corta frases a mitad.
+    NORMAL_SILENCE: float = 0.7
+    EXTENDED_SILENCE: float = 1.6
 
     # Respuestas de crisis (fallback si no hay intención matcheada)
     _CRISIS_RESPONSES: dict[str, str] = {
@@ -666,9 +667,12 @@ class CameraWorker:
         self._stop_event = threading.Event()
         self.models_loaded_event = threading.Event()
         self._thread: threading.Thread | None = None
-        # Capture at a reduced frame rate to lower CPU usage (frames per second)
-        # 3 fps is optimal for RPi 5: balances responsiveness vs CPU load
-        self.frame_rate = 3
+        # LATENCIA punto 7: emoción por cámara es la feature de menor prioridad.
+        # Antes: 3 fps. Revertir a 3 si se necesita la cara más fluida en el dashboard.
+        self.frame_rate = 1
+        # False = solo preview (sin MediaPipe). True restaura detección de emoción.
+        # Ver docs/LATENCIA_AUDIO_CAMARA.md
+        self.infer_emotion = False
 
     def start(self) -> None:
         log_action("CameraWorker", f"inicio (cámara={self.camera_index})")
@@ -703,44 +707,51 @@ class CameraWorker:
             capture = cv2.VideoCapture(self.camera_index, capture_backend)
             if not capture.isOpened():
                 raise RuntimeError(f"No se pudo abrir la cámara {self.camera_index}")
-            # Force lower resolution to reduce USB bandwidth and MediaPipe CPU load
-            capture.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-            capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+            # LATENCIA punto 7: resolución mínima. Antes 640x480.
+            capture.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+            capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
 
-            # Ruta clasica de MediaPipe (API solutions).
-            if hasattr(mp, "solutions") and hasattr(mp.solutions, "face_mesh"):
-                mp_face_mesh = mp.solutions.face_mesh
-                mp_drawing = mp.solutions.drawing_utils
-                drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
-                connection_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
-                face_mesh = mp_face_mesh.FaceMesh(
-                    static_image_mode=False,
-                    max_num_faces=1,
-                    refine_landmarks=False,
-                    min_detection_confidence=0.5,
-                    min_tracking_confidence=0.5,
-                )
-                face_mesh_enabled = True
-                _queue_message_with_semaphore(self.message_queue, self.message_semaphore, "log", "MediaPipe FaceMesh habilitado")
-                _dlog = get_debug_logger()
-                if _dlog:
-                    _dlog.log_output("MEDIAPIPE", "FaceMesh cargado")
-            else:
-                # Fallback obligatorio: MediaPipe Tasks Face Landmarker.
-                tasks_landmarker = self._create_tasks_face_landmarker()
-                if tasks_landmarker is not None:
-                    tasks_face_enabled = True
-                    _queue_message_with_semaphore(
-                        self.message_queue,
-                        self.message_semaphore,
-                        "log",
-                        "MediaPipe Tasks Face Landmarker habilitado",
+            # LATENCIA punto 7: MediaPipe apagado por defecto (infer_emotion=False).
+            if self.infer_emotion:
+                if hasattr(mp, "solutions") and hasattr(mp.solutions, "face_mesh"):
+                    mp_face_mesh = mp.solutions.face_mesh
+                    mp_drawing = mp.solutions.drawing_utils
+                    drawing_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
+                    connection_spec = mp_drawing.DrawingSpec(thickness=1, circle_radius=1)
+                    face_mesh = mp_face_mesh.FaceMesh(
+                        static_image_mode=False,
+                        max_num_faces=1,
+                        refine_landmarks=False,
+                        min_detection_confidence=0.5,
+                        min_tracking_confidence=0.5,
                     )
+                    face_mesh_enabled = True
+                    _queue_message_with_semaphore(self.message_queue, self.message_semaphore, "log", "MediaPipe FaceMesh habilitado")
+                    _dlog = get_debug_logger()
+                    if _dlog:
+                        _dlog.log_output("MEDIAPIPE", "FaceMesh cargado")
                 else:
-                    raise RuntimeError(
-                        "No se pudo inicializar deteccion facial. "
-                        "Instala/usa una version de MediaPipe compatible o habilita descarga del modelo face_landmarker.task."
-                    )
+                    tasks_landmarker = self._create_tasks_face_landmarker()
+                    if tasks_landmarker is not None:
+                        tasks_face_enabled = True
+                        _queue_message_with_semaphore(
+                            self.message_queue,
+                            self.message_semaphore,
+                            "log",
+                            "MediaPipe Tasks Face Landmarker habilitado",
+                        )
+                    else:
+                        raise RuntimeError(
+                            "No se pudo inicializar deteccion facial. "
+                            "Instala/usa una version de MediaPipe compatible o habilita descarga del modelo face_landmarker.task."
+                        )
+            else:
+                _queue_message_with_semaphore(
+                    self.message_queue,
+                    self.message_semaphore,
+                    "log",
+                    "Cámara en modo preview (emoción/MediaPipe desactivado)",
+                )
 
             _queue_message_with_semaphore(
                 self.message_queue,
@@ -776,22 +787,12 @@ class CameraWorker:
                     continue
                 last_frame_ts = now_ts
 
-                if face_mesh_enabled and face_mesh is not None and mp_drawing is not None and mp_face_mesh is not None:
+                if not self.infer_emotion:
+                    self._push_frame(frame)
+                elif face_mesh_enabled and face_mesh is not None and mp_drawing is not None and mp_face_mesh is not None:
                     rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    result = face_mesh.process(rgb_frame)
-
-                    if result.multi_face_landmarks:
-                        for face_landmarks in result.multi_face_landmarks:
-                            mp_drawing.draw_landmarks(
-                                image=rgb_frame,
-                                landmark_list=face_landmarks,
-                                connections=mp_face_mesh.FACEMESH_TESSELATION,
-                                landmark_drawing_spec=drawing_spec,
-                                connection_drawing_spec=connection_spec,
-                            )
-
-                    annotated_frame = cv2.cvtColor(rgb_frame, cv2.COLOR_RGB2BGR)
-                    self._push_frame(annotated_frame)
+                    face_mesh.process(rgb_frame)
+                    self._push_frame(frame)
                 elif tasks_face_enabled and tasks_landmarker is not None:
                     annotated_frame, emotion_payload = self._process_tasks_frame(tasks_landmarker, frame)
                     self._push_frame(annotated_frame)
@@ -829,8 +830,8 @@ class CameraWorker:
                 else:
                     self._push_frame(frame)
 
-                # Yield CPU briefly to ensure audio threads get processing time
-                time.sleep(0.005)
+                # LATENCIA punto 7: ceder CPU al audio/Whisper (antes 0.005).
+                time.sleep(0.05)
 
         except Exception as exc:
             self.models_loaded_event.set()
@@ -1005,8 +1006,9 @@ class CameraWorker:
 
 
 class AudioWorker:
-    # Tope duro de captura: se corta por silencio (VAD) o a los 15s, lo que ocurra primero.
-    MAX_LISTEN_SECONDS: float = 15.0
+    # Tope duro de captura: silencio (VAD) o este máximo, lo que ocurra primero.
+    # LATENCIA punto 10: antes 15.0s. Revertir si corta monólogos del nene.
+    MAX_LISTEN_SECONDS: float = 8.0
 
     def __init__(
         self,
@@ -1066,6 +1068,9 @@ class AudioWorker:
         except ImportError:
             self.game_engine = None
 
+        from parent_alerts import VocabularyParentAlerter
+        self._vocab_alerter = VocabularyParentAlerter()
+
     def start(self) -> None:
         log_action("AudioWorker", f"inicio (mic={self.microphone_device_index})")
         self._thread = threading.Thread(target=self._run, name="AudioWorker", daemon=True)
@@ -1076,7 +1081,25 @@ class AudioWorker:
         self._stop_event.set()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=2)
+        self._flush_vocab_parent_alert(force_session=True)
         log_action("AudioWorker", "detenido")
+
+    def _notify_vocab_parent(self, message: str) -> None:
+        if not message or self._robot_state is None:
+            return
+        self._robot_state.push_notification("vocabulario", message)
+
+    def _flush_vocab_parent_alert(self, force_session: bool = False) -> None:
+        try:
+            msg = (
+                self._vocab_alerter.flush_session()
+                if force_session
+                else self._vocab_alerter.poll()
+            )
+        except Exception:
+            return
+        if msg:
+            self._notify_vocab_parent(msg)
 
     def _run(self) -> None:
         sample_rate = 16000
@@ -1378,8 +1401,18 @@ class AudioWorker:
                             self.message_queue, self.message_semaphore, "log",
                             f"Vocabulario: {len(new_words)} palabras nuevas detectadas: {', '.join(new_words[:5])}",
                         )
+                    hours_prior = None
+                    if new_words:
+                        hours_prior = self.vocabulary_tracker.hours_since_prior_discovery(
+                            excluding_last_n=len(new_words),
+                        )
+                    vocab_msg = self._vocab_alerter.consider(new_words, hours_prior)
+                    if vocab_msg:
+                        self._notify_vocab_parent(vocab_msg)
                 except Exception:
                     pass
+            else:
+                self._flush_vocab_parent_alert()
 
             # 4. Emotion context
             emotion_context = getattr(self.intent_dispatcher, "current_emotion", None)
@@ -1723,16 +1756,23 @@ class AudioWorker:
                             _dlog.log_output("ACTION", f"EXPRESSION -> {expr}")
 
                 elif action == "CELEBRATE":
-                    # Expresión feliz + notificar padre del logro
+                    # Expresión feliz + notificar padre del logro (qué hizo)
                     if self.eye_display is not None:
                         self.eye_display.set_expression("feliz")
+                    from parent_alerts import describe_child_achievement
+                    achievement = describe_child_achievement(
+                        param,
+                        user_text,
+                        str(intent_payload.get("intent_name", "")),
+                    )
                     if self._robot_state is not None:
                         self._robot_state.push_notification(
                             "logro",
-                            param or "¡El nene logró algo importante!",
+                            achievement,
+                            extra={"utterance": user_text, "detail": param},
                         )
                     if _dlog:
-                        _dlog.log_output("ACTION", "CELEBRATE ejecutado")
+                        _dlog.log_output("ACTION", f"CELEBRATE -> {achievement}")
 
                 elif action == "CALM_MODE":
                     # Expresión tranquila
@@ -1770,11 +1810,13 @@ class AudioWorker:
 
             # Default 'small' (~500MB int8): ~3-4x más rápido que medium en CPU
             # con poca pérdida de español. Override: WHISPER_MODEL=medium.
+            # LATENCIA punto 5: 2 hilos (antes 4). En Pi 5 de 4 cores, 4 hilos
+            # peleaban con cámara y Piper. Si Whisper solo se siente más lento, volver a 4.
             model = WhisperModel(
                 model_size,
                 device="cpu",
                 compute_type="int8",
-                cpu_threads=4,
+                cpu_threads=2,
                 num_workers=1,
             )
             if _dlog:
@@ -2115,8 +2157,8 @@ class AudioWorker:
         audio = (audio - np.mean(audio)).astype(np.float32)
         # 6. Normalize — consistent level (necesario para Whisper)
         audio = self._normalize_audio(audio)
-        # 7. Pad — minimum duration for Whisper
-        audio = self._pad_audio(audio, sample_rate=16000, min_duration_s=1.5)
+        # LATENCIA punto 6: sin pad a 1.5s. Restaurar si Whisper alucina más en clips cortos:
+        # audio = self._pad_audio(audio, sample_rate=16000, min_duration_s=1.5)
         return audio
 
     _LOW_LOGPROB_THRESHOLD: float = -0.9

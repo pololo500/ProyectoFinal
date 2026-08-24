@@ -80,6 +80,26 @@ class VocabularyTracker:
         """Retorna las últimas N palabras descubiertas."""
         return [h["word"] for h in self.history[-limit:]]
 
+    def hours_since_prior_discovery(self, excluding_last_n: int = 0) -> float | None:
+        """Horas desde el descubrimiento anterior a las últimas N entradas.
+
+        ``None`` si no hay historia previa (primera palabra o tracker vacío).
+        """
+        idx = len(self.history) - excluding_last_n - 1
+        if idx < 0:
+            return None
+        raw = self.history[idx].get("timestamp") or self.history[idx].get("date")
+        if not raw:
+            return None
+        try:
+            prior = datetime.fromisoformat(str(raw))
+        except ValueError:
+            try:
+                prior = datetime.strptime(str(raw)[:10], "%Y-%m-%d")
+            except ValueError:
+                return None
+        return max(0.0, (datetime.now() - prior).total_seconds() / 3600.0)
+
     # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------

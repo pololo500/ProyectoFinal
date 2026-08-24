@@ -310,6 +310,7 @@ object RobotConnectionManager {
             "pedido" -> "📞 Pedido"
             "musica" -> "🎵 Música"
             "logro" -> "🎉 Logro"
+            "vocabulario" -> "📚 Vocabulario"
             else -> "ℹ️ Aviso"
         }
         return "$prefix: $message"
@@ -323,7 +324,7 @@ object RobotConnectionManager {
             "Avisos de TEO",
             NotificationManager.IMPORTANCE_HIGH
         )
-        channel.description = "Crisis, pedidos del nene, música y logros"
+        channel.description = "Crisis, pedidos del nene, música, vocabulario y logros"
         manager.createNotificationChannel(channel)
     }
 
@@ -333,7 +334,8 @@ object RobotConnectionManager {
             "crisis" -> "TEO: atención recomendada"
             "pedido" -> "TEO: el nene te necesita"
             "musica" -> "TEO está reproduciendo música"
-            "logro" -> "TEO: logro"
+            "logro" -> "TEO: el nene logró algo"
+            "vocabulario" -> "TEO: palabras nuevas"
             else -> "Aviso de TEO"
         }
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)

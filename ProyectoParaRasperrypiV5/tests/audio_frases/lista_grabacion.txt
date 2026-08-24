@@ -1,0 +1,33 @@
+Grabaciones para tests automáticos de TEO
+========================================
+
+Cómo grabar
+-----------
+- Un archivo = una frase. El NOMBRE del archivo es exactamente lo que se dice.
+  Ejemplo: decís "hola teo" → guardás "hola teo.wav" (o .mp3).
+- Preferible WAV 16 kHz mono. MP3 también sirve.
+- Hablá a ~30 cm del mic, en español rioplatense, sin música de fondo
+  (salvo las tomas marcadas como "ruido").
+- Reemplazá los MP3 de TTS de esta carpeta cuando tengas tu voz o la del nene:
+  el test usa el nombre del archivo como texto esperado.
+
+Ya incluidos (TTS, para que el test corra hoy)
+----------------------------------------------
+Ver manifest.json, priority "core", "game", "llm", "vocab".
+
+Qué más conviene que grabes VOS (prioridad)
+-------------------------------------------
+1. Voz de nene de 3-7 años, mismas frases core (hola, juegos, música, mamá).
+2. Lejos del mic (1-2 m): "cantame una cancion", "juguemos veo veo".
+3. Con ruido de fondo: tele, cocina, otro chico.
+4. Rápido / atropellado: "piedra papel o tijera".
+5. Pronunciación infantil: "ola teo", "cansión", "jugemos veo veo".
+6. Silencio de 2-3 s (no debe transcribir basura).
+7. Turnos de juego, DESPUÉS de haber arrancado el juego a mano:
+   piedra / papel / tijera / rojo / azul / es un auto / no quiero jugar / basta.
+
+Correr el test
+--------------
+  python test_audio_corpus.py              NLU de las frases + STT si hay audio
+  python test_audio_corpus.py --nlu-only   Solo intents (rápido, sin Whisper)
+  python test_audio_corpus.py --generate   Regenera los MP3 de TTS

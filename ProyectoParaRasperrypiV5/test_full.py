@@ -324,11 +324,83 @@ ok("Stats total_words correcto",
    stats["total_words"] == len(vt.known_words),
    f"stats={stats}")
 
+# 5.5 — Gap since prior discovery (for parent alerts)
+hours_after_new = vt.hours_since_prior_discovery(excluding_last_n=0)
+ok("Horas desde último descubrimiento es un número",
+   hours_after_new is not None and hours_after_new >= 0,
+   f"hours={hours_after_new}")
+ok("Excluir toda la historia equivale a no tener descubrimiento previo",
+   vt.hours_since_prior_discovery(excluding_last_n=len(vt.history)) is None)
+empty_vt_file = Path(tmp_vocab).with_name(tmp_vocab.name + "_empty.json")
+empty_vt = VocabularyTracker(vocab_file=empty_vt_file)
+ok("Tracker vacío: hours_since_prior es None",
+   empty_vt.hours_since_prior_discovery(excluding_last_n=0) is None)
+
 # Cleanup
 try:
     tmp_vocab.unlink()
 except Exception:
     pass
+try:
+    empty_vt_file.unlink()
+except Exception:
+    pass
+
+
+# ═══════════════════════════════════════════
+#  5b. ALERTAS PARENTALES (vocabulario + logros)
+# ═══════════════════════════════════════════
+print("\n" + "="*60)
+print("  5b. PARENT ALERTS")
+print("="*60)
+
+from datetime import timedelta
+from parent_alerts import VocabularyParentAlerter, describe_child_achievement
+
+_now = [datetime(2026, 8, 23, 12, 0, 0)]
+
+def _fake_now():
+    return _now[0]
+
+alerter = VocabularyParentAlerter(now_fn=_fake_now)
+
+msg = alerter.consider(["casa"], hours_since_prior=1.0)
+ok("Una palabra reciente no notifica al toque",
+   msg is None, f"msg={msg!r}")
+
+_now[0] = _now[0] + timedelta(seconds=120)
+msg = alerter.poll()
+ok("Tras debounce, 1 palabra en día activo sigue sin avisar",
+   msg is None, f"msg={msg!r}")
+
+msg = alerter.consider(["pelota", "auto", "helado", "parque"], hours_since_prior=1.0)
+ok("5+ palabras nuevas se juntan en un solo aviso",
+   msg is not None and "5 palabras nuevas" in msg and "casa" in msg and "parque" in msg,
+   f"msg={msg!r}")
+
+alerter2 = VocabularyParentAlerter(now_fn=_fake_now)
+msg = alerter2.consider(["mariposa"], hours_since_prior=None)
+ok("Primera palabra de la vida: no dispara al instante",
+   msg is None, f"msg={msg!r}")
+_now[0] = _now[0] + timedelta(seconds=90)
+msg = alerter2.poll()
+ok("Tras sequía/primera vez, avisa con la palabra",
+   msg is not None and "mariposa" in msg and "tiempo" in msg.lower(),
+   f"msg={msg!r}")
+
+alerter3 = VocabularyParentAlerter(now_fn=_fake_now)
+alerter3.consider(["sol"], hours_since_prior=20.0)
+alerter3.consider(["luna"], hours_since_prior=20.0)
+_now[0] = _now[0] + timedelta(seconds=90)
+msg = alerter3.poll()
+ok("Varias palabras tras sequía van en el mismo mensaje",
+   msg is not None and "sol" in msg and "luna" in msg,
+   f"msg={msg!r}")
+
+ok("Logro describe lo que dijo el nene",
+   "dijo" in describe_child_achievement("", "gané yo") and "gané yo" in describe_child_achievement("", "gané yo"))
+ok("Logro usa el detalle del tag CELEBRATE",
+   "veo veo" in describe_child_achievement("adivinó el objeto en veo veo", ""))
 
 
 # ═══════════════════════════════════════════

@@ -54,6 +54,17 @@
       "success_message": "¡Buenas noches! Que descanses bien. ¡Nos vemos mañana!",
       "pre_reminder_minutes": 10,
       "enabled": true
+    },
+    {
+      "id": "ir_a_lo_de_la_abuela_1787495400400",
+      "name": "ir a lo de la abuela",
+      "time": "11:35",
+      "reminder_message": "Tenemos que ir a lo de la abuela, anda cambiandote",
+      "transition_from": "",
+      "transition_to": "",
+      "success_message": "¡Muy bien! ¡Lo lograste!",
+      "pre_reminder_minutes": 5,
+      "enabled": true
     }
   ]
 }

@@ -1,0 +1,134 @@
+{
+  "format": "El archivo se llama igual que la frase hablada (espacios permitidos). Extensión .mp3 o .wav.",
+  "sample_rate_hint": 16000,
+  "clips": [
+    {"file": "hola teo.mp3", "text": "hola teo", "intent": "greeting", "priority": "core", "why": "Saludo básico"},
+    {"file": "chau teo.mp3", "text": "chau teo", "intent": "farewell", "priority": "core", "why": "Despedida"},
+    {"file": "juguemos piedra papel o tijera.mp3", "text": "juguemos piedra papel o tijera", "intent": "play_piedra_papel", "priority": "core", "why": "Skill PPT (keyword)"},
+    {"file": "piedra papel o tijera.mp3", "text": "piedra papel o tijera", "intent": "play_piedra_papel", "priority": "core", "why": "Skill PPT corta"},
+    {"file": "juguemos veo veo.mp3", "text": "juguemos veo veo", "intent": "play_veo_veo", "priority": "core", "why": "Skill veo veo"},
+    {"file": "veo veo.mp3", "text": "veo veo", "intent": "play_veo_veo", "priority": "core", "why": "Veo veo corto"},
+    {"file": "cantame una cancion.mp3", "text": "cantame una cancion", "intent": "song_request", "priority": "core", "why": "Pedir música"},
+    {"file": "quiero musica.mp3", "text": "quiero musica", "intent": "song_request", "priority": "core", "why": "Pedir música"},
+    {"file": "para la musica.mp3", "text": "para la musica", "intent": "stop_music_request", "priority": "core", "why": "Parar canción"},
+    {"file": "llama a mama.mp3", "text": "llama a mama", "intent": "call_parent", "priority": "core", "why": "Aviso al padre"},
+    {"file": "quiero hablar con papa.mp3", "text": "quiero hablar con papa", "intent": "call_parent", "priority": "core", "why": "Pedido de papá"},
+    {"file": "estoy triste.mp3", "text": "estoy triste", "intent": "emotion_sad", "priority": "core", "why": "Emoción triste"},
+    {"file": "estoy enojado.mp3", "text": "estoy enojado", "intent": "emotion_angry", "priority": "core", "why": "Emoción enojo"},
+    {"file": "estoy feliz.mp3", "text": "estoy feliz", "intent": "emotion_happy", "priority": "core", "why": "Emoción alegría"},
+    {"file": "quiero a mama.mp3", "text": "quiero a mama", "intent": "crisis_cry", "priority": "core", "why": "Crisis / quiere a mamá"},
+    {"file": "ayudame a calmarme.mp3", "text": "ayudame a calmarme", "intent": "regulation_breathing", "priority": "core", "why": "Regulación"},
+    {"file": "hagamos yoga.mp3", "text": "hagamos yoga", "intent": "yoga_request", "priority": "core", "why": "Yoga"},
+    {"file": "tengo hambre.mp3", "text": "tengo hambre", "intent": "needs_basic", "priority": "core", "why": "Necesidad básica"},
+    {"file": "quiero agua.mp3", "text": "quiero agua", "intent": "needs_basic", "priority": "core", "why": "Sed"},
+    {"file": "dame un abrazo.mp3", "text": "dame un abrazo", "intent": "hug_request", "priority": "core", "why": "Abrazo"},
+    {"file": "estoy aburrido.mp3", "text": "estoy aburrido", "intent": "activity_offer", "priority": "core", "why": "Oferta de actividad"},
+    {"file": "piedra.mp3", "text": "piedra", "intent": null, "priority": "game", "why": "Jugada PPT (con juego activo)"},
+    {"file": "papel.mp3", "text": "papel", "intent": null, "priority": "game", "why": "Jugada PPT"},
+    {"file": "tijera.mp3", "text": "tijera", "intent": null, "priority": "game", "why": "Jugada PPT"},
+    {"file": "rojo.mp3", "text": "rojo", "intent": null, "priority": "game", "why": "Color veo veo"},
+    {"file": "es un auto.mp3", "text": "es un auto", "intent": null, "priority": "game", "why": "Adivinanza veo veo"},
+    {"file": "no quiero jugar.mp3", "text": "no quiero jugar", "intent": null, "priority": "game", "why": "Salir del juego", "aliases": ["no quiedro jugar"]},
+    {"file": "basta.mp3", "text": "basta", "intent": null, "priority": "game", "why": "Salir del juego"},
+    {"file": "ayer vimos un dinosaurio enorme.mp3", "text": "ayer vimos un dinosaurio enorme", "intent": "unknown", "priority": "llm", "why": "Charla libre → LLM, no skill"},
+    {"file": "vi una mariposa en el jardin.mp3", "text": "vi una mariposa en el jardin", "intent": "unknown", "priority": "vocab", "why": "Palabra nueva / vocabulario"}
+  ],
+  "record_also": [
+    {
+      "file": "hola teo nene.wav",
+      "text": "hola teo",
+      "intent": "greeting",
+      "note": "Misma frase con voz de nene (lo más importante: Whisper se entrena distinto con TTS adulto)."
+    },
+    {
+      "file": "cantame una cancion lejos.wav",
+      "text": "cantame una cancion",
+      "intent": "song_request",
+      "note": "A 1-2 metros del mic, como el peluche en la habitación."
+    },
+    {
+      "file": "cantame una cancion ruido.wav",
+      "text": "cantame una cancion",
+      "note": "Con tele o ventilador de fondo."
+    },
+    {
+      "file": "piedra papel o tijera rapido.wav",
+      "text": "piedra papel o tijera",
+      "intent": "play_piedra_papel",
+      "note": "Hablando rápido / atropellado."
+    },
+    {
+      "file": "ola teo.wav",
+      "text": "ola teo",
+      "intent": "greeting",
+      "note": "Pronunciación infantil (sin h, comiendo sílabas)."
+    },
+    {
+      "file": "quiero una cansión.wav",
+      "text": "quiero una cancion",
+      "intent": "song_request",
+      "note": "Error típico de nene / Whisper."
+    },
+    {
+      "file": "silencio.wav",
+      "text": "",
+      "intent": null,
+      "note": "2-3 segundos sin hablar: no debe inventar subtítulos."
+    },
+    {
+      "file": "Hola.m4a",
+      "text": "hola",
+      "intent": "greeting",
+      "note": "Saludo corto extra."
+    },
+    {
+      "file": "Hola me llamo Tomás.m4a",
+      "text": "hola me llamo tomas",
+      "intent": "unknown",
+      "note": "Presentación: debería ir a charla libre, no a una skill."
+    },
+    {
+      "file": "Llama a mama o papa tengo miedo.m4a",
+      "text": "llama a mama o papa tengo miedo",
+      "intent": "call_parent",
+      "note": "Pedido a los padres + miedo."
+    },
+    {
+      "file": "Quiero jugar al piedra papel o tijera.m4a",
+      "text": "quiero jugar al piedra papel o tijera",
+      "intent": "play_piedra_papel",
+      "note": "Variante más natural de PPT."
+    },
+    {
+      "file": "Quiero jugara al veo veo.m4a",
+      "text": "quiero jugar al veo veo",
+      "intent": "play_veo_veo",
+      "aliases": ["quiero jugara al veo veo"],
+      "note": "Variante de veo veo (typo en el nombre del archivo)."
+    },
+    {
+      "file": "Globo azul.m4a",
+      "text": "globo azul",
+      "intent": null,
+      "note": "Posible respuesta de veo veo."
+    },
+    {
+      "file": "Maceta.m4a",
+      "text": "maceta",
+      "intent": "unknown",
+      "note": "Palabra suelta / vocabulario."
+    },
+    {
+      "file": "Mar.m4a",
+      "text": "mar",
+      "intent": "unknown",
+      "note": "Palabra suelta / vocabulario."
+    },
+    {
+      "file": "Que bonito día que hace como estas.m4a",
+      "text": "que bonito dia que hace como estas",
+      "intent": "unknown",
+      "note": "Charla libre."
+    }
+  ]
+}
