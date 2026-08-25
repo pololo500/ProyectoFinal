@@ -30,6 +30,8 @@ cache_voces/
 telemetry_data/
 music/*
 !music/.gitkeep
+stories/*
+!stories/.gitkeep
 exe_stdout.txt
 exe_stderr.txt
 

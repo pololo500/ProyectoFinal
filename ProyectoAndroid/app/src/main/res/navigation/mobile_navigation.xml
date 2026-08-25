@@ -34,4 +34,10 @@
         android:name="com.example.aplicacionparacelular.ui.medical.MedicalFragment"
         android:label="@string/menu_medical"
         tools:layout="@layout/fragment_medical" />
+
+    <fragment
+        android:id="@+id/nav_stories"
+        android:name="com.example.aplicacionparacelular.ui.stories.StoriesFragment"
+        android:label="@string/menu_stories"
+        tools:layout="@layout/fragment_stories" />
 </navigation>

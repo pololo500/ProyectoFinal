@@ -28,6 +28,8 @@ from debug_logger import log_action
 APP_DIR = Path(__file__).resolve().parent
 MUSIC_DIR = APP_DIR / "music"
 MUSIC_DIR.mkdir(exist_ok=True)
+STORIES_DIR = APP_DIR / "stories"
+STORIES_DIR.mkdir(exist_ok=True)
 
 
 class RobotState:
@@ -226,6 +228,8 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
             self._handle_get_routines()
         elif path == "/api/music":
             self._handle_get_music()
+        elif path == "/api/stories":
+            self._handle_get_stories()
         elif path == "/api/notifications":
             self._handle_get_notifications()
         else:
@@ -353,6 +357,13 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
             currently_playing = getattr(sw, '_current_song_name', None)
         self._send_json({"songs": songs, "currently_playing": currently_playing})
 
+    def _handle_get_stories(self) -> None:
+        from story_library import StoryLibrary
+
+        lib = StoryLibrary(STORIES_DIR)
+        stories = [rec.to_dict() for rec in lib.list_stories()]
+        self._send_json({"stories": stories})
+
     def _handle_get_notifications(self) -> None:
         """Devuelve y vacía las notificaciones pendientes.
 
@@ -385,6 +396,8 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
             self._handle_post_music_play()
         elif path == "/api/music/stop":
             self._handle_post_music_stop()
+        elif path == "/api/stories/upload":
+            self._handle_post_stories_upload()
         else:
             self._send_error_json(404, "Endpoint no encontrado")
 
@@ -519,6 +532,20 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
         else:
             self._send_error_json(503, "Reproductor de música no disponible")
 
+    def _handle_post_stories_upload(self) -> None:
+        import urllib.parse
+
+        from story_library import ingest_pdf
+
+        raw_header = self.headers.get("X-Filename", "cuento.pdf")
+        try:
+            filename = urllib.parse.unquote(raw_header)
+        except Exception:
+            filename = raw_header
+        raw_data = self._read_body()
+        result = ingest_pdf(raw_data, filename, stories_dir=STORIES_DIR)
+        self._send_json(result)
+
     # ------------------------------------------------------------------
     # DELETE endpoints
     # ------------------------------------------------------------------
@@ -529,6 +556,9 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
         if path.startswith("/api/music/"):
             filename = path.split("/api/music/")[1]
             self._handle_delete_music(filename)
+        elif path.startswith("/api/stories/"):
+            story_id = path.split("/api/stories/")[1]
+            self._handle_delete_story(story_id)
         else:
             self._send_error_json(404, "Endpoint no encontrado")
 
@@ -543,6 +573,21 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"status": "ok", "message": f"'{safe_name}' eliminado"})
         except Exception as exc:
             self._send_error_json(500, f"Error al eliminar: {exc}")
+
+    def _handle_delete_story(self, story_id: str) -> None:
+        import urllib.parse
+
+        from story_library import StoryLibrary
+
+        try:
+            safe_id = urllib.parse.unquote(story_id)
+        except Exception:
+            safe_id = story_id
+        lib = StoryLibrary(STORIES_DIR)
+        if not lib.delete(safe_id):
+            self._send_error_json(404, "Cuento no encontrado")
+            return
+        self._send_json({"status": "ok"})
 
 
 class _DiscoveryBeacon:
@@ -737,6 +782,7 @@ if __name__ == "__main__":
     print(f"  GET  http://localhost:8080/api/telemetry/today")
     print(f"  GET  http://localhost:8080/api/routines")
     print(f"  GET  http://localhost:8080/api/music")
+    print(f"  GET  http://localhost:8080/api/stories")
     print(f"  POST http://localhost:8080/api/celebrate")
     print(f"  POST http://localhost:8080/api/config")
     print(f"  POST http://localhost:8080/api/night-mode")

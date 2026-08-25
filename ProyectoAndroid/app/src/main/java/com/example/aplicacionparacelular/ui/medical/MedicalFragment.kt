@@ -71,6 +71,12 @@ class MedicalFragment : Fragment() {
 
         // Load data
         viewModel.loadData(requireContext())
+        viewModel.appointments.observe(viewLifecycleOwner) {
+            viewModel.scheduleReminders(requireContext())
+        }
+        viewModel.vaccines.observe(viewLifecycleOwner) {
+            viewModel.scheduleReminders(requireContext())
+        }
     }
 
     private fun createAppointmentCard(appointment: Appointment, position: Int): View {
@@ -175,7 +181,13 @@ class MedicalFragment : Fragment() {
         }
 
         val ageText = TextView(requireContext()).apply {
-            text = if (vaccine.applied) "${vaccine.scheduledAge} ✓" else vaccine.scheduledAge
+            text = if (vaccine.applied) {
+                "${vaccine.scheduledAge} ✓"
+            } else if (vaccine.dueDate.isNotBlank()) {
+                "${vaccine.scheduledAge} · ${vaccine.dueDate}"
+            } else {
+                vaccine.scheduledAge
+            }
             textSize = 12f
             setTextColor(
                 if (vaccine.applied) resources.getColor(R.color.card_connection_online, null)
@@ -186,6 +198,16 @@ class MedicalFragment : Fragment() {
         row.addView(checkbox)
         row.addView(nameText)
         row.addView(ageText)
+        if (!vaccine.applied) {
+            row.setOnLongClickListener {
+                val cal = Calendar.getInstance()
+                DatePickerDialog(requireContext(), { _, year, month, day ->
+                    val iso = "%04d-%02d-%02d".format(year, month + 1, day)
+                    viewModel.setVaccineDueDate(requireContext(), position, iso)
+                }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
+                true
+            }
+        }
         return row
     }
 

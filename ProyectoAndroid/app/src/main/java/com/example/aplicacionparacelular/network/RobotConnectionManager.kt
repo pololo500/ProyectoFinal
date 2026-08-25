@@ -1,13 +1,9 @@
 package com.example.aplicacionparacelular.network
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Context
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import org.json.JSONObject
@@ -30,7 +26,6 @@ import java.util.concurrent.TimeUnit
 object RobotConnectionManager {
 
     private const val TAG = "RobotConnMgr"
-    private const val CHANNEL_ID = "teo_parent_alerts"
 
     private val executor = Executors.newScheduledThreadPool(2)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -78,7 +73,7 @@ object RobotConnectionManager {
         val ctx = context.applicationContext
         appContext = ctx
         RobotApiClient.init(ctx)
-        ensureNotificationChannel(ctx)
+        com.example.aplicacionparacelular.notifications.AppNotificationHelper.ensureChannels(ctx)
 
         if (RobotApiClient.isConfigured()) {
             // Ya tenemos IP guardada, arrancar polling de inmediato
@@ -270,6 +265,18 @@ object RobotConnectionManager {
         executeAsync({ RobotApiClient.stopMusic() }, onResult)
     }
 
+    fun fetchStories(onResult: (ApiResult<JSONObject>) -> Unit) {
+        executeAsync({ RobotApiClient.getStories() }, onResult)
+    }
+
+    fun uploadStory(filename: String, data: ByteArray, onResult: (ApiResult<JSONObject>) -> Unit) {
+        executeAsync({ RobotApiClient.uploadStory(filename, data) }, onResult)
+    }
+
+    fun deleteStory(storyId: String, onResult: (ApiResult<JSONObject>) -> Unit) {
+        executeAsync({ RobotApiClient.deleteStory(storyId) }, onResult)
+    }
+
     // ------------------------------------------------------------------
     // Notificaciones Raspberry → celular
     // ------------------------------------------------------------------
@@ -311,43 +318,39 @@ object RobotConnectionManager {
             "musica" -> "🎵 Música"
             "logro" -> "🎉 Logro"
             "vocabulario" -> "📚 Vocabulario"
+            "rutina" -> "🗓️ Rutina"
+            "vacuna" -> "💉 Vacuna"
             else -> "ℹ️ Aviso"
         }
         return "$prefix: $message"
     }
 
-    private fun ensureNotificationChannel(context: Context) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Avisos de TEO",
-            NotificationManager.IMPORTANCE_HIGH
-        )
-        channel.description = "Crisis, pedidos del nene, música, vocabulario y logros"
-        manager.createNotificationChannel(channel)
-    }
-
     private fun showSystemNotification(type: String, message: String) {
         val context = appContext ?: return
-        val title = when (type.lowercase()) {
+        val t = type.lowercase()
+        val title = when (t) {
             "crisis" -> "TEO: atención recomendada"
             "pedido" -> "TEO: el nene te necesita"
             "musica" -> "TEO está reproduciendo música"
             "logro" -> "TEO: el nene logró algo"
             "vocabulario" -> "TEO: palabras nuevas"
+            "rutina" -> "TEO: rutina"
+            "vacuna" -> "TEO: vacunación"
             else -> "Aviso de TEO"
         }
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle(title)
-            .setContentText(message)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .build()
-        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify((System.currentTimeMillis() % Int.MAX_VALUE).toInt(), notification)
+        val channel = when (t) {
+            "rutina" -> com.example.aplicacionparacelular.notifications.AppNotificationHelper.CHANNEL_RUTINA
+            "vacuna" -> com.example.aplicacionparacelular.notifications.AppNotificationHelper.CHANNEL_VACUNA
+            else -> com.example.aplicacionparacelular.notifications.AppNotificationHelper.CHANNEL_PELUCHE
+        }
+        com.example.aplicacionparacelular.notifications.AppNotificationHelper.show(
+            context,
+            channel,
+            (System.currentTimeMillis() % Int.MAX_VALUE).toInt(),
+            title,
+            message,
+            highPriority = t == "crisis" || t == "pedido",
+        )
     }
 
     // ------------------------------------------------------------------

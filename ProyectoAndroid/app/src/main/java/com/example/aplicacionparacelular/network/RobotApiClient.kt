@@ -82,6 +82,9 @@ object RobotApiClient {
     /** Obtiene la lista de canciones. */
     fun getMusic(): ApiResult<JSONObject> = doGet("/api/music")
 
+    /** Obtiene la lista de cuentos publicados. */
+    fun getStories(): ApiResult<JSONObject> = doGet("/api/stories")
+
     // ------------------------------------------------------------------
     // POST endpoints
     // ------------------------------------------------------------------
@@ -151,6 +154,29 @@ object RobotApiClient {
         }
     }
 
+    /** Sube un PDF de cuento al robot. */
+    fun uploadStory(filename: String, data: ByteArray): ApiResult<JSONObject> {
+        if (!isConfigured()) return ApiResult.Error("Robot no configurado")
+        return try {
+            val encodedFilename = java.net.URLEncoder.encode(filename, "UTF-8")
+            val url = URL("$baseUrl/api/stories/upload")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = CONNECT_TIMEOUT
+                readTimeout = 60000
+                setFixedLengthStreamingMode(data.size)
+                setRequestProperty("Content-Type", "application/octet-stream")
+                setRequestProperty("Content-Length", data.size.toString())
+                setRequestProperty("X-Filename", encodedFilename)
+                doOutput = true
+            }
+            conn.outputStream.use { it.write(data) }
+            readResponse(conn)
+        } catch (e: Exception) {
+            ApiResult.Error(e.message ?: "Error de conexión")
+        }
+    }
+
     // ------------------------------------------------------------------
     // DELETE endpoints
     // ------------------------------------------------------------------
@@ -158,6 +184,12 @@ object RobotApiClient {
     /** Elimina una canción del robot. */
     fun deleteMusic(filename: String): ApiResult<JSONObject> =
         doDelete("/api/music/$filename")
+
+    /** Elimina un cuento publicado. */
+    fun deleteStory(storyId: String): ApiResult<JSONObject> {
+        val encoded = java.net.URLEncoder.encode(storyId, "UTF-8")
+        return doDelete("/api/stories/$encoded")
+    }
 
     // ------------------------------------------------------------------
     // Helpers HTTP

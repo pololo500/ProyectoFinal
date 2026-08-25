@@ -34,6 +34,9 @@ class MainActivity : AppCompatActivity() {
         // Initialize Robot connection (auto-discovers or loads saved IP)
         RobotConnectionManager.init(this)
         requestNotificationPermission()
+        com.example.aplicacionparacelular.notifications.AppNotificationHelper.ensureChannels(this)
+        com.example.aplicacionparacelular.notifications.ReminderScheduler.restoreAll(this)
+        com.example.aplicacionparacelular.notifications.TeoAlertPollService.start(this)
 
         binding.appBarMain.fab?.setOnClickListener { view ->
             // Celebrate achievement - send signal to robot
@@ -64,7 +67,7 @@ class MainActivity : AppCompatActivity() {
         binding.navView?.let {
             appBarConfiguration = AppBarConfiguration(
                 setOf(
-                    R.id.nav_dashboard, R.id.nav_metrics, R.id.nav_routines, R.id.nav_config, R.id.nav_medical
+                    R.id.nav_dashboard, R.id.nav_metrics, R.id.nav_routines, R.id.nav_config, R.id.nav_medical, R.id.nav_stories
                 ),
                 binding.drawerLayout
             )
@@ -85,7 +88,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        RobotConnectionManager.stopPolling()
+        // El poll de avisos del peluche sigue en TeoAlertPollService.
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -110,6 +113,10 @@ class MainActivity : AppCompatActivity() {
             R.id.nav_medical -> {
                 val navController = findNavController(R.id.nav_host_fragment_content_main)
                 navController.navigate(R.id.nav_medical)
+            }
+            R.id.nav_stories -> {
+                val navController = findNavController(R.id.nav_host_fragment_content_main)
+                navController.navigate(R.id.nav_stories)
             }
         }
         return super.onOptionsItemSelected(item)

@@ -78,6 +78,7 @@ class RoutinesViewModel : ViewModel() {
                         list.add(RoutineItem.fromJson(json))
                     }
                     _routines.value = list
+                    scheduleLocalReminders()
                 }
                 is ApiResult.Error -> {
                     _syncStatus.value = "Error: ${result.message}"
@@ -131,9 +132,38 @@ class RoutinesViewModel : ViewModel() {
 
         RobotConnectionManager.updateRoutines(body) { result ->
             when (result) {
-                is ApiResult.Success -> _syncStatus.value = "✅ Sincronizado"
+                is ApiResult.Success -> {
+                    _syncStatus.value = "✅ Sincronizado"
+                    scheduleLocalReminders()
+                }
                 is ApiResult.Error -> _syncStatus.value = "⚠ No sincronizado: ${result.message}"
             }
         }
+    }
+
+    fun attachContext(context: android.content.Context) {
+        appContext = context.applicationContext
+        scheduleLocalReminders()
+    }
+
+    private var appContext: android.content.Context? = null
+
+    private fun scheduleLocalReminders() {
+        val ctx = appContext ?: return
+        val items = _routines.value.orEmpty()
+            .filter { it.enabled }
+            .mapNotNull { routine ->
+                val parts = routine.time.split(":")
+                val hour = parts.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
+                val minute = parts.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
+                val total = hour * 60 + minute
+                val pre = (total - routine.preReminderMinutes).mod(24 * 60)
+                listOf(
+                    Triple(routine.id, routine.name, total),
+                    Triple(routine.id + "_pre", "Pronto: ${routine.name}", pre),
+                )
+            }
+            .flatten()
+        com.example.aplicacionparacelular.notifications.ReminderScheduler.saveAndScheduleRoutines(ctx, items)
     }
 }

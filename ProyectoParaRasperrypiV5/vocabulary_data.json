@@ -6,6 +6,7 @@
     "200",
     "60",
     "73",
+    "80",
     "abandono",
     "abuela",
     "aburrido",
@@ -49,6 +50,7 @@
     "anterior",
     "antes",
     "apa",
+    "apagas",
     "aparate",
     "aparecer",
     "aparecieron",
@@ -80,6 +82,7 @@
     "ballera",
     "banda",
     "barato",
+    "barco",
     "basta",
     "bastante",
     "batalla",
@@ -146,6 +149,7 @@
     "chupa",
     "cielo",
     "cierra",
+    "cinco",
     "ciudad",
     "claro",
     "climatico",
@@ -159,6 +163,7 @@
     "comparador",
     "comparar",
     "comprame",
+    "comprar",
     "computadora",
     "concha",
     "conectado",
@@ -214,6 +219,7 @@
     "deja",
     "dejado",
     "dejame",
+    "dejaste",
     "deje",
     "dejo",
     "delirio",
@@ -302,6 +308,7 @@
     "espacisto",
     "espalda",
     "especial",
+    "espere",
     "estaba",
     "estaban",
     "estamos",
@@ -316,6 +323,7 @@
     "fato",
     "favor",
     "favorita",
+    "felipe",
     "feliz",
     "femenina",
     "feo",
@@ -323,6 +331,7 @@
     "fija",
     "fin",
     "flaco",
+    "flacos",
     "flamenco",
     "flor",
     "fondo",
@@ -399,6 +408,7 @@
     "hijo",
     "hilo",
     "historia",
+    "historias",
     "hizo",
     "hoja",
     "hola",
@@ -417,6 +427,7 @@
     "interno",
     "intervalle",
     "inventa",
+    "inventar",
     "irlo",
     "ito",
     "jajaja",
@@ -440,6 +451,7 @@
     "leer",
     "leerlo",
     "lenguaje",
+    "leno",
     "letra",
     "libre",
     "limite",
@@ -468,6 +480,7 @@
     "malo",
     "mama",
     "manco",
+    "mandan",
     "mando",
     "manga",
     "manghiro",
@@ -479,6 +492,7 @@
     "mare",
     "mariano",
     "mata",
+    "matera",
     "materia",
     "materias",
     "mayoria",
@@ -543,8 +557,10 @@
     "non",
     "nos",
     "nosotros",
+    "notificaciones",
     "nube",
     "nueva",
+    "nuevas",
     "nuevo",
     "numero",
     "numeros",
@@ -552,6 +568,7 @@
     "objetivo",
     "ok",
     "onda",
+    "opero",
     "oral",
     "ordenadas",
     "otra",
@@ -564,6 +581,7 @@
     "paga",
     "pagaste",
     "pagina",
+    "palabras",
     "palas",
     "pame",
     "pan",
@@ -579,6 +597,7 @@
     "paro",
     "parroquia",
     "pasa",
+    "pasaba",
     "pasado",
     "pasapalda",
     "pase",
@@ -727,6 +746,7 @@
     "respuesta",
     "respuestas",
     "revolver",
+    "revolvi",
     "reyan",
     "reyes",
     "rica",
@@ -773,6 +793,7 @@
     "siempre",
     "siendo",
     "sienta",
+    "siento",
     "siga",
     "sigues",
     "siguieron",
@@ -792,6 +813,7 @@
     "soy",
     "suena",
     "sueno",
+    "supongo",
     "switch",
     "tal",
     "tama",
@@ -827,6 +849,7 @@
     "tirar",
     "tiraria",
     "tocando",
+    "tocar",
     "toda",
     "todas",
     "todavia",
@@ -835,6 +858,7 @@
     "toma",
     "tomar",
     "tomas",
+    "toro",
     "total",
     "trabajaban",
     "trabajan",
@@ -5371,11 +5395,131 @@
       "word": "contas",
       "date": "2026-08-24",
       "timestamp": "2026-08-24T13:50:27.473720"
+    },
+    {
+      "word": "supongo",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T17:05:42.489130"
+    },
+    {
+      "word": "apagas",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T17:05:42.489130"
+    },
+    {
+      "word": "toro",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T17:06:33.792764"
+    },
+    {
+      "word": "matera",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T17:06:54.971977"
+    },
+    {
+      "word": "espere",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T17:57:45.808772"
+    },
+    {
+      "word": "tocar",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T17:57:45.808772"
+    },
+    {
+      "word": "dejaste",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T17:59:31.868374"
+    },
+    {
+      "word": "revolvi",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T17:59:31.868374"
+    },
+    {
+      "word": "flacos",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T17:59:31.868374"
+    },
+    {
+      "word": "comprar",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T17:59:59.719037"
+    },
+    {
+      "word": "barco",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T17:59:59.719037"
+    },
+    {
+      "word": "opero",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T18:00:27.316412"
+    },
+    {
+      "word": "pasaba",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T18:01:15.721427"
+    },
+    {
+      "word": "felipe",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T18:01:15.721427"
+    },
+    {
+      "word": "80",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T18:01:35.820206"
+    },
+    {
+      "word": "notificaciones",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T18:01:35.820206"
+    },
+    {
+      "word": "mandan",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T18:01:35.820206"
+    },
+    {
+      "word": "leno",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T18:01:35.820206"
+    },
+    {
+      "word": "cinco",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T18:01:35.820206"
+    },
+    {
+      "word": "palabras",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T18:01:35.820206"
+    },
+    {
+      "word": "nuevas",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T18:01:35.820206"
+    },
+    {
+      "word": "siento",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T18:01:35.820206"
+    },
+    {
+      "word": "inventar",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T18:01:35.820206"
+    },
+    {
+      "word": "historias",
+      "date": "2026-08-24",
+      "timestamp": "2026-08-24T18:01:35.820206"
     }
   ],
   "stats": {
-    "total_words": 895,
-    "new_words_today": 72,
-    "history_count": 895
+    "total_words": 919,
+    "new_words_today": 96,
+    "history_count": 919
   }
 }

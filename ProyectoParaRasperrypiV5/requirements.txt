@@ -15,4 +15,4 @@ groq
 edge-tts
 python-dotenv
 soundfile
-gTTS
+pypdf

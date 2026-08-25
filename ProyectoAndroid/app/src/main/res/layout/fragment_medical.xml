@@ -51,6 +51,13 @@
             android:layout_height="wrap_content"
             android:text="@string/medical_vaccines_title"
             android:textAppearance="@style/TextAppearance.App.SectionTitle"
+            android:layout_marginBottom="4dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/medical_vaccines_hint"
+            android:textAppearance="@style/TextAppearance.App.CardSubtitle"
             android:layout_marginBottom="8dp" />
 
         <com.google.android.material.card.MaterialCardView
@@ -82,7 +89,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="🔔 @string/medical_reminder_title"
+                    android:text="@string/medical_reminder_title"
                     android:textAppearance="@style/TextAppearance.App.CardTitle" />
 
                 <TextView

@@ -19,7 +19,8 @@ data class Vaccine(
     val name: String,
     val scheduledAge: String,
     val applied: Boolean,
-    val appliedDate: String = ""
+    val appliedDate: String = "",
+    val dueDate: String = ""
 )
 
 class MedicalViewModel : ViewModel() {
@@ -75,7 +76,8 @@ class MedicalViewModel : ViewModel() {
                         name = obj.optString("name"),
                         scheduledAge = obj.optString("scheduled_age"),
                         applied = obj.optBoolean("applied", false),
-                        appliedDate = obj.optString("applied_date", "")
+                        appliedDate = obj.optString("applied_date", ""),
+                        dueDate = obj.optString("due_date", "")
                     ))
                 }
                 _vaccines.value = list
@@ -130,6 +132,36 @@ class MedicalViewModel : ViewModel() {
         }
     }
 
+    fun setVaccineDueDate(context: Context, position: Int, isoDate: String) {
+        val current = _vaccines.value?.toMutableList() ?: return
+        if (position in current.indices) {
+            val vaccine = current[position]
+            current[position] = vaccine.copy(dueDate = isoDate)
+            _vaccines.value = current
+            saveVaccines(context)
+        }
+    }
+
+    fun scheduleReminders(context: Context) {
+        val vaccines = _vaccines.value.orEmpty().map {
+            com.example.aplicacionparacelular.notifications.ReminderScheduler.VaccineReminder(
+                id = it.id,
+                name = it.name,
+                dueDateIso = it.dueDate,
+                applied = it.applied,
+            )
+        }
+        val appointments = _appointments.value.orEmpty().map { it.title to it.date }
+        com.example.aplicacionparacelular.notifications.ReminderScheduler.saveAndScheduleVaccines(
+            context.applicationContext,
+            vaccines,
+        )
+        com.example.aplicacionparacelular.notifications.ReminderScheduler.saveAndScheduleAppointments(
+            context.applicationContext,
+            appointments,
+        )
+    }
+
     private fun saveAppointments(context: Context) {
         val prefs = context.getSharedPreferences("medical_data", Context.MODE_PRIVATE)
         val arr = JSONArray()
@@ -142,6 +174,7 @@ class MedicalViewModel : ViewModel() {
             })
         }
         prefs.edit().putString("appointments", arr.toString()).apply()
+        scheduleReminders(context)
     }
 
     private fun saveVaccines(context: Context) {
@@ -154,8 +187,10 @@ class MedicalViewModel : ViewModel() {
                 put("scheduled_age", vac.scheduledAge)
                 put("applied", vac.applied)
                 put("applied_date", vac.appliedDate)
+                put("due_date", vac.dueDate)
             })
         }
         prefs.edit().putString("vaccines", arr.toString()).apply()
+        scheduleReminders(context)
     }
 }

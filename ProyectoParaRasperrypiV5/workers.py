@@ -394,6 +394,11 @@ class IntentDispatcher:
         if re.search(r"\bveo[\s\-]?veo\b", normalized):
             return "play_veo_veo"
         if re.search(
+            r"(cont(a|ame)|lee(me)?|narra(me)?).{0,24}cuento|\b(un|el)\s+cuento\b|\bcuentos\b",
+            normalized,
+        ):
+            return "story_request"
+        if re.search(
             r"\b(par[aoá]|paro|cort[aá]|stop|silencio|apag[aá]r?).{0,25}(m[uú]sica|canci)",
             normalized,
         ):
@@ -1068,6 +1073,12 @@ class AudioWorker:
         except ImportError:
             self.game_engine = None
 
+        try:
+            from story_engine import StoryEngine
+            self.story_engine: Any = StoryEngine()
+        except ImportError:
+            self.story_engine = None
+
         from parent_alerts import VocabularyParentAlerter
         self._vocab_alerter = VocabularyParentAlerter()
 
@@ -1442,6 +1453,9 @@ class AudioWorker:
             if self.game_engine is not None:
                 intent_payload = self.game_engine.process_or_passthrough(sanitized_text, intent_payload)
 
+            if self.story_engine is not None:
+                intent_payload = self.story_engine.process_or_passthrough(sanitized_text, intent_payload)
+
             # 8. Routine acknowledgment (#EPIC-007)
             intent_name = intent_payload.get("intent_name", "")
             if intent_name == "routine_ack" and self.routine_scheduler is not None:
@@ -1458,7 +1472,8 @@ class AudioWorker:
             # 8.5. Fallback LLM — generate empathetic response for unknown intents
             intent_name = intent_payload.get("intent_name", "")
             game_active = self.game_engine is not None and self.game_engine.is_active
-            allow_llm = intent_name == "unknown" and not game_active
+            story_active = self.story_engine is not None and self.story_engine.is_active
+            allow_llm = intent_name == "unknown" and not game_active and not story_active
             if allow_llm and self.cloud_mode and self.cloud_llm is not None and self.cloud_llm.is_available:
                 _t_llm = time.monotonic()
                 if _dlog:
@@ -1492,7 +1507,7 @@ class AudioWorker:
 
             if intent_name == "unknown" and not str(intent_payload.get("response", "")).strip():
                 intent_payload["response"] = (
-                    "¿Querés jugar al veo veo, escuchar música o charlar un rato?"
+                    "¿Querés jugar al veo veo, escuchar música, un cuento o charlar un rato?"
                 )
                 intent_payload["pilar"] = "general"
 
@@ -1590,14 +1605,29 @@ class AudioWorker:
             # 12. TTS — speak the response and block until playback finishes.
             response_text = self._strip_unspeakable(str(intent_payload.get("response", "")))
             intent_payload["response"] = response_text
-            # Truncar respuestas largas a ~25 palabras para mantener TTS < 4s.
-            # Respuestas de 50+ palabras causaban 10-13s de síntesis.
-            response_text = self._truncate_response(response_text, max_words=25)
-            if response_text and self.speech_worker is not None:
+            story_chunks = intent_payload.get("story_chunks")
+            skip_cut = bool(intent_payload.get("skip_tts_truncate"))
+            if not skip_cut and not story_chunks:
+                # Truncar respuestas largas a ~25 palabras para mantener TTS < 4s.
+                response_text = self._truncate_response(response_text, max_words=25)
+            if self.speech_worker is not None:
                 _t_tts = time.monotonic()
-                if _dlog:
-                    _dlog.log_input("TTS", f"text=\"{response_text}\"")
-                self.speech_worker.speak_and_wait(response_text)
+                if story_chunks:
+                    if _dlog:
+                        _dlog.log_input("TTS", f"cuento chunks={len(story_chunks)}")
+                    if response_text:
+                        self.speech_worker.speak_and_wait(response_text, timeout=60.0)
+                    for chunk in story_chunks:
+                        spoken = self._strip_unspeakable(str(chunk))
+                        if spoken:
+                            self.speech_worker.speak_and_wait(spoken, timeout=180.0)
+                    closing = self._strip_unspeakable(str(intent_payload.get("story_closing") or ""))
+                    if closing:
+                        self.speech_worker.speak_and_wait(closing, timeout=60.0)
+                elif response_text:
+                    if _dlog:
+                        _dlog.log_input("TTS", f"text=\"{response_text}\"")
+                    self.speech_worker.speak_and_wait(response_text)
                 if _dlog:
                     _dlog.log_output("TTS", "Reproducción completada", elapsed_ms=(time.monotonic() - _t_tts) * 1000)
 

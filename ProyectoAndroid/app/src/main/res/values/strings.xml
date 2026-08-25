@@ -13,6 +13,7 @@
     <string name="menu_routines">Rutinas</string>
     <string name="menu_config">Configuración</string>
     <string name="menu_medical">Agenda Médica</string>
+    <string name="menu_stories">Cuentos</string>
 
     <!-- Dashboard -->
     <string name="dashboard_connection_title">Estado del Peluche</string>
@@ -115,7 +116,15 @@
     <string name="medical_sample_appointment_2">Fonoaudióloga</string>
     <string name="medical_sample_appointment_2_date">22 de julio, 16:30</string>
     <string name="medical_reminder_title">Recordatorios</string>
-    <string name="medical_reminder_subtitle">Recibí notificaciones antes de cada turno</string>
+    <string name="medical_reminder_subtitle">Avisos en el celular: turnos, vacunas (día anterior y el día) y rutinas. Mantené la app o el servicio de TEO activo para los avisos del peluche.</string>
+    <string name="medical_vaccines_hint">Mantener presionada una vacuna pendiente para cargar la fecha del turno.</string>
+
+    <!-- Stories -->
+    <string name="stories_title">Cuentos de TEO</string>
+    <string name="stories_subtitle">Subí un PDF con texto (no foto). TEO lo lee cuando el nene pide un cuento.</string>
+    <string name="stories_upload">Subir PDF</string>
+    <string name="stories_empty">Todavía no hay cuentos. Subí un PDF para que TEO pueda leerlo.</string>
+    <string name="stories_delete_confirm">¿Borrar este cuento del peluche?</string>
 
     <!-- General -->
     <string name="fab_content_description">Acción principal</string>

@@ -37,9 +37,9 @@
       "no se que hacer"
     ],
     "response": [
-      "¡Hay de todo! Podemos jugar al veo veo, piedra papel o tijera, escuchar música o charlar. ¿Cuál te copa?",
-      "¡Dale! ¿Jugamos al veo veo, ponemos una canción o hacemos yoga un ratito?",
-      "Podemos jugar, cantar o conversar. Decime qué preferís."
+      "¡Hay de todo! Podemos jugar al veo veo, piedra papel o tijera, escuchar música, un cuento o charlar. ¿Cuál te copa?",
+      "¡Dale! ¿Jugamos al veo veo, ponemos una canción, te leo un cuento o hacemos yoga un ratito?",
+      "Podemos jugar, cantar, leer un cuento o conversar. Decime qué preferís."
     ]
   },
   "farewell": {
@@ -222,6 +222,27 @@
       "¡Qué buena pregunta! Me encanta que seas tan curioso. Pensemos juntos... ¿Vos qué pensás que puede ser?",
       "¡Me gusta que preguntes! Contame un poquito más y pensamos juntos.",
       "¡Buena pregunta! ¿Vos qué se te ocurre?"
+    ]
+  },
+  "story_request": {
+    "pilar": "cognitivo",
+    "priority": 20,
+    "examples": [
+      "contame un cuento",
+      "contame un cuento teo",
+      "leeme un cuento",
+      "leeme un cuento",
+      "quiero un cuento",
+      "un cuento por favor",
+      "narrame un cuento",
+      "quiero que me cuentes un cuento",
+      "conta un cuento",
+      "lee un cuento"
+    ],
+    "response": [
+      "¡Dale, un cuento!",
+      "¡Sí! Vamos con un cuento.",
+      "Bueno, te cuento uno."
     ]
   },
   "song_request": {

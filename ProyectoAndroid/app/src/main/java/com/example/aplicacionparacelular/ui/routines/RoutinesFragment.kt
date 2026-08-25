@@ -73,6 +73,7 @@ class RoutinesFragment : Fragment() {
         }
 
         // Load routines from robot
+        viewModel.attachContext(requireContext())
         viewModel.loadRoutines()
     }
 

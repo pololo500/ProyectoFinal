@@ -725,6 +725,8 @@ class EyeModeApp(tk.Tk):
                 for msg in messages:
                     print(f"[ROUTINE] {msg}", flush=True)
                     self.speech_worker.speak(msg)
+                    if robot_state is not None:
+                        robot_state.push_notification("rutina", msg)
             except Exception:
                 pass
         self.after(30000, self._check_routines)
@@ -1375,6 +1377,8 @@ class EdgeAiDesktopApp(tk.Tk):
                 for msg in messages:
                     self._append_log(f"🔔 Rutina: {msg}")
                     self.speech_worker.speak(msg)
+                    if robot_state is not None:
+                        robot_state.push_notification("rutina", msg)
             except Exception:
                 pass
         self.after(30000, self._check_routines)
