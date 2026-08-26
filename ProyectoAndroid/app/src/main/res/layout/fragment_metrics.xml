@@ -26,9 +26,10 @@
                 android:id="@+id/btn_today"
                 style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="0dp"
-                android:layout_height="40dp"
+                android:layout_height="48dp"
                 android:layout_weight="1"
                 android:layout_marginEnd="4dp"
+                android:minHeight="48dp"
                 android:text="@string/metrics_period_today"
                 app:cornerRadius="8dp" />
 
@@ -36,10 +37,11 @@
                 android:id="@+id/btn_week"
                 style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="0dp"
-                android:layout_height="40dp"
+                android:layout_height="48dp"
                 android:layout_weight="1"
                 android:layout_marginStart="4dp"
                 android:layout_marginEnd="4dp"
+                android:minHeight="48dp"
                 android:text="@string/metrics_period_week"
                 app:cornerRadius="8dp" />
 
@@ -47,9 +49,10 @@
                 android:id="@+id/btn_month"
                 style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="0dp"
-                android:layout_height="40dp"
+                android:layout_height="48dp"
                 android:layout_weight="1"
                 android:layout_marginStart="4dp"
+                android:minHeight="48dp"
                 android:text="@string/metrics_period_month"
                 app:cornerRadius="8dp" />
         </LinearLayout>
@@ -148,7 +151,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:gravity="center"
-                        android:text="Alertas"
+                        android:text="@string/metrics_alerts_label"
                         android:textAppearance="@style/TextAppearance.App.CardSubtitle" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -227,7 +230,7 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Distribución por Pilar"
+            android:text="@string/metrics_pillar_title"
             android:textAppearance="@style/TextAppearance.App.SectionTitle" />
 
         <com.google.android.material.card.MaterialCardView
@@ -236,11 +239,108 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp">
 
-            <com.example.aplicacionparacelular.ui.metrics.PillarDonutChart
-                android:id="@+id/pillar_chart"
-                android:layout_width="200dp"
-                android:layout_height="200dp"
-                android:layout_gravity="center" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <com.example.aplicacionparacelular.ui.metrics.PillarDonutChart
+                    android:id="@+id/pillar_chart"
+                    android:layout_width="200dp"
+                    android:layout_height="200dp"
+                    android:layout_gravity="center" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingTop="4dp"
+                        android:paddingBottom="4dp">
+
+                        <View
+                            android:layout_width="12dp"
+                            android:layout_height="12dp"
+                            android:background="@color/card_emotion_alert" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/metrics_pillar_emotional"
+                            android:textAppearance="@style/TextAppearance.App.CardSubtitle" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingTop="4dp"
+                        android:paddingBottom="4dp">
+
+                        <View
+                            android:layout_width="12dp"
+                            android:layout_height="12dp"
+                            android:background="@color/tertiary" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/metrics_pillar_cognitive"
+                            android:textAppearance="@style/TextAppearance.App.CardSubtitle" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingTop="4dp"
+                        android:paddingBottom="4dp">
+
+                        <View
+                            android:layout_width="12dp"
+                            android:layout_height="12dp"
+                            android:background="@color/primary_light" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/metrics_pillar_social"
+                            android:textAppearance="@style/TextAppearance.App.CardSubtitle" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingTop="4dp"
+                        android:paddingBottom="4dp">
+
+                        <View
+                            android:layout_width="12dp"
+                            android:layout_height="12dp"
+                            android:background="@color/card_emotion_happy" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="8dp"
+                            android:text="@string/metrics_pillar_autonomy"
+                            android:textAppearance="@style/TextAppearance.App.CardSubtitle" />
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <!-- Weekly Interactions Chart -->

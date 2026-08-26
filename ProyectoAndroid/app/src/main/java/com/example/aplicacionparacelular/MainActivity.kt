@@ -8,8 +8,6 @@ import android.view.Menu
 import android.view.MenuItem
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.google.android.material.snackbar.Snackbar
-import com.google.android.material.navigation.NavigationView
 import androidx.navigation.findNavController
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.AppBarConfiguration
@@ -38,52 +36,28 @@ class MainActivity : AppCompatActivity() {
         com.example.aplicacionparacelular.notifications.ReminderScheduler.restoreAll(this)
         com.example.aplicacionparacelular.notifications.TeoAlertPollService.start(this)
 
-        binding.appBarMain.fab?.setOnClickListener { view ->
-            // Celebrate achievement - send signal to robot
-            RobotConnectionManager.celebrate { result ->
-                val message = when (result) {
-                    is com.example.aplicacionparacelular.network.ApiResult.Success ->
-                        "🎉 ¡Celebración enviada al peluche!"
-                    is com.example.aplicacionparacelular.network.ApiResult.Error ->
-                        "No se pudo enviar. ¿Está conectado el peluche?"
-                }
-                Snackbar.make(view, message, Snackbar.LENGTH_LONG)
-                    .setAnchorView(R.id.fab).show()
-            }
-        }
-
         val navHostFragment =
             (supportFragmentManager.findFragmentById(R.id.nav_host_fragment_content_main) as NavHostFragment?)!!
         val navController = navHostFragment.navController
 
-        // Show/hide FAB based on current destination
-        navController.addOnDestinationChangedListener { _, destination, _ ->
-            binding.appBarMain.fab?.visibility = when (destination.id) {
-                R.id.nav_dashboard -> android.view.View.VISIBLE
-                else -> android.view.View.GONE
-            }
-        }
+        findViewById<com.google.android.material.floatingactionbutton.FloatingActionButton?>(R.id.fab)
+            ?.visibility = android.view.View.GONE
 
-        binding.navView?.let {
-            appBarConfiguration = AppBarConfiguration(
-                setOf(
-                    R.id.nav_dashboard, R.id.nav_metrics, R.id.nav_routines, R.id.nav_config, R.id.nav_medical, R.id.nav_stories
-                ),
-                binding.drawerLayout
-            )
-            setupActionBarWithNavController(navController, appBarConfiguration)
-            it.setupWithNavController(navController)
+        val topLevel = setOf(
+            R.id.nav_dashboard,
+            R.id.nav_routines,
+            R.id.nav_stories,
+            R.id.nav_medical,
+        )
+        val navView = findViewById<com.google.android.material.navigation.NavigationView>(R.id.nav_view)
+        appBarConfiguration = if (navView != null) {
+            AppBarConfiguration(topLevel, binding.drawerLayout)
+        } else {
+            AppBarConfiguration(topLevel)
         }
-
-        binding.appBarMain.contentMain.bottomNavView?.let {
-            appBarConfiguration = AppBarConfiguration(
-                setOf(
-                    R.id.nav_dashboard, R.id.nav_metrics, R.id.nav_routines
-                )
-            )
-            setupActionBarWithNavController(navController, appBarConfiguration)
-            it.setupWithNavController(navController)
-        }
+        setupActionBarWithNavController(navController, appBarConfiguration)
+        navView?.setupWithNavController(navController)
+        binding.appBarMain.contentMain.bottomNavView?.setupWithNavController(navController)
     }
 
     override fun onDestroy() {
@@ -92,32 +66,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        val result = super.onCreateOptionsMenu(menu)
-        // Using findViewById because NavigationView exists in different layout files
-        // between w600dp and w1240dp
-        val navView: NavigationView? = findViewById(R.id.nav_view)
-        if (navView == null) {
-            // The navigation drawer already has the items including the items in the overflow menu
-            // We only inflate the overflow menu if the navigation drawer isn't visible
-            menuInflater.inflate(R.menu.overflow, menu)
-        }
-        return result
+        menuInflater.inflate(R.menu.overflow, menu)
+        return true
     }
 
     override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        when (item.itemId) {
-            R.id.nav_config -> {
-                val navController = findNavController(R.id.nav_host_fragment_content_main)
+        if (item.itemId == R.id.nav_config) {
+            val navController = findNavController(R.id.nav_host_fragment_content_main)
+            if (navController.currentDestination?.id != R.id.nav_config) {
                 navController.navigate(R.id.nav_config)
             }
-            R.id.nav_medical -> {
-                val navController = findNavController(R.id.nav_host_fragment_content_main)
-                navController.navigate(R.id.nav_medical)
-            }
-            R.id.nav_stories -> {
-                val navController = findNavController(R.id.nav_host_fragment_content_main)
-                navController.navigate(R.id.nav_stories)
-            }
+            return true
         }
         return super.onOptionsItemSelected(item)
     }

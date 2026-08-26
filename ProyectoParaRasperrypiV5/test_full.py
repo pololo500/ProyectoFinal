@@ -659,22 +659,14 @@ ok("'solución' NO matchea 'sol' (fix BUG-3)",
    not is_bad_sol,
    f"resp={resp_sol.text!r}")
 
-# 9.8 — FallbackLLM: historial se limita a 4 entradas
-llm2 = FallbackLLM()
-llm2._history = [
-    {"role": "user", "content": "1"},
-    {"role": "assistant", "content": "r1"},
-    {"role": "user", "content": "2"},
-    {"role": "assistant", "content": "r2"},
-    {"role": "user", "content": "3"},
-    {"role": "assistant", "content": "r3"},
-]
-# Simular la lógica de truncamiento
-if len(llm2._history) > 4:
-    llm2._history = llm2._history[-4:]
-ok("Historial se trunca a 4 entradas",
-   len(llm2._history) == 4 and llm2._history[0]["content"] == "2",
-   f"len={len(llm2._history)}, first={llm2._history[0]}")
+# 9.8 — ConversationMemory: historial se limita a 10 turnos (20 mensajes)
+from conversation_memory import ConversationMemory
+mem = ConversationMemory(max_turns=10)
+for i in range(12):
+    mem.add_turn(f"u{i}", f"a{i}")
+ok("Historial se trunca a 10 turnos",
+   len(mem.messages()) == 20 and mem.messages()[0]["content"] == "u2",
+   f"len={len(mem.messages())}, first={mem.messages()[0]}")
 
 
 # ═══════════════════════════════════════════

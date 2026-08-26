@@ -112,4 +112,110 @@ class DashboardViewModel : ViewModel() {
             }
         }
     }
+
+    private val _nowPlaying = MutableLiveData<String?>(null)
+    val nowPlaying: LiveData<String?> = _nowPlaying
+
+    private val _storyPlaying = MutableLiveData(false)
+    val storyPlaying: LiveData<Boolean> = _storyPlaying
+
+    private var readingStoryId: String? = null
+
+    private val _songCount = MutableLiveData(-1)
+    val songCount: LiveData<Int> = _songCount
+
+    private val _musicMessage = MutableLiveData<String?>()
+    val musicMessage: LiveData<String?> = _musicMessage
+
+    fun applyRobotStatus(status: JSONObject) {
+        val reading = status.optJSONObject("currently_reading")
+        val title = reading?.optString("title").orEmpty()
+        val id = reading?.optString("id").orEmpty()
+        if (title.isNotBlank() && id.isNotBlank()) {
+            readingStoryId = id
+            _storyPlaying.value = true
+            _nowPlaying.value = title
+            return
+        }
+        readingStoryId = null
+        _storyPlaying.value = false
+        val playing = if (status.isNull("currently_playing")) null
+        else status.optString("currently_playing", null)?.ifBlank { null }
+        _nowPlaying.value = playing
+    }
+
+    fun refreshMusic() {
+        RobotConnectionManager.fetchMusic { result ->
+                when (result) {
+                    is ApiResult.Success -> {
+                    val songs = result.data.optJSONArray("songs")
+                    _songCount.value = songs?.length() ?: 0
+                    if (_storyPlaying.value == true) {
+                        return@fetchMusic
+                    }
+                    val playing = if (result.data.isNull("currently_playing")) null
+                    else result.data.optString("currently_playing", null)?.ifBlank { null }
+                    _nowPlaying.value = playing
+                }
+                is ApiResult.Error -> { /* keep */ }
+            }
+        }
+    }
+
+    fun playNow() {
+        val storyId = readingStoryId
+        if (!storyId.isNullOrBlank()) {
+            RobotConnectionManager.playStory(storyId) { playResult ->
+                _musicMessage.value = when (playResult) {
+                    is ApiResult.Success -> null
+                    is ApiResult.Error -> playResult.message.ifBlank { "¿Está conectado el peluche?" }
+                }
+            }
+            return
+        }
+        RobotConnectionManager.fetchMusic { result ->
+            when (result) {
+                is ApiResult.Error -> {
+                    _musicMessage.value = result.message.ifBlank { "¿Está conectado el peluche?" }
+                }
+                is ApiResult.Success -> {
+                    val songs = result.data.optJSONArray("songs")
+                    val names = mutableListOf<String>()
+                    if (songs != null) {
+                        for (i in 0 until songs.length()) {
+                            val name = songs.optJSONObject(i)?.optString("filename").orEmpty()
+                            if (name.isNotBlank()) names.add(name)
+                        }
+                    }
+                    _songCount.value = names.size
+                    if (names.isEmpty()) {
+                        _musicMessage.value = "Cargá una en Archivos"
+                        return@fetchMusic
+                    }
+                    val last = RobotConnectionManager.lastPlayedSong()
+                    val target = last?.takeIf { it in names } ?: names.first()
+                    RobotConnectionManager.playMusic(target) { playResult ->
+                        _musicMessage.value = when (playResult) {
+                            is ApiResult.Success -> null
+                            is ApiResult.Error -> playResult.message.ifBlank { "¿Está conectado el peluche?" }
+                        }
+                        refreshMusic()
+                    }
+                }
+            }
+        }
+    }
+
+    fun stopNow() {
+        RobotConnectionManager.stopStory { }
+        RobotConnectionManager.stopMusic { result ->
+            readingStoryId = null
+            _storyPlaying.value = false
+            _musicMessage.value = when (result) {
+                is ApiResult.Success -> null
+                is ApiResult.Error -> result.message.ifBlank { "¿Está conectado el peluche?" }
+            }
+            refreshMusic()
+        }
+    }
 }

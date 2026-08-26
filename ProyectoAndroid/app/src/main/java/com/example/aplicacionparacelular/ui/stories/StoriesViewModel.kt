@@ -5,12 +5,17 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.example.aplicacionparacelular.network.ApiResult
 import com.example.aplicacionparacelular.network.RobotConnectionManager
-import org.json.JSONObject
 
 data class StoryItem(
     val id: String,
     val title: String,
     val wordCount: Int,
+)
+
+data class SongItem(
+    val filename: String,
+    val sizeBytes: Long,
+    val modified: String,
 )
 
 class StoriesViewModel : ViewModel() {
@@ -79,6 +84,97 @@ class StoriesViewModel : ViewModel() {
                 }
                 is ApiResult.Error -> {
                     _statusMessage.value = "Error: ${result.message}"
+                }
+            }
+        }
+    }
+
+    private val _songs = MutableLiveData<List<SongItem>>(emptyList())
+    val songs: LiveData<List<SongItem>> = _songs
+
+    private val _currentlyPlaying = MutableLiveData<String?>(null)
+    val currentlyPlaying: LiveData<String?> = _currentlyPlaying
+
+    fun loadSongs() {
+        RobotConnectionManager.fetchMusic { result ->
+            when (result) {
+                is ApiResult.Success -> {
+                    val songsArray = result.data.optJSONArray("songs")
+                    val list = mutableListOf<SongItem>()
+                    if (songsArray != null) {
+                        for (i in 0 until songsArray.length()) {
+                            val obj = songsArray.optJSONObject(i) ?: continue
+                            list.add(
+                                SongItem(
+                                    filename = obj.optString("filename", ""),
+                                    sizeBytes = obj.optLong("size_bytes", 0),
+                                    modified = obj.optString("modified", ""),
+                                )
+                            )
+                        }
+                    }
+                    _songs.value = list
+                    val playing = if (result.data.isNull("currently_playing")) null
+                    else result.data.optString("currently_playing", null)?.ifBlank { null }
+                    _currentlyPlaying.value = playing
+                }
+                is ApiResult.Error -> {
+                    _statusMessage.value = "Error al cargar canciones: ${result.message}"
+                }
+            }
+        }
+    }
+
+    fun deleteSong(filename: String) {
+        RobotConnectionManager.deleteMusic(filename) { result ->
+            when (result) {
+                is ApiResult.Success -> {
+                    _statusMessage.value = "Canción eliminada"
+                    loadSongs()
+                }
+                is ApiResult.Error -> {
+                    _statusMessage.value = "Error: ${result.message}"
+                }
+            }
+        }
+    }
+
+    fun uploadSong(filename: String, data: ByteArray) {
+        _statusMessage.value = "Subiendo canción..."
+        RobotConnectionManager.uploadMusic(filename, data) { result ->
+            when (result) {
+                is ApiResult.Success -> {
+                    _statusMessage.value = "Canción subida correctamente"
+                    loadSongs()
+                }
+                is ApiResult.Error -> {
+                    _statusMessage.value = "Error: ${result.message}"
+                }
+            }
+        }
+    }
+
+    fun playSong(filename: String) {
+        _currentlyPlaying.value = filename
+        RobotConnectionManager.playMusic(filename) { result ->
+            when (result) {
+                is ApiResult.Success -> loadSongs()
+                is ApiResult.Error -> {
+                    _currentlyPlaying.value = null
+                    _statusMessage.value = "Error al reproducir: ${result.message}"
+                }
+            }
+        }
+    }
+
+    fun stopMusic() {
+        _currentlyPlaying.value = null
+        RobotConnectionManager.stopMusic { result ->
+            when (result) {
+                is ApiResult.Success -> loadSongs()
+                is ApiResult.Error -> {
+                    _statusMessage.value = "Error al detener: ${result.message}"
+                    loadSongs()
                 }
             }
         }

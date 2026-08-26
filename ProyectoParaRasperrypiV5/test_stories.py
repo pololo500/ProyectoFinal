@@ -125,8 +125,8 @@ def test_engine_one_story_yes() -> None:
         )
         ok("un cuento ofrece título", "sapo" in out["response"].lower() and engine.is_active)
         out2 = engine.process_or_passthrough("sí", {"intent_name": "unknown", "response": ""})
-        ok("sí dispara lectura", bool(out2.get("story_chunks")), str(out2.keys()))
-        ok("quedó esperando otro", engine.is_active)
+        ok("sí dispara lectura", bool(out2.get("story_chunk")), str(out2.keys()))
+        ok("quedó en check-in o reflexión", engine.state in ("checking_in", "reflecting"), engine.state)
 
 
 def test_engine_pick_title() -> None:
@@ -140,9 +140,9 @@ def test_engine_pick_title() -> None:
             {"intent_name": "story_request", "response": "", "confidence": 1.0},
         )
         out = engine.process_or_passthrough("el sapo", {"intent_name": "unknown", "response": ""})
-        ok("elige por título", "sapo" in out["response"].lower() or bool(out.get("story_chunks")))
-        chunks = out.get("story_chunks") or []
-        ok("leyó el sapo", any("sapo" in c.lower() for c in chunks) or "sapo" in out["response"].lower())
+        ok("elige por título", "sapo" in out["response"].lower() or bool(out.get("story_chunk")))
+        chunk = str(out.get("story_chunk") or "")
+        ok("leyó el sapo", "sapo" in chunk.lower() or "sapo" in out["response"].lower())
 
 
 def test_engine_basta() -> None:
@@ -170,7 +170,7 @@ def test_engine_cualquiera() -> None:
             {"intent_name": "story_request", "response": "", "confidence": 1.0},
         )
         out = engine.process_or_passthrough("cualquiera", {"intent_name": "unknown", "response": ""})
-        ok("cualquiera lee uno", bool(out.get("story_chunks")))
+        ok("cualquiera lee uno", bool(out.get("story_chunk")))
 
 
 def test_engine_delete_missing() -> None:
@@ -185,6 +185,60 @@ def test_engine_delete_missing() -> None:
         lib.delete(rec.id)
         out = engine.process_or_passthrough("sí", {"intent_name": "unknown", "response": ""})
         ok("archivo borrado se avisa", "no está" in out["response"].lower() or "ya no" in out["response"].lower())
+
+
+def test_engine_checkin_and_silence() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        lib = StoryLibrary(Path(tmp))
+        lib.save_story("El sapo valiente", _story_text())
+        engine = StoryEngine(lib)
+        engine.process_or_passthrough(
+            "cuento",
+            {"intent_name": "story_request", "response": "", "confidence": 1.0},
+        )
+        first = engine.process_or_passthrough("sí", {"intent_name": "unknown", "response": ""})
+        if engine.state == "checking_in":
+            ok("primer bloque pide seguimos", first.get("story_checkin") == "¿Seguimos?")
+            engine.advance_silence()
+            ok("silencio avanza", engine.state in ("checking_in", "reflecting"), engine.state)
+            stop = engine.process_or_passthrough("basta", {"intent_name": "unknown", "response": ""})
+            ok("basta en check-in para", not engine.is_active)
+            ok("cierre", "paramos" in stop["response"].lower() or "listo" in stop["response"].lower())
+        else:
+            ok("cuento corto va a reflexión", engine.state == "reflecting" and bool(first.get("story_need_reflection")))
+            digest = first.get("story_digest") or ""
+            ok("digest acotado", 0 < len(digest) <= 401)
+
+
+def test_engine_last_chunk_reflection() -> None:
+    with tempfile.TemporaryDirectory() as tmp:
+        lib = StoryLibrary(Path(tmp))
+        lib.save_story("Corto", _story_text())
+        engine = StoryEngine(lib)
+        engine.process_or_passthrough(
+            "cuento",
+            {"intent_name": "story_request", "response": "", "confidence": 1.0},
+        )
+        first = engine.process_or_passthrough("sí", {"intent_name": "unknown", "response": ""})
+        last = first
+        guard = 0
+        while engine.state == "checking_in" and guard < 20:
+            last = engine.advance_silence()
+            guard += 1
+        ok("termina en reflecting", engine.state == "reflecting")
+        ok("pide reflexión", bool(last.get("story_need_reflection")) or engine.state == "reflecting")
+        digest = last.get("story_digest") or engine._digest
+        ok("digest no vacío", bool(digest))
+        ans = engine.process_or_passthrough("me gustó el sapo", {"intent_name": "unknown", "response": ""})
+        ok("respuesta de reflexión", ans.get("intent_name") == "story_reflect_answer")
+        ok("después espera otro", engine.state == "awaiting_more")
+
+
+def test_digest_limit() -> None:
+    from story_engine import make_digest
+    long = "palabra " * 200
+    d = make_digest(long, 400)
+    ok("digest respeta límite", len(d) <= 401)
 
 
 def test_min_words_constant() -> None:
@@ -207,6 +261,9 @@ if __name__ == "__main__":
     test_engine_basta()
     test_engine_cualquiera()
     test_engine_delete_missing()
+    test_engine_checkin_and_silence()
+    test_engine_last_chunk_reflection()
+    test_digest_limit()
     test_min_words_constant()
     print(f"\nPASS={PASS} FAIL={FAIL}")
     sys.exit(1 if FAIL else 0)

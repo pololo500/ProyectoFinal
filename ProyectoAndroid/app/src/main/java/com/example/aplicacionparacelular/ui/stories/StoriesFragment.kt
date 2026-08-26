@@ -31,13 +31,29 @@ class StoriesFragment : Fragment() {
         if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
         val uri = result.data?.data ?: return@registerForActivityResult
         val context = requireContext()
-        val filename = fileNameFromUri(context, uri)
+        val filename = fileNameFromUri(context, uri, "cuento.pdf", ".pdf")
         try {
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 ?: return@registerForActivityResult
             viewModel.uploadPdf(filename, bytes)
         } catch (exc: Exception) {
             Snackbar.make(binding.root, "No pude leer el PDF: ${exc.message}", Snackbar.LENGTH_SHORT).show()
+        }
+    }
+
+    private val audioPicker = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode != Activity.RESULT_OK) return@registerForActivityResult
+        val uri = result.data?.data ?: return@registerForActivityResult
+        val context = requireContext()
+        val filename = fileNameFromUri(context, uri, "cancion.mp3", null)
+        try {
+            val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: return@registerForActivityResult
+            viewModel.uploadSong(filename, bytes)
+        } catch (exc: Exception) {
+            Snackbar.make(binding.root, "Error al leer archivo: ${exc.message}", Snackbar.LENGTH_SHORT).show()
         }
     }
 
@@ -60,7 +76,18 @@ class StoriesFragment : Fragment() {
             }
             pdfPicker.launch(intent)
         }
-        viewModel.stories.observe(viewLifecycleOwner) { rebuildList(it) }
+        binding.btnUploadSong.setOnClickListener {
+            val intent = Intent(Intent.ACTION_GET_CONTENT).apply {
+                type = "audio/*"
+                addCategory(Intent.CATEGORY_OPENABLE)
+            }
+            audioPicker.launch(intent)
+        }
+        binding.btnStopSong.setOnClickListener { viewModel.stopMusic() }
+
+        viewModel.stories.observe(viewLifecycleOwner) { rebuildStories(it) }
+        viewModel.songs.observe(viewLifecycleOwner) { rebuildSongs() }
+        viewModel.currentlyPlaying.observe(viewLifecycleOwner) { rebuildSongs() }
         viewModel.statusMessage.observe(viewLifecycleOwner) { msg ->
             if (!msg.isNullOrBlank()) {
                 Snackbar.make(binding.root, msg, Snackbar.LENGTH_LONG).show()
@@ -68,10 +95,18 @@ class StoriesFragment : Fragment() {
         }
         if (RobotApiClient.isConfigured()) {
             viewModel.loadStories()
+            viewModel.loadSongs()
         }
     }
 
-    private fun rebuildList(stories: List<StoryItem>) {
+    override fun onResume() {
+        super.onResume()
+        if (RobotApiClient.isConfigured()) {
+            viewModel.loadSongs()
+        }
+    }
+
+    private fun rebuildStories(stories: List<StoryItem>) {
         binding.storiesContainer.removeAllViews()
         if (stories.isEmpty()) {
             val empty = TextView(requireContext()).apply {
@@ -100,6 +135,7 @@ class StoriesFragment : Fragment() {
             ).apply {
                 text = "Borrar"
                 textSize = 12f
+                minHeight = 48
                 setOnClickListener {
                     AlertDialog.Builder(requireContext())
                         .setTitle(story.title)
@@ -115,7 +151,87 @@ class StoriesFragment : Fragment() {
         }
     }
 
-    private fun fileNameFromUri(context: Context, uri: android.net.Uri): String {
+    private fun rebuildSongs() {
+        val songs = viewModel.songs.value ?: emptyList()
+        val currentlyPlaying = viewModel.currentlyPlaying.value
+        binding.songsContainer.removeAllViews()
+        if (songs.isEmpty()) {
+            val tv = TextView(requireContext()).apply {
+                text = getString(R.string.files_songs_empty)
+                setPadding(0, 16, 0, 16)
+                setTextColor(resources.getColor(R.color.text_hint, null))
+            }
+            binding.songsContainer.addView(tv)
+            return
+        }
+        for (song in songs) {
+            val isPlaying = song.filename == currentlyPlaying
+            val row = LinearLayout(requireContext()).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = android.view.Gravity.CENTER_VERTICAL
+                setPadding(0, 8, 0, 8)
+            }
+            val nameText = TextView(requireContext()).apply {
+                text = song.filename
+                textSize = 14f
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            row.addView(nameText)
+            if (isPlaying) {
+                val stopBtn = MaterialButton(
+                    requireContext(),
+                    null,
+                    com.google.android.material.R.attr.materialButtonOutlinedStyle,
+                ).apply {
+                    text = "Stop"
+                    textSize = 12f
+                    minHeight = 48
+                    contentDescription = getString(R.string.dashboard_music_stop)
+                    setOnClickListener { viewModel.stopMusic() }
+                }
+                row.addView(stopBtn)
+            } else {
+                val playBtn = MaterialButton(
+                    requireContext(),
+                    null,
+                    com.google.android.material.R.attr.materialButtonOutlinedStyle,
+                ).apply {
+                    text = "Play"
+                    textSize = 12f
+                    minHeight = 48
+                    contentDescription = getString(R.string.dashboard_music_play)
+                    setOnClickListener { viewModel.playSong(song.filename) }
+                }
+                row.addView(playBtn)
+            }
+            val deleteBtn = MaterialButton(
+                requireContext(),
+                null,
+                com.google.android.material.R.attr.materialButtonOutlinedStyle,
+            ).apply {
+                text = "Borrar"
+                textSize = 12f
+                minHeight = 48
+                setOnClickListener {
+                    AlertDialog.Builder(requireContext())
+                        .setTitle(getString(R.string.files_songs_delete_title))
+                        .setMessage("¿Eliminar '${song.filename}'?")
+                        .setPositiveButton("Eliminar") { _, _ -> viewModel.deleteSong(song.filename) }
+                        .setNegativeButton("Cancelar", null)
+                        .show()
+                }
+            }
+            row.addView(deleteBtn)
+            binding.songsContainer.addView(row)
+        }
+    }
+
+    private fun fileNameFromUri(
+        context: Context,
+        uri: android.net.Uri,
+        fallback: String,
+        forceSuffix: String?,
+    ): String {
         var name: String? = null
         if (uri.scheme == "content") {
             try {
@@ -131,8 +247,11 @@ class StoriesFragment : Fragment() {
         if (name == null) {
             name = uri.lastPathSegment?.substringAfterLast("/")
         }
-        val safe = name?.trim() ?: "cuento.pdf"
-        return if (safe.lowercase().endsWith(".pdf")) safe else "$safe.pdf"
+        val safe = name?.trim() ?: fallback
+        if (forceSuffix != null) {
+            return if (safe.lowercase().endsWith(forceSuffix)) safe else "$safe$forceSuffix"
+        }
+        return if (!safe.contains(".")) "$safe.mp3" else safe
     }
 
     override fun onDestroyView() {

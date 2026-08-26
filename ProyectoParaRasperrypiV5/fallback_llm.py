@@ -112,7 +112,7 @@ class FallbackLLM:
         try:
             self._llm = Llama(
                 model_path=str(model_path),
-                n_ctx=1024,         # Contexto cómodo para prompt + respuesta
+                n_ctx=2048,         # 10 turnos + digest de cuento
                 n_threads=4,        # 4 cores de CPU
                 n_batch=128,        # Batch eficiente
                 verbose=False,
@@ -141,6 +141,7 @@ class FallbackLLM:
         self,
         text: str,
         emotion: dict[str, Any] | None = None,
+        history: list[dict[str, str]] | None = None,
     ) -> str:
         """Genera una respuesta empática para el texto dado.
 
@@ -156,7 +157,7 @@ class FallbackLLM:
             return ""
 
         _dlog = get_debug_logger()
-        messages = self._build_messages(text, emotion, self._history)
+        messages = self._build_messages(text, emotion, history if history is not None else self._history)
 
         if _dlog:
             _dlog.log_input("LLM_GENERATE", f"text=\"{text}\"")
@@ -181,14 +182,6 @@ class FallbackLLM:
             )
 
             response_text = self._clean_response(raw_text)
-
-            # Guardar la interacción en el historial
-            if response_text:
-                self._history.append({"role": "user", "content": text})
-                self._history.append({"role": "assistant", "content": response_text})
-                # Mantener solo las últimas 4 interacciones (2 turnos) para no sobrepasar el contexto
-                if len(self._history) > 4:
-                    self._history = self._history[-4:]
 
             if _dlog:
                 _dlog.log_output(

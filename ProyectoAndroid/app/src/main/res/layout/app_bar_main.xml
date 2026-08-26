@@ -25,23 +25,4 @@
         android:id="@+id/content_main"
         layout="@layout/content_main" />
 
-    <!-- FAB for Celebrate Achievement (visible on Dashboard) -->
-    <androidx.coordinatorlayout.widget.CoordinatorLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_marginBottom="56dp"
-        android:background="@android:color/transparent">
-
-        <com.google.android.material.floatingactionbutton.FloatingActionButton
-            android:id="@+id/fab"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="bottom|end"
-            android:layout_margin="@dimen/fab_margin"
-            android:contentDescription="@string/dashboard_celebrate_title"
-            android:visibility="gone"
-            app:backgroundTint="@color/card_celebrate"
-            app:srcCompat="@drawable/ic_celebrate_24dp"
-            app:tint="@color/white" />
-    </androidx.coordinatorlayout.widget.CoordinatorLayout>
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

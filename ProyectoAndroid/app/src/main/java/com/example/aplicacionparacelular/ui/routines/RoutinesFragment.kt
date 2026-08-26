@@ -214,18 +214,15 @@ class RoutineAdapter(
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
         val card = MaterialCardView(parent.context).apply {
+            val density = resources.displayMetrics.density
             layoutParams = RecyclerView.LayoutParams(
                 RecyclerView.LayoutParams.MATCH_PARENT,
                 RecyclerView.LayoutParams.WRAP_CONTENT
-            ).apply { bottomMargin = 12 }
-            radius = 16f * resources.displayMetrics.density
-            cardElevation = 2f * resources.displayMetrics.density
-            setContentPadding(
-                (16 * resources.displayMetrics.density).toInt(),
-                (12 * resources.displayMetrics.density).toInt(),
-                (16 * resources.displayMetrics.density).toInt(),
-                (12 * resources.displayMetrics.density).toInt()
-            )
+            ).apply { bottomMargin = (12 * density).toInt() }
+            radius = resources.getDimension(R.dimen.card_corner_radius)
+            cardElevation = resources.getDimension(R.dimen.card_elevation)
+            val padding = resources.getDimensionPixelSize(R.dimen.card_padding)
+            setContentPadding(padding, padding, padding, padding)
         }
 
         val layout = LinearLayout(parent.context).apply {

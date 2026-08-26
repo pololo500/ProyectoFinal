@@ -1,4 +1,4 @@
-"""Motor de cuentos multi-turno: listar, elegir, devolver párrafos para TTS."""
+"""Motor de cuentos: ofrecer, leer por bloques con check-in, reflexionar."""
 from __future__ import annotations
 
 import random
@@ -8,6 +8,10 @@ from typing import Any
 
 from story_library import StoryLibrary, StoryRecord
 from story_validate import split_for_speech
+
+CHECKIN_PROMPT = "¿Seguimos?"
+CLOSING_PROMPT = "¿Querés otro o paramos?"
+DIGEST_CHARS = 400
 
 
 def _fold(text: str) -> str:
@@ -55,21 +59,54 @@ def _match_title(text: str, stories: list[StoryRecord]) -> StoryRecord | None:
     return None
 
 
+def make_digest(text: str, limit: int = DIGEST_CHARS) -> str:
+    compact = re.sub(r"\s+", " ", text or "").strip()
+    if len(compact) <= limit:
+        return compact
+    clipped = compact[:limit].rsplit(" ", 1)[0]
+    return (clipped or compact[:limit]) + "…"
+
+
 class StoryEngine:
     def __init__(self, library: StoryLibrary | None = None) -> None:
         self._library = library or StoryLibrary()
         self._state = "idle"
         self._pending_id: str | None = None
         self._offer_retries = 0
+        self._chunks: list[str] = []
+        self._index = 0
+        self._reading_id: str | None = None
+        self._reading_title: str | None = None
+        self._digest = ""
+
+    @property
+    def state(self) -> str:
+        return self._state
 
     @property
     def is_active(self) -> bool:
-        return self._state in ("offering", "awaiting_more")
+        return self._state in ("offering", "checking_in", "reflecting", "awaiting_more")
+
+    @property
+    def is_waiting_for_child(self) -> bool:
+        return self._state in ("checking_in", "reflecting")
+
+    def now_reading(self) -> dict[str, str] | None:
+        if self._state not in ("checking_in", "reflecting"):
+            return None
+        if not self._reading_id or not self._reading_title:
+            return None
+        return {"id": self._reading_id, "title": self._reading_title}
 
     def cancel(self) -> None:
         self._state = "idle"
         self._pending_id = None
         self._offer_retries = 0
+        self._chunks = []
+        self._index = 0
+        self._reading_id = None
+        self._reading_title = None
+        self._digest = ""
 
     def process_or_passthrough(
         self,
@@ -81,6 +118,23 @@ class StoryEngine:
         if dispatcher_result.get("intent_name") == "story_request":
             return self._begin_offer()
         return dispatcher_result
+
+    def start_by_id(self, story_id: str) -> dict[str, Any]:
+        rec = self._library.get(story_id)
+        if rec is None:
+            self.cancel()
+            return self._payload("story_request", "Ese ya no está.")
+        return self._start_reading(rec)
+
+    def advance_silence(self) -> dict[str, Any]:
+        if self._state == "checking_in":
+            return self._advance_chunk()
+        if self._state == "reflecting":
+            self._reading_id = None
+            self._reading_title = None
+            self._state = "awaiting_more"
+            return self._payload("story_request", CLOSING_PROMPT)
+        return self._payload("story_request", "")
 
     def _begin_offer(self) -> dict[str, Any]:
         stories = self._library.list_stories()
@@ -106,6 +160,27 @@ class StoryEngine:
         )
 
     def _handle_turn(self, text: str) -> dict[str, Any]:
+        if self._state == "checking_in":
+            if _wants_exit(text):
+                self.cancel()
+                return self._payload("story_request", "Listo, paramos. Cuando quieras otro cuento, pedímelo.")
+            return self._advance_chunk()
+
+        if self._state == "reflecting":
+            if _wants_exit(text):
+                self.cancel()
+                return self._payload("story_request", "Listo, paramos. Cuando quieras otro cuento, pedímelo.")
+            title = self._reading_title or "el cuento"
+            digest = self._digest
+            self._reading_id = None
+            self._reading_title = None
+            self._state = "awaiting_more"
+            payload = self._payload("story_reflect_answer", "")
+            payload["story_digest"] = digest
+            payload["story_title"] = title
+            payload["story_closing"] = CLOSING_PROMPT
+            return payload
+
         if self._state == "awaiting_more":
             folded = _fold(text)
             no_more = folded.strip() in {"no", "no gracias"} or (
@@ -175,14 +250,39 @@ class StoryEngine:
             self.cancel()
             return self._payload("story_request", "Ese ya no está.")
 
-        chunks = split_for_speech(text)
-        self._state = "awaiting_more"
+        self._chunks = split_for_speech(text)
+        if not self._chunks:
+            self.cancel()
+            return self._payload("story_request", "Ese ya no está.")
+        self._index = 0
+        self._reading_id = rec.id
+        self._reading_title = rec.title
+        self._digest = make_digest(text)
         self._pending_id = None
         self._offer_retries = 0
-        payload = self._payload("story_reading", f"Dale, te leo {rec.title}.")
-        payload["story_chunks"] = chunks
-        payload["story_closing"] = "¿Querés otro o paramos?"
-        payload["skip_tts_truncate"] = True
+        return self._emit_current_chunk(intro=f"Dale, te leo {rec.title}.")
+
+    def _advance_chunk(self) -> dict[str, Any]:
+        self._index += 1
+        if self._index >= len(self._chunks):
+            self.cancel()
+            return self._payload("story_request", CLOSING_PROMPT)
+        return self._emit_current_chunk(intro=None)
+
+    def _emit_current_chunk(self, intro: str | None) -> dict[str, Any]:
+        chunk = self._chunks[self._index]
+        last = self._index >= len(self._chunks) - 1
+        payload = self._payload("story_reading", intro or "")
+        payload["story_chunk"] = chunk
+        payload["story_id"] = self._reading_id
+        payload["story_title"] = self._reading_title
+        if last:
+            payload["story_need_reflection"] = True
+            payload["story_digest"] = self._digest
+            self._state = "reflecting"
+        else:
+            payload["story_checkin"] = CHECKIN_PROMPT
+            self._state = "checking_in"
         return payload
 
     @staticmethod

@@ -194,7 +194,7 @@ class CloudLLM:
     )
 
     _MODEL = "llama-3.3-70b-versatile"
-    _MAX_HISTORY = 4  # Últimos 4 turnos de contexto
+    _MAX_HISTORY = 10  # Últimos 10 turnos (pares); el recorte lo hace ConversationMemory
 
     def __init__(self, api_key: str) -> None:
         self._api_key = api_key
@@ -216,7 +216,7 @@ class CloudLLM:
         """Borra el historial de conversación."""
         self._history.clear()
 
-    def generate(self, user_text: str, emotion: dict | None = None) -> str:
+    def generate(self, user_text: str, emotion: dict | None = None, history: list | None = None) -> str:
         """Genera una respuesta empática para el texto del usuario.
 
         Args:
@@ -232,24 +232,16 @@ class CloudLLM:
         try:
             client = self._ensure_client()
 
-            # Construir contexto emocional
             emotion_hint = ""
             if emotion and emotion.get("label") and emotion["label"] != "neutral":
                 emotion_hint = f" (El nene parece estar {emotion['label']})"
 
-            # Agregar mensaje del usuario al historial
-            self._history.append({
-                "role": "user",
-                "content": user_text + emotion_hint,
-            })
-
-            # Recortar historial
-            if len(self._history) > self._MAX_HISTORY * 2:
-                self._history = self._history[-self._MAX_HISTORY * 2:]
-
+            hist = list(history if history is not None else self._history)
+            user_content = user_text + emotion_hint
             messages = [
                 {"role": "system", "content": self._SYSTEM_PROMPT},
-                *self._history,
+                *hist,
+                {"role": "user", "content": user_content},
             ]
 
             if _dlog:
@@ -263,13 +255,6 @@ class CloudLLM:
             )
 
             reply = response.choices[0].message.content.strip() if response.choices else ""
-
-            # Agregar respuesta al historial
-            if reply:
-                self._history.append({
-                    "role": "assistant",
-                    "content": reply,
-                })
 
             if _dlog:
                 _dlog.log_output(

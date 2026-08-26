@@ -9,16 +9,18 @@
 
     <!-- Menu items -->
     <string name="menu_dashboard">Inicio</string>
-    <string name="menu_metrics">Métricas</string>
+    <string name="menu_metrics">Cómo estuvo</string>
     <string name="menu_routines">Rutinas</string>
     <string name="menu_config">Configuración</string>
     <string name="menu_medical">Agenda Médica</string>
-    <string name="menu_stories">Cuentos</string>
+    <string name="menu_stories">Archivos</string>
 
     <!-- Dashboard -->
     <string name="dashboard_connection_title">Estado del Peluche</string>
     <string name="dashboard_connection_status_online">Conectado</string>
     <string name="dashboard_connection_status_offline">Desconectado</string>
+    <string name="dashboard_power_on">Encendido</string>
+    <string name="dashboard_power_off">Apagado</string>
     <string name="dashboard_connection_subtitle">Vinculación vía Wi-Fi</string>
     <string name="dashboard_today_summary">Resumen del Día</string>
     <string name="dashboard_interactions">Interacciones</string>
@@ -30,24 +32,36 @@
     <string name="dashboard_celebrate_title">¡Celebrar Logro!</string>
     <string name="dashboard_celebrate_subtitle">Envía una señal al peluche para festejar un logro de tu hijo/a</string>
     <string name="dashboard_quick_actions">Acciones Rápidas</string>
+    <string name="dashboard_music_title">Ahora</string>
+    <string name="dashboard_music_idle">Nada sonando</string>
+    <string name="dashboard_music_play">Play</string>
+    <string name="dashboard_music_stop">Stop</string>
+    <string name="dashboard_music_empty">Cargá una en Archivos</string>
+    <string name="dashboard_metrics_detail">Ver detalle</string>
     <string name="dashboard_alerts_title">Alertas Recientes</string>
     <string name="dashboard_no_alerts">No hay alertas nuevas</string>
     <string name="dashboard_alert_vocab">Vocabulario limitado detectado</string>
     <string name="dashboard_alert_emotion">Episodio de desregulación detectado</string>
 
     <!-- Metrics -->
-    <string name="metrics_title">Panel de Métricas</string>
+    <string name="metrics_title">Cómo estuvo</string>
     <string name="metrics_period_today">Hoy</string>
     <string name="metrics_period_week">Semana</string>
     <string name="metrics_period_month">Mes</string>
-    <string name="metrics_interaction_chart">Interacciones Diarias</string>
-    <string name="metrics_emotion_chart">Estado Emocional</string>
-    <string name="metrics_vocabulary_title">Progreso de Vocabulario</string>
+    <string name="metrics_interaction_chart">Veces que hablaron</string>
+    <string name="metrics_emotion_chart">Cómo se sintió</string>
+    <string name="metrics_vocabulary_title">Palabras</string>
     <string name="metrics_vocabulary_words">palabras nuevas esta semana</string>
     <string name="metrics_vocabulary_value">8</string>
-    <string name="metrics_cognitive_title">Desarrollo Cognitivo</string>
-    <string name="metrics_emotional_title">Desarrollo Emocional</string>
-    <string name="metrics_social_title">Desarrollo Vincular</string>
+    <string name="metrics_cognitive_title">Juego y charla</string>
+    <string name="metrics_emotional_title">Cómo se sintió</string>
+    <string name="metrics_social_title">Con vos</string>
+    <string name="metrics_pillar_title">En qué anduvo</string>
+    <string name="metrics_pillar_emotional">Cómo se sintió</string>
+    <string name="metrics_pillar_cognitive">Juego y charla</string>
+    <string name="metrics_pillar_social">Con vos</string>
+    <string name="metrics_pillar_autonomy">Haciendo solo</string>
+    <string name="metrics_alerts_label">Avisos</string>
     <string name="metrics_alerts_history">Historial de Alertas</string>
     <string name="metrics_no_data">Aún no hay datos suficientes</string>
     <string name="metrics_chart_placeholder">Gráfico disponible próximamente</string>
@@ -120,11 +134,18 @@
     <string name="medical_vaccines_hint">Mantener presionada una vacuna pendiente para cargar la fecha del turno.</string>
 
     <!-- Stories -->
-    <string name="stories_title">Cuentos de TEO</string>
+    <string name="stories_title">Cuentos</string>
+    <string name="stories_section_read">Lo que TEO puede leer</string>
     <string name="stories_subtitle">Subí un PDF con texto (no foto). TEO lo lee cuando el nene pide un cuento.</string>
     <string name="stories_upload">Subir PDF</string>
-    <string name="stories_empty">Todavía no hay cuentos. Subí un PDF para que TEO pueda leerlo.</string>
+    <string name="stories_empty">Todavía no hay cuentos</string>
     <string name="stories_delete_confirm">¿Borrar este cuento del peluche?</string>
+    <string name="files_songs_title">Canciones</string>
+    <string name="files_songs_section">Lo que TEO puede poner</string>
+    <string name="files_songs_empty">Todavía no hay canciones</string>
+    <string name="files_songs_upload">Subir canción</string>
+    <string name="files_songs_stop">Parar canción</string>
+    <string name="files_songs_delete_title">Eliminar canción</string>
 
     <!-- General -->
     <string name="fab_content_description">Acción principal</string>

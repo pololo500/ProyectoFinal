@@ -43,6 +43,7 @@ class RobotState:
         self.current_emotion: str | None = None
         self.current_emotion_score: float = 0.0
         self.currently_playing_song: str | None = None  # Canción en reproducción
+        self.currently_reading: dict[str, str] | None = None
         self._lock = threading.Lock()
 
         # Cola de notificaciones para la app Android (crisis, logros, pedidos)
@@ -56,6 +57,8 @@ class RobotState:
         self.on_power_changed: Callable[[bool], None] | None = None
         self.on_play_music: Callable[[str | None], bool] | None = None
         self.on_stop_music: Callable[[], None] | None = None
+        self.on_play_story: Callable[[str], bool] | None = None
+        self.on_stop_story: Callable[[], None] | None = None
 
         # Referencias a subsistemas (set from app.py)
         self.telemetry: Any = None
@@ -76,6 +79,7 @@ class RobotState:
                 "current_emotion": self.current_emotion,
                 "current_emotion_score": self.current_emotion_score,
                 "currently_playing": playing,
+                "currently_reading": dict(self.currently_reading) if self.currently_reading else None,
                 "timestamp": datetime.now().isoformat(),
             }
 
@@ -398,6 +402,10 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
             self._handle_post_music_stop()
         elif path == "/api/stories/upload":
             self._handle_post_stories_upload()
+        elif path == "/api/stories/play":
+            self._handle_post_stories_play()
+        elif path == "/api/stories/stop":
+            self._handle_post_stories_stop()
         else:
             self._send_error_json(404, "Endpoint no encontrado")
 
@@ -511,6 +519,8 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
         body = self._parse_json_body() or {}
         filename = body.get("filename")
         if robot_state.on_play_music:
+            if robot_state.on_stop_story:
+                robot_state.on_stop_story()
             robot_state.currently_playing_song = filename
             import threading
             threading.Thread(
@@ -526,6 +536,8 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
     def _handle_post_music_stop(self) -> None:
         """Detiene la reproducción de música en curso."""
         if robot_state.on_stop_music:
+            if robot_state.on_stop_story:
+                robot_state.on_stop_story()
             robot_state.on_stop_music()
             robot_state.currently_playing_song = None
             self._send_json({"status": "ok", "message": "Música detenida"})
@@ -545,6 +557,29 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
         raw_data = self._read_body()
         result = ingest_pdf(raw_data, filename, stories_dir=STORIES_DIR)
         self._send_json(result)
+
+    def _handle_post_stories_play(self) -> None:
+        body = self._parse_json_body() or {}
+        story_id = str(body.get("id") or "").strip()
+        if not story_id:
+            self._send_error_json(400, "Falta id del cuento")
+            return
+        if robot_state.on_play_story:
+            ok = robot_state.on_play_story(story_id)
+            if ok:
+                self._send_json({"status": "ok", "id": story_id})
+            else:
+                self._send_error_json(404, "Cuento no encontrado")
+        else:
+            self._send_error_json(503, "Lector de cuentos no disponible")
+
+    def _handle_post_stories_stop(self) -> None:
+        if robot_state.on_stop_story:
+            robot_state.on_stop_story()
+            robot_state.currently_reading = None
+            self._send_json({"status": "ok", "message": "Cuento detenido"})
+        else:
+            self._send_error_json(503, "Lector de cuentos no disponible")
 
     # ------------------------------------------------------------------
     # DELETE endpoints
@@ -782,7 +817,8 @@ if __name__ == "__main__":
     print(f"  GET  http://localhost:8080/api/telemetry/today")
     print(f"  GET  http://localhost:8080/api/routines")
     print(f"  GET  http://localhost:8080/api/music")
-    print(f"  GET  http://localhost:8080/api/stories")
+    print(f"  POST http://localhost:8080/api/stories/play")
+  print(f"  POST http://localhost:8080/api/stories/stop")
     print(f"  POST http://localhost:8080/api/celebrate")
     print(f"  POST http://localhost:8080/api/config")
     print(f"  POST http://localhost:8080/api/night-mode")

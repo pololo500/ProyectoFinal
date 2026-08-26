@@ -1079,6 +1079,11 @@ class AudioWorker:
         except ImportError:
             self.story_engine = None
 
+        from conversation_memory import ConversationMemory
+        self.conversation_memory = ConversationMemory()
+        self._story_generation = 0
+        self._story_lock = threading.Lock()
+
         from parent_alerts import VocabularyParentAlerter
         self._vocab_alerter = VocabularyParentAlerter()
 
@@ -1111,6 +1116,134 @@ class AudioWorker:
             return
         if msg:
             self._notify_vocab_parent(msg)
+
+    STORY_CHECKIN_SECONDS = 6.0
+    STORY_REFLECT_FALLBACK = "¿Qué parte te gustó más?"
+    STORY_REFLECT_COMMENT_FALLBACK = "Qué lindo lo que contaste."
+
+    def _invalidate_story_timer(self) -> None:
+        self._story_generation += 1
+
+    def _publish_story_status(self) -> None:
+        reading = None
+        if self.story_engine is not None:
+            reading = self.story_engine.now_reading()
+        if self._robot_state is not None:
+            self._robot_state.currently_reading = reading
+
+    def _remember_turn(self, user_text: str, payload: dict[str, Any], spoken_response: str) -> None:
+        if payload.get("intent_name") == "story_reading" and payload.get("story_chunk"):
+            return
+        user = (user_text or "").strip()
+        assistant = (spoken_response or "").strip()
+        closing = str(payload.get("story_closing") or "").strip()
+        if closing and closing not in assistant:
+            assistant = (assistant + " " + closing).strip()
+        if user and assistant:
+            self.conversation_memory.add_turn(user, assistant)
+
+    def _arm_story_timer(self) -> None:
+        gen = self._story_generation
+        seconds = self.STORY_CHECKIN_SECONDS
+
+        def _wait() -> None:
+            time.sleep(seconds)
+            if gen != self._story_generation:
+                return
+            if self.story_engine is None or not self.story_engine.is_waiting_for_child:
+                return
+            with self._story_lock:
+                if gen != self._story_generation:
+                    return
+                if not self.story_engine.is_waiting_for_child:
+                    return
+                payload = self.story_engine.advance_silence()
+            self._speak_story_payload(payload, generation=gen)
+
+        threading.Thread(target=_wait, name="StoryCheckin", daemon=True).start()
+
+    def _speak_story_payload(self, payload: dict[str, Any], generation: int | None) -> None:
+        if generation is None:
+            generation = self._story_generation
+        if self.speech_worker is None:
+            self._publish_story_status()
+            return
+
+        def _still() -> bool:
+            return generation == self._story_generation
+
+        intro = self._strip_unspeakable(str(payload.get("response") or ""))
+        if payload.get("intent_name") == "story_reflect_answer" and not intro:
+            intro = self.STORY_REFLECT_COMMENT_FALLBACK
+        if intro and _still():
+            self.speech_worker.speak_and_wait(intro, timeout=60.0)
+        chunk = self._strip_unspeakable(str(payload.get("story_chunk") or ""))
+        if chunk and _still():
+            self.speech_worker.speak_and_wait(chunk, timeout=180.0)
+
+        if payload.get("story_need_reflection") and _still():
+            question = self._story_reflection_question(payload)
+            if question:
+                self.speech_worker.speak_and_wait(question, timeout=60.0)
+            if _still():
+                self._arm_story_timer()
+        elif payload.get("story_checkin") and _still():
+            checkin = self._strip_unspeakable(str(payload.get("story_checkin")))
+            if checkin:
+                self.speech_worker.speak_and_wait(checkin, timeout=30.0)
+            if _still():
+                self._arm_story_timer()
+        else:
+            closing = self._strip_unspeakable(str(payload.get("story_closing") or ""))
+            if closing and _still() and closing != intro:
+                self.speech_worker.speak_and_wait(closing, timeout=60.0)
+
+        self._publish_story_status()
+
+    def _story_reflection_question(self, payload: dict[str, Any]) -> str:
+        title = payload.get("story_title") or "el cuento"
+        digest = payload.get("story_digest") or ""
+        prompt = (
+            f"Leímos el cuento '{title}'. Texto: {digest}. "
+            "Hacé UNA pregunta corta para que el nene piense el cuento. "
+            "No narres. Máximo 15 palabras."
+        )
+        hist = self.conversation_memory.messages()
+        reply = ""
+        try:
+            if self.cloud_mode and self.cloud_llm is not None and self.cloud_llm.is_available:
+                reply = self.cloud_llm.generate(prompt, None, history=hist) or ""
+            elif self.fallback_llm is not None and getattr(self.fallback_llm, "is_available", False):
+                reply = self.fallback_llm.generate(prompt, None, history=hist) or ""
+        except Exception:
+            reply = ""
+        cleaned = self._strip_unspeakable(reply)
+        return cleaned or self.STORY_REFLECT_FALLBACK
+
+    def stop_story_from_api(self) -> None:
+        self._invalidate_story_timer()
+        if self.story_engine is not None:
+            self.story_engine.cancel()
+        self._publish_story_status()
+
+    def play_story_from_api(self, story_id: str | None) -> bool:
+        if not story_id or self.story_engine is None:
+            return False
+        if self.speech_worker is not None:
+            self.speech_worker.stop_music()
+        self._invalidate_story_timer()
+        with self._story_lock:
+            payload = self.story_engine.start_by_id(story_id)
+        if not payload.get("story_chunk"):
+            self._publish_story_status()
+            return False
+        gen = self._story_generation
+
+        def _run() -> None:
+            self._speak_story_payload(payload, generation=gen)
+
+        threading.Thread(target=_run, name="StoryPlay", daemon=True).start()
+        return bool(payload.get("story_chunk") or payload.get("response"))
 
     def _run(self) -> None:
         sample_rate = 16000
@@ -1454,6 +1587,8 @@ class AudioWorker:
                 intent_payload = self.game_engine.process_or_passthrough(sanitized_text, intent_payload)
 
             if self.story_engine is not None:
+                if self.story_engine.is_waiting_for_child:
+                    self._invalidate_story_timer()
                 intent_payload = self.story_engine.process_or_passthrough(sanitized_text, intent_payload)
 
             # 8. Routine acknowledgment (#EPIC-007)
@@ -1467,22 +1602,35 @@ class AudioWorker:
                     pass
 
             if intent_name == "stop_music_request" and self.speech_worker is not None:
+                self.stop_story_from_api()
                 self.speech_worker.stop_music()
 
             # 8.5. Fallback LLM — generate empathetic response for unknown intents
             intent_name = intent_payload.get("intent_name", "")
             game_active = self.game_engine is not None and self.game_engine.is_active
             story_active = self.story_engine is not None and self.story_engine.is_active
-            allow_llm = intent_name == "unknown" and not game_active and not story_active
+            story_reflect = intent_payload.get("intent_name") == "story_reflect_answer"
+            allow_llm = (intent_name == "unknown" and not game_active and not story_active) or story_reflect
+            llm_history = self.conversation_memory.messages()
             if allow_llm and self.cloud_mode and self.cloud_llm is not None and self.cloud_llm.is_available:
                 _t_llm = time.monotonic()
                 if _dlog:
                     _dlog.log_input("LLM_FALLBACK", f'text="{sanitized_text}" [CLOUD]')
-                llm_response = self.cloud_llm.generate(sanitized_text, emotion_context)
+                if story_reflect:
+                    title = intent_payload.get("story_title") or "el cuento"
+                    digest = intent_payload.get("story_digest") or ""
+                    prompt = (
+                        f"Leímos '{title}'. Recorte: {digest}. "
+                        f"El nene dijo: {sanitized_text}. "
+                        "Comentá en una frase corta. No narres el cuento."
+                    )
+                    llm_response = self.cloud_llm.generate(prompt, emotion_context, history=llm_history)
+                else:
+                    llm_response = self.cloud_llm.generate(sanitized_text, emotion_context, history=llm_history)
                 if llm_response:
-                    intent_payload["intent_name"] = "llm_fallback"
+                    intent_payload["intent_name"] = "llm_fallback" if not story_reflect else "story_reflect_answer"
                     intent_payload["response"] = llm_response
-                    intent_payload["pilar"] = "general"
+                    intent_payload["pilar"] = "general" if not story_reflect else "cognitivo"
                 if _dlog:
                     _dlog.log_output(
                         "LLM_FALLBACK",
@@ -1493,11 +1641,21 @@ class AudioWorker:
                 _t_llm = time.monotonic()
                 if _dlog:
                     _dlog.log_input("LLM_FALLBACK", f"text=\"{sanitized_text}\"")
-                llm_response = self.fallback_llm.generate(sanitized_text, emotion_context)
+                if story_reflect:
+                    title = intent_payload.get("story_title") or "el cuento"
+                    digest = intent_payload.get("story_digest") or ""
+                    prompt = (
+                        f"Leímos '{title}'. Recorte: {digest}. "
+                        f"El nene dijo: {sanitized_text}. "
+                        "Comentá en una frase corta. No narres el cuento."
+                    )
+                    llm_response = self.fallback_llm.generate(prompt, emotion_context, history=llm_history)
+                else:
+                    llm_response = self.fallback_llm.generate(sanitized_text, emotion_context, history=llm_history)
                 if llm_response:
-                    intent_payload["intent_name"] = "llm_fallback"
+                    intent_payload["intent_name"] = "llm_fallback" if not story_reflect else "story_reflect_answer"
                     intent_payload["response"] = llm_response
-                    intent_payload["pilar"] = "general"
+                    intent_payload["pilar"] = "general" if not story_reflect else "cognitivo"
                 if _dlog:
                     _dlog.log_output(
                         "LLM_FALLBACK",
@@ -1605,25 +1763,17 @@ class AudioWorker:
             # 12. TTS — speak the response and block until playback finishes.
             response_text = self._strip_unspeakable(str(intent_payload.get("response", "")))
             intent_payload["response"] = response_text
-            story_chunks = intent_payload.get("story_chunks")
             skip_cut = bool(intent_payload.get("skip_tts_truncate"))
-            if not skip_cut and not story_chunks:
+            story_chunk = intent_payload.get("story_chunk")
+            if not skip_cut and not story_chunk and not intent_payload.get("story_need_reflection") and intent_payload.get("intent_name") != "story_reflect_answer":
                 # Truncar respuestas largas a ~25 palabras para mantener TTS < 4s.
                 response_text = self._truncate_response(response_text, max_words=25)
             if self.speech_worker is not None:
                 _t_tts = time.monotonic()
-                if story_chunks:
+                if story_chunk or intent_payload.get("story_need_reflection") or intent_payload.get("intent_name") == "story_reflect_answer":
                     if _dlog:
-                        _dlog.log_input("TTS", f"cuento chunks={len(story_chunks)}")
-                    if response_text:
-                        self.speech_worker.speak_and_wait(response_text, timeout=60.0)
-                    for chunk in story_chunks:
-                        spoken = self._strip_unspeakable(str(chunk))
-                        if spoken:
-                            self.speech_worker.speak_and_wait(spoken, timeout=180.0)
-                    closing = self._strip_unspeakable(str(intent_payload.get("story_closing") or ""))
-                    if closing:
-                        self.speech_worker.speak_and_wait(closing, timeout=60.0)
+                        _dlog.log_input("TTS", "cuento turno")
+                    self._speak_story_payload(intent_payload, generation=None)
                 elif response_text:
                     if _dlog:
                         _dlog.log_input("TTS", f"text=\"{response_text}\"")
@@ -1631,9 +1781,12 @@ class AudioWorker:
                 if _dlog:
                     _dlog.log_output("TTS", "Reproducción completada", elapsed_ms=(time.monotonic() - _t_tts) * 1000)
 
+            self._remember_turn(sanitized_text, intent_payload, response_text)
+
             # Reproducir archivo de música si fue solicitado
             music_to_play = intent_payload.get("play_music_file")
             if music_to_play and self.speech_worker is not None:
+                self.stop_story_from_api()
                 self.speech_worker.play_audio_file(music_to_play)
 
             if _dlog:

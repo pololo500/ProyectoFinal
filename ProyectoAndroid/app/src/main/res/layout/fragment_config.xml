@@ -120,6 +120,7 @@
                     android:id="@+id/btn_auto_scan"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:minHeight="48dp"
                     android:text="🔍 Buscar automáticamente"
                     app:cornerRadius="12dp"
                     app:backgroundTint="@color/tertiary" />
@@ -181,6 +182,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
+                    android:minHeight="48dp"
                     android:text="Conectar manualmente"
                     app:cornerRadius="8dp" />
             </LinearLayout>
@@ -215,7 +217,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="🔊 @string/config_volume_label"
+                        android:text="@string/config_volume_label"
                         android:textSize="15sp" />
 
                     <TextView
@@ -250,7 +252,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="💡 @string/config_brightness_label"
+                        android:text="@string/config_brightness_label"
                         android:textSize="15sp" />
 
                     <TextView
@@ -278,6 +280,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
+                    android:minHeight="48dp"
                     android:text="Aplicar cambios"
                     app:cornerRadius="8dp"
                     app:backgroundTint="@color/tertiary" />
@@ -307,7 +310,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="🌙 @string/config_night_mode"
+                        android:text="@string/config_night_mode"
                         android:textAppearance="@style/TextAppearance.App.CardTitle" />
 
                     <TextView
@@ -320,58 +323,8 @@
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/switch_night_mode"
                     android:layout_width="wrap_content"
-                    android:layout_height="wrap_content" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Songs Section -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/config_songs_title"
-            android:textAppearance="@style/TextAppearance.App.SectionTitle" />
-
-        <com.google.android.material.card.MaterialCardView
-            style="@style/Widget.App.CardView"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/config_songs_subtitle"
-                    android:textAppearance="@style/TextAppearance.App.CardSubtitle"
-                    android:layout_marginBottom="12dp" />
-
-                <LinearLayout
-                    android:id="@+id/songs_container"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_stop_song"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="@string/config_songs_stop"
-                    app:cornerRadius="8dp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_upload_song"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="📁 Subir canción"
-                    app:cornerRadius="8dp" />
+                    android:minHeight="48dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

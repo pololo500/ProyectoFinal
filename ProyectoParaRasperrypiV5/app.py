@@ -86,6 +86,45 @@ except ImportError:
     FallbackLLM = None  # type: ignore[misc,assignment]
 
 
+def _bind_playback_callbacks(app: object) -> None:
+    """Play/stop de música y cuento para la API parental."""
+    if robot_state is None:
+        return
+
+    def play_music(filename: str | None) -> bool:
+        aw = getattr(app, "audio_worker", None)
+        if aw is not None:
+            aw.stop_story_from_api()
+        sw = getattr(app, "speech_worker", None)
+        if sw is not None:
+            return bool(sw.play_music(filename))
+        return False
+
+    def stop_music() -> None:
+        aw = getattr(app, "audio_worker", None)
+        if aw is not None:
+            aw.stop_story_from_api()
+        sw = getattr(app, "speech_worker", None)
+        if sw is not None:
+            sw.stop_music()
+
+    def play_story(story_id: str) -> bool:
+        aw = getattr(app, "audio_worker", None)
+        if aw is None:
+            return False
+        return bool(aw.play_story_from_api(story_id))
+
+    def stop_story() -> None:
+        aw = getattr(app, "audio_worker", None)
+        if aw is not None:
+            aw.stop_story_from_api()
+
+    robot_state.on_play_music = play_music
+    robot_state.on_stop_music = stop_music
+    robot_state.on_play_story = play_story
+    robot_state.on_stop_story = stop_story
+
+
 APP_DIR = Path(__file__).resolve().parent
 INTENT_RULES_PATH = APP_DIR / "intent_rules.json"
 
@@ -592,8 +631,7 @@ class EyeModeApp(tk.Tk):
         robot_state.on_config_changed = _on_config_changed
         robot_state.on_night_mode_changed = _on_night_mode
         robot_state.on_power_changed = _on_power
-        robot_state.on_play_music = self.speech_worker.play_music if self.speech_worker else None
-        robot_state.on_stop_music = self.speech_worker.stop_music if self.speech_worker else None
+        _bind_playback_callbacks(self)
 
         try:
             self.api_server = ApiServer()
@@ -1150,8 +1188,7 @@ class EdgeAiDesktopApp(tk.Tk):
         robot_state.routine_scheduler = self.routine_scheduler
         robot_state.speech_worker = self.speech_worker
         robot_state.volume_limit = self._volume_var.get()
-        robot_state.on_play_music = self.speech_worker.play_music if self.speech_worker else None
-        robot_state.on_stop_music = self.speech_worker.stop_music if self.speech_worker else None
+        _bind_playback_callbacks(self)
 
         def _on_celebrate() -> None:
             log_action("APP", "celebración disparada desde API")

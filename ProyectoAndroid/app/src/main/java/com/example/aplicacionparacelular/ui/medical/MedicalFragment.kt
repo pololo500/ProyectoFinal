@@ -81,14 +81,14 @@ class MedicalFragment : Fragment() {
 
     private fun createAppointmentCard(appointment: Appointment, position: Int): View {
         val dp = resources.displayMetrics.density
+        val radius = resources.getDimension(R.dimen.card_corner_radius)
+        val elevation = resources.getDimension(R.dimen.card_elevation)
+        val padding = resources.getDimensionPixelSize(R.dimen.card_padding)
 
         val card = MaterialCardView(requireContext()).apply {
-            radius = 12 * dp
-            cardElevation = 2 * dp
-            setContentPadding(
-                (16 * dp).toInt(), (12 * dp).toInt(),
-                (16 * dp).toInt(), (12 * dp).toInt()
-            )
+            this.radius = radius
+            cardElevation = elevation
+            setContentPadding(padding, padding, padding, padding)
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -126,15 +126,21 @@ class MedicalFragment : Fragment() {
             })
         }
 
+        val touch = (48 * dp).toInt()
         val deleteBtn = com.google.android.material.button.MaterialButton(
             requireContext(), null,
             com.google.android.material.R.attr.materialButtonOutlinedStyle
         ).apply {
             text = "✕"
             textSize = 14f
-            minimumWidth = 0
-            minimumHeight = 0
+            minWidth = touch
+            minHeight = touch
+            minimumWidth = touch
+            minimumHeight = touch
+            insetTop = 0
+            insetBottom = 0
             setPadding((8 * dp).toInt(), 0, (8 * dp).toInt(), 0)
+            contentDescription = "Eliminar turno"
             setOnClickListener {
                 AlertDialog.Builder(requireContext())
                     .setTitle("Eliminar turno")
@@ -159,6 +165,7 @@ class MedicalFragment : Fragment() {
         val row = LinearLayout(requireContext()).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = android.view.Gravity.CENTER_VERTICAL
+            minimumHeight = (48 * dp).toInt()
             setPadding(0, (6 * dp).toInt(), 0, (6 * dp).toInt())
         }
 

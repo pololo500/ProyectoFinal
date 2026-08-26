@@ -4,10 +4,10 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
+import androidx.navigation.fragment.findNavController
 import com.example.aplicacionparacelular.R
 import com.example.aplicacionparacelular.databinding.FragmentDashboardBinding
 import com.example.aplicacionparacelular.network.RobotConnectionManager
@@ -49,6 +49,7 @@ class DashboardFragment : Fragment() {
                 val powerOn = status.optBoolean("power_on", true)
                 val nightMode = status.optBoolean("night_mode", false)
                 updatePowerUI(powerOn, nightMode)
+                viewModel.applyRobotStatus(status)
             }
             refreshAlerts()
         }
@@ -70,11 +71,37 @@ class DashboardFragment : Fragment() {
             refreshAlerts()
         }
 
+        viewModel.nowPlaying.observe(viewLifecycleOwner) { name ->
+            binding.txtNowPlaying.text = if (name.isNullOrBlank()) {
+                getString(R.string.dashboard_music_idle)
+            } else {
+                name
+            }
+        }
+
+        viewModel.songCount.observe(viewLifecycleOwner) { count ->
+            val storyOn = viewModel.storyPlaying.value == true
+            binding.btnMusicPlay.isEnabled = storyOn || count > 0
+            binding.txtMusicHint.visibility =
+                if (!storyOn && count == 0) View.VISIBLE else View.GONE
+        }
+        viewModel.storyPlaying.observe(viewLifecycleOwner) { storyOn ->
+            val count = viewModel.songCount.value ?: -1
+            binding.btnMusicPlay.isEnabled = storyOn || count > 0
+            binding.txtMusicHint.visibility =
+                if (!storyOn && count == 0) View.VISIBLE else View.GONE
+        }
+
+        viewModel.musicMessage.observe(viewLifecycleOwner) { msg ->
+            if (!msg.isNullOrBlank()) {
+                Snackbar.make(view, msg, Snackbar.LENGTH_SHORT).show()
+            }
+        }
+
         RobotConnectionManager.parentAlerts.observe(viewLifecycleOwner) {
             refreshAlerts()
         }
 
-        // Celebrate button
         binding.cardCelebrate.setOnClickListener {
             RobotConnectionManager.celebrate { result ->
                 val msg = when (result) {
@@ -94,33 +121,40 @@ class DashboardFragment : Fragment() {
             viewModel.togglePower()
         }
 
-        // Initial data load
+        binding.btnMusicPlay.setOnClickListener {
+            viewModel.playNow()
+        }
+        binding.btnMusicStop.setOnClickListener {
+            viewModel.stopNow()
+        }
+        binding.btnMetricsDetail.setOnClickListener {
+            findNavController().navigate(R.id.nav_metrics)
+        }
+
         viewModel.refreshTelemetry()
+        viewModel.refreshMusic()
     }
 
     override fun onResume() {
         super.onResume()
         viewModel.refreshTelemetry()
+        viewModel.refreshMusic()
     }
 
     private fun updatePowerUI(powerOn: Boolean, nightMode: Boolean) {
         if (nightMode) {
             binding.btnPowerToggle.text = "🌙 Modo Noche"
         } else if (powerOn) {
-            binding.btnPowerToggle.text = "⏻ Encendido"
+            binding.btnPowerToggle.text = getString(R.string.dashboard_power_on)
         } else {
-            binding.btnPowerToggle.text = "⏻ Apagado"
+            binding.btnPowerToggle.text = getString(R.string.dashboard_power_off)
         }
     }
 
     private fun refreshAlerts() {
-        val playing = RobotConnectionManager.robotStatus.value?.let { status ->
-            if (status.isNull("currently_playing")) "" else status.optString("currently_playing", "")
-        }.orEmpty()
-        val nowPlaying = if (playing.isNotBlank()) listOf("🎵 Reproduciendo ahora: $playing") else emptyList()
         val live = RobotConnectionManager.parentAlerts.value ?: emptyList()
         val telemetry = viewModel.alertMessages.value ?: emptyList()
-        updateAlerts(nowPlaying + live + telemetry)
+        updateAlerts(live + telemetry)
     }
 
     private fun updateAlerts(alerts: List<String>) {

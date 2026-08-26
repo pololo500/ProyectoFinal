@@ -130,6 +130,14 @@ object RobotApiClient {
     fun stopMusic(): ApiResult<JSONObject> =
         doPost("/api/music/stop", JSONObject())
 
+    fun playStory(storyId: String): ApiResult<JSONObject> {
+        val body = JSONObject().apply { put("id", storyId) }
+        return doPost("/api/stories/play", body)
+    }
+
+    fun stopStory(): ApiResult<JSONObject> =
+        doPost("/api/stories/stop", JSONObject())
+
     /** Sube un archivo de música al robot. */
     /** Sube un archivo de música al robot. */
     fun uploadMusic(filename: String, data: ByteArray): ApiResult<JSONObject> {

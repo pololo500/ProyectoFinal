@@ -68,7 +68,12 @@ class MetricsFragment : Fragment() {
                     pillars.vincular,
                     pillars.autonomia
                 ),
-                listOf("Emocional", "Cognitivo", "Vincular", "Autonomía"),
+                listOf(
+                    getString(R.string.metrics_pillar_emotional),
+                    getString(R.string.metrics_pillar_cognitive),
+                    getString(R.string.metrics_pillar_social),
+                    getString(R.string.metrics_pillar_autonomy)
+                ),
                 listOf(
                     ContextCompat.getColor(requireContext(), R.color.card_emotion_alert),
                     ContextCompat.getColor(requireContext(), R.color.tertiary),

@@ -26,6 +26,8 @@ import java.util.concurrent.TimeUnit
 object RobotConnectionManager {
 
     private const val TAG = "RobotConnMgr"
+    private const val MUSIC_PREFS = "teo_music"
+    private const val KEY_LAST_SONG = "last_played_song"
 
     private val executor = Executors.newScheduledThreadPool(2)
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -255,7 +257,24 @@ object RobotConnectionManager {
      * Reproduce una canción en el robot.
      */
     fun playMusic(filename: String? = null, onResult: (ApiResult<JSONObject>) -> Unit = {}) {
+        if (!filename.isNullOrBlank()) {
+            rememberLastSong(filename)
+        }
         executeAsync({ RobotApiClient.playMusic(filename) }, onResult)
+    }
+
+    fun rememberLastSong(filename: String) {
+        val ctx = appContext ?: return
+        ctx.getSharedPreferences(MUSIC_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_LAST_SONG, filename)
+            .apply()
+    }
+
+    fun lastPlayedSong(): String? {
+        val ctx = appContext ?: return null
+        return ctx.getSharedPreferences(MUSIC_PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_LAST_SONG, null)
     }
 
     /**
@@ -263,6 +282,14 @@ object RobotConnectionManager {
      */
     fun stopMusic(onResult: (ApiResult<JSONObject>) -> Unit = {}) {
         executeAsync({ RobotApiClient.stopMusic() }, onResult)
+    }
+
+    fun playStory(storyId: String, onResult: (ApiResult<JSONObject>) -> Unit = {}) {
+        executeAsync({ RobotApiClient.playStory(storyId) }, onResult)
+    }
+
+    fun stopStory(onResult: (ApiResult<JSONObject>) -> Unit = {}) {
+        executeAsync({ RobotApiClient.stopStory() }, onResult)
     }
 
     fun fetchStories(onResult: (ApiResult<JSONObject>) -> Unit) {

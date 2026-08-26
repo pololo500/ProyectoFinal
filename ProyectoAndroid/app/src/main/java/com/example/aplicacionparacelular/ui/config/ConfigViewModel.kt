@@ -5,13 +5,6 @@ import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.example.aplicacionparacelular.network.ApiResult
 import com.example.aplicacionparacelular.network.RobotConnectionManager
-import org.json.JSONObject
-
-data class SongItem(
-    val filename: String,
-    val sizeBytes: Long,
-    val modified: String
-)
 
 class ConfigViewModel : ViewModel() {
 
@@ -24,18 +17,9 @@ class ConfigViewModel : ViewModel() {
     private val _nightMode = MutableLiveData(false)
     val nightMode: LiveData<Boolean> = _nightMode
 
-    private val _songs = MutableLiveData<List<SongItem>>(emptyList())
-    val songs: LiveData<List<SongItem>> = _songs
-
-    private val _currentlyPlaying = MutableLiveData<String?>(null)
-    val currentlyPlaying: LiveData<String?> = _currentlyPlaying
-
     private val _statusMessage = MutableLiveData<String?>()
     val statusMessage: LiveData<String?> = _statusMessage
 
-    /**
-     * Loads the current robot config from the status endpoint.
-     */
     fun loadFromRobot() {
         RobotConnectionManager.executeAsync({ com.example.aplicacionparacelular.network.RobotApiClient.getStatus() }) { result ->
             when (result) {
@@ -57,9 +41,6 @@ class ConfigViewModel : ViewModel() {
         _brightness.value = value
     }
 
-    /**
-     * Sends current volume and brightness to the robot.
-     */
     fun applyConfig() {
         val vol = _volumeLimit.value ?: 100
         val bright = (_brightness.value ?: 100) / 100f
@@ -81,102 +62,6 @@ class ConfigViewModel : ViewModel() {
                 }
                 is ApiResult.Error -> {
                     _statusMessage.value = "⚠ Error: ${result.message}"
-                }
-            }
-        }
-    }
-
-    fun loadSongs() {
-        RobotConnectionManager.fetchMusic { result ->
-            when (result) {
-                is ApiResult.Success -> {
-                    val songsArray = result.data.optJSONArray("songs")
-                    val list = mutableListOf<SongItem>()
-                    if (songsArray != null) {
-                        for (i in 0 until songsArray.length()) {
-                            val obj = songsArray.optJSONObject(i) ?: continue
-                            list.add(SongItem(
-                                filename = obj.optString("filename", ""),
-                                sizeBytes = obj.optLong("size_bytes", 0),
-                                modified = obj.optString("modified", "")
-                            ))
-                        }
-                    }
-                    _songs.value = list
-                    // Actualizar canción en reproducción desde la respuesta del servidor
-                    val playing = if (result.data.isNull("currently_playing")) null
-                                  else result.data.optString("currently_playing", null)
-                    _currentlyPlaying.value = playing
-                }
-                is ApiResult.Error -> {
-                    _statusMessage.value = "Error al cargar canciones: ${result.message}"
-                }
-            }
-        }
-    }
-
-    fun deleteSong(filename: String) {
-        RobotConnectionManager.deleteMusic(filename) { result ->
-            when (result) {
-                is ApiResult.Success -> {
-                    _statusMessage.value = "Canción eliminada"
-                    loadSongs() // Refresh
-                }
-                is ApiResult.Error -> {
-                    _statusMessage.value = "Error: ${result.message}"
-                }
-            }
-        }
-    }
-
-    fun uploadSong(filename: String, data: ByteArray) {
-        _statusMessage.value = "Subiendo canción..."
-        RobotConnectionManager.uploadMusic(filename, data) { result ->
-            when (result) {
-                is ApiResult.Success -> {
-                    _statusMessage.value = "✅ Canción subida correctamente"
-                    loadSongs() // Refresh
-                }
-                is ApiResult.Error -> {
-                    _statusMessage.value = "Error: ${result.message}"
-                }
-            }
-        }
-    }
-
-    fun playSong(filename: String) {
-        // Actualización optimista: mostrar spinner inmediatamente
-        _currentlyPlaying.value = filename
-        _statusMessage.value = "▶️ Reproduciendo '$filename' en el robot..."
-        RobotConnectionManager.playMusic(filename) { result ->
-            when (result) {
-                is ApiResult.Success -> {
-                    // Confirmar — sincronizar con estado real del servidor
-                    loadSongs()
-                }
-                is ApiResult.Error -> {
-                    // Revertir UI optimista
-                    _currentlyPlaying.value = null
-                    _statusMessage.value = "Error al reproducir: ${result.message}"
-                }
-            }
-        }
-    }
-
-    fun stopMusic() {
-        // Actualización optimista: quitar spinner inmediatamente
-        _currentlyPlaying.value = null
-        _statusMessage.value = "⏹️ Música detenida"
-        RobotConnectionManager.stopMusic { result ->
-            when (result) {
-                is ApiResult.Success -> {
-                    // Confirmar — sincronizar con estado real del servidor
-                    loadSongs()
-                }
-                is ApiResult.Error -> {
-                    _statusMessage.value = "Error al detener: ${result.message}"
-                    // Sincronizar para ver el estado real
-                    loadSongs()
                 }
             }
         }
