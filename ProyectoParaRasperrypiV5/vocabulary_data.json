@@ -30,6 +30,7 @@
     "ahora",
     "ajito",
     "ala",
+    "alante",
     "album",
     "algo",
     "alguien",
@@ -60,6 +61,7 @@
     "aprende",
     "arbol",
     "archivos",
+    "argentino",
     "arranco",
     "artificial",
     "asi",
@@ -78,6 +80,7 @@
     "azul",
     "baba",
     "bailar",
+    "bajar",
     "baje",
     "ballera",
     "banda",
@@ -129,6 +132,7 @@
     "carajo",
     "caray",
     "cargando",
+    "carino",
     "carne",
     "carrera",
     "carton",
@@ -210,6 +214,7 @@
     "dara",
     "darle",
     "das",
+    "datos",
     "debo",
     "decente",
     "decentes",
@@ -259,6 +264,7 @@
     "drunk",
     "duele",
     "edad",
+    "educacion",
     "efectivamente",
     "eh",
     "ejemplo",
@@ -293,6 +299,7 @@
     "erre",
     "errodeas",
     "errores",
+    "esas",
     "escenario",
     "escolenta",
     "esconderar",
@@ -301,6 +308,7 @@
     "escuchandote",
     "escuchar",
     "escuchas",
+    "escuche",
     "escuches",
     "escucho",
     "esito",
@@ -320,6 +328,7 @@
     "estupido",
     "existian",
     "ey",
+    "falta",
     "fato",
     "favor",
     "favorita",
@@ -341,6 +350,7 @@
     "fps",
     "frase",
     "frecuencia",
+    "fue",
     "funciona",
     "funcionaba",
     "fundita",
@@ -409,6 +419,7 @@
     "hilo",
     "historia",
     "historias",
+    "hitele",
     "hizo",
     "hoja",
     "hola",
@@ -508,6 +519,7 @@
     "miedo",
     "mientras",
     "mierda",
+    "mim",
     "mira",
     "mirando",
     "miras",
@@ -520,6 +532,7 @@
     "mo",
     "modelo",
     "modo",
+    "mofa",
     "momento",
     "monton",
     "morder",
@@ -590,6 +603,7 @@
     "pape",
     "papel",
     "papi",
+    "parcos",
     "parece",
     "parecen",
     "parezco",
@@ -600,6 +614,7 @@
     "pasaba",
     "pasado",
     "pasapalda",
+    "pasar",
     "pase",
     "pasear",
     "pases",
@@ -618,6 +633,7 @@
     "perfectamente",
     "perfecto",
     "perro",
+    "personales",
     "pesciente",
     "peso",
     "picera",
@@ -633,6 +649,7 @@
     "pista",
     "pitoforo",
     "playa",
+    "plazo",
     "poco",
     "podemos",
     "podes",
@@ -719,8 +736,10 @@
     "reaccionaste",
     "realidad",
     "rearemos",
+    "rebezco",
     "recien",
     "recorrer",
+    "recto",
     "recuerdo",
     "refecto",
     "refuele",
@@ -820,8 +839,11 @@
     "tambien",
     "tan",
     "tanto",
+    "tarde",
     "tardes",
+    "tarre",
     "tarta",
+    "tavale",
     "temer",
     "tenemos",
     "tener",
@@ -833,6 +855,7 @@
     "tenido",
     "teo",
     "terminando",
+    "texamo",
     "texta",
     "texto",
     "theo",
@@ -863,6 +886,7 @@
     "trabajaban",
     "trabajan",
     "trabajos",
+    "trabalo",
     "traduccion",
     "trampa",
     "tranquilo",
@@ -904,6 +928,7 @@
     "ves",
     "vestido",
     "vez",
+    "vi",
     "vida",
     "video",
     "videos",
@@ -5515,11 +5540,136 @@
       "word": "historias",
       "date": "2026-08-24",
       "timestamp": "2026-08-24T18:01:35.820206"
+    },
+    {
+      "word": "esas",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T19:03:26.337284"
+    },
+    {
+      "word": "mim",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T19:04:09.873069"
+    },
+    {
+      "word": "hitele",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T19:04:44.604036"
+    },
+    {
+      "word": "texamo",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T19:04:44.604036"
+    },
+    {
+      "word": "parcos",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T19:05:14.383132"
+    },
+    {
+      "word": "tarde",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T19:05:14.383132"
+    },
+    {
+      "word": "pasar",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T19:05:14.383132"
+    },
+    {
+      "word": "trabalo",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:17:26.085239"
+    },
+    {
+      "word": "rebezco",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:17:26.085239"
+    },
+    {
+      "word": "argentino",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:17:26.085239"
+    },
+    {
+      "word": "falta",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:17:42.997188"
+    },
+    {
+      "word": "carino",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:17:42.997188"
+    },
+    {
+      "word": "recto",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:17:42.997188"
+    },
+    {
+      "word": "fue",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:17:42.997188"
+    },
+    {
+      "word": "tavale",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:17:55.637413"
+    },
+    {
+      "word": "mofa",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:18:10.880819"
+    },
+    {
+      "word": "vi",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:18:10.880819"
+    },
+    {
+      "word": "tarre",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:18:23.265842"
+    },
+    {
+      "word": "escuche",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:18:23.265842"
+    },
+    {
+      "word": "bajar",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:18:23.265842"
+    },
+    {
+      "word": "educacion",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:18:23.265842"
+    },
+    {
+      "word": "plazo",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:18:23.265842"
+    },
+    {
+      "word": "datos",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:18:47.333481"
+    },
+    {
+      "word": "personales",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:18:47.333481"
+    },
+    {
+      "word": "alante",
+      "date": "2026-08-25",
+      "timestamp": "2026-08-25T22:19:32.269296"
     }
   ],
   "stats": {
-    "total_words": 919,
-    "new_words_today": 96,
-    "history_count": 919
+    "total_words": 944,
+    "new_words_today": 25,
+    "history_count": 944
   }
 }

@@ -27,7 +27,7 @@ class StoriesViewModel : ViewModel() {
                 is ApiResult.Success -> {
                     val arr = result.data.optJSONArray("stories")
                     val list = mutableListOf<StoryItem>()
-                    if (arr != None) {
+                    if (arr != null) {
                         for (i in 0 until arr.length()) {
                             val obj = arr.optJSONObject(i) ?: continue
                             list.add(

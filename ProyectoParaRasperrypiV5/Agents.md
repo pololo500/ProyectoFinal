@@ -10,7 +10,7 @@ Este proyecto es el "cerebro" local para un sistema embebido interactivo. Todo e
 - **Video:** `opencv-python` (captura a 320×240, 1 fps; MediaPipe de emoción apagado por defecto) y `mediapipe` (opcional si `infer_emotion=True`).
 - **Audio (Captura):** `sounddevice` (I/O) y `silero-vad` (detección de silencios y actividad de voz).
 - **Audio (Procesamiento):** `faster-whisper` (transcripción STT, modelo `base` con `compute_type="int8"`, `beam_size=5`, `initial_prompt` contextual para habla infantil argentina).
-- **Audio (Síntesis/TTS):** `piper-tts` (TTS neural local con voz lo más humana posible, modelo `es_MX-ald-medium`). Si piper no está disponible, fallback a `System.Speech` (Windows) o `espeak-ng` (Linux).
+- **Audio (Síntesis/TTS):** `piper-tts` (TTS neural local, modelo `es_AR-daniela-high`, `length_scale=1.08`, `noise_scale=0.667`, `noise_w_scale=0.90`). Si piper no está disponible, fallback a `System.Speech` (Windows) o `espeak-ng` (Linux).
 - **Procesamiento de Lenguaje (NLU):** `spacy` (modelo `es_core_news_md` para similitud semántica con 20k vectores de palabras, docs de ejemplos pre-cacheados).
 - **LLM de Fallback:** `llama-cpp-python` con modelo `internlm2.5-1.8B-chat` Q4_K_M (~1.2 GB RAM). Genera respuestas empáticas en español argentino cuando el intent es `unknown`. Se carga secuencialmente al inicio después de Whisper y VAD. Si no está disponible, la app funciona sin él (graceful degradation).
 - **Saneamiento de Datos:** `scrubadub` (eliminación de PII).
@@ -23,4 +23,4 @@ Este proyecto es el "cerebro" local para un sistema embebido interactivo. Todo e
 4. **Manejo de Silencios:** El micrófono graba en un buffer circular. El segmento se corta y va a `faster-whisper` cuando ocurre lo primero de: (a) `silero-vad` detecta ~0.7 s de silencio (1.6 s si hay emoción triste/enojado), o (b) la captura lleva 8 s. Detalle y rollback: `docs/LATENCIA_AUDIO_CAMARA.md`.
 5. **Carga Secuencial de Modelos:** Los modelos pesados (MediaPipe, Whisper, piper) deben cargarse secuencialmente, no en paralelo, para evitar contención de CPU. El AudioWorker espera al evento `models_loaded_event` del CameraWorker antes de cargar Whisper.
 6. **Mensajes Críticos No Descartables:** Los mensajes de tipo `transcript` deben usar `put(timeout=...)` en la cola (nunca `put_nowait`) para garantizar que jamás se pierdan silenciosamente.
-7. **TTS con Voz Natural:** La respuesta de la intención detectada debe reproducirse por el parlante seleccionado con la voz más humana posible, priorizando `piper-tts` neural. El consumo de recursos debe ser mínimo (modelo ONNX optimizado para ARM64).
+7. **TTS con Voz Natural:** La respuesta de la intención detectada debe reproducirse por el parlante seleccionado con Piper `es_AR-daniela-high`. El consumo de recursos debe ser mínimo (modelo ONNX optimizado para ARM64).

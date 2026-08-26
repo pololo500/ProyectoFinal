@@ -2312,6 +2312,12 @@ class AudioWorker:
 
 
 class SpeechWorker:
+    PIPER_MODEL_NAME = "es_AR-daniela-high"
+    PIPER_MODEL_HF_PATH = "es/es_AR/daniela/high"
+    PIPER_LENGTH_SCALE = 1.08
+    PIPER_NOISE_SCALE = 0.667
+    PIPER_NOISE_W_SCALE = 0.90
+
     def __init__(
         self,
         output_device_index: int | None = None,
@@ -2365,8 +2371,17 @@ class SpeechWorker:
         cleaned = re.sub(r"NOTIFY_PARENT\s*:?\s*.*$", "", cleaned, flags=re.IGNORECASE)
         return re.sub(r"\s{2,}", " ", cleaned).strip()
 
+    @staticmethod
+    def _prepare_tts_text(text: str) -> str:
+        cleaned = re.sub(r"\s{2,}", " ", text).strip()
+        if not cleaned:
+            return ""
+        if cleaned[-1] not in ".!?…":
+            cleaned += "."
+        return cleaned
+
     def speak(self, text: str) -> None:
-        speech_text = self._strip_tts_markup((text or "").strip())
+        speech_text = self._prepare_tts_text(self._strip_tts_markup((text or "").strip()))
         if not speech_text:
             return
         try:
@@ -2380,7 +2395,7 @@ class SpeechWorker:
 
     def speak_and_wait(self, text: str, timeout: float = 30.0) -> None:
         """Queue text for speaking and block until playback finishes."""
-        speech_text = self._strip_tts_markup((text or "").strip())
+        speech_text = self._prepare_tts_text(self._strip_tts_markup((text or "").strip()))
         if not speech_text:
             return
         self._idle_event.clear()
@@ -2424,23 +2439,92 @@ class SpeechWorker:
             resampled[:, ch] = np.interp(new_indices, old_indices, audio_array[:, ch])
         return resampled
 
+    def _find_supported_output_config(
+        self, sample_rate: int, channels: int
+    ) -> tuple[int, str, int]:
+        """Return (samplerate, dtype, channels) that the output device accepts.
+
+        Raspberry Pi ALSA often rejects float32 and mono (PaErrorCode -9994)
+        and only accepts int16 stereo at 48000/44100.  Probe dtype and channel
+        count as well as rate; never fall back to an untested float32 config.
+        """
+        rates: list[int] = []
+        for sr in (sample_rate, 48000, 44100, 22050, 16000):
+            if sr not in rates:
+                rates.append(sr)
+
+        if sys.platform.startswith("linux"):
+            dtypes = ("int16", "float32")
+            raw_channels = (2, 1) if channels == 1 else (channels, 2, 1)
+        else:
+            dtypes = ("float32", "int16")
+            raw_channels = (channels, 2) if channels == 1 else (channels, 1)
+
+        channel_options: list[int] = []
+        for ch in raw_channels:
+            if ch > 0 and ch not in channel_options:
+                channel_options.append(ch)
+
+        for sr in rates:
+            for dtype in dtypes:
+                for ch in channel_options:
+                    try:
+                        sd.check_output_settings(
+                            device=self._output_device_index,
+                            samplerate=float(sr),
+                            channels=ch,
+                            dtype=dtype,
+                        )
+                        return sr, dtype, ch
+                    except Exception:
+                        continue
+        return 48000, "int16", 2
+
     def _find_supported_samplerate(self, sample_rate: int, channels: int) -> int:
-        """Return the requested sample_rate if the device supports it, otherwise
-        find the best ALSA-compatible alternative.  Falls back to 48000 Hz."""
-        candidates = [sample_rate, 48000, 44100, 22050, 16000, 8000]
-        for sr in candidates:
-            try:
-                sd.check_output_settings(
-                    device=self._output_device_index,
-                    samplerate=float(sr),
-                    channels=channels,
-                    dtype="float32",
+        """Compat: only the sample rate from the full ALSA/WASAPI probe."""
+        sr, _dtype, _ch = self._find_supported_output_config(sample_rate, channels)
+        return sr
+
+    @staticmethod
+    def _adapt_playback_audio(
+        audio_array: np.ndarray,
+        orig_sr: int,
+        target_sr: int,
+        target_dtype: str,
+        target_channels: int,
+    ) -> tuple[np.ndarray, int]:
+        """Resample, upmix/downmix and convert dtype for the output device."""
+        if audio_array.ndim == 1:
+            audio_array = audio_array.reshape(-1, 1)
+        if audio_array.dtype != np.float32:
+            if np.issubdtype(audio_array.dtype, np.integer):
+                info = np.iinfo(audio_array.dtype)
+                audio_array = audio_array.astype(np.float32) / float(info.max)
+            else:
+                audio_array = audio_array.astype(np.float32)
+
+        audio_array = SpeechWorker._resample_audio(audio_array, orig_sr, target_sr)
+
+        src_ch = audio_array.shape[1]
+        if target_channels > src_ch:
+            if src_ch == 1:
+                audio_array = np.repeat(audio_array, target_channels, axis=1)
+            else:
+                pad = np.zeros(
+                    (audio_array.shape[0], target_channels - src_ch),
+                    dtype=audio_array.dtype,
                 )
-                return sr
-            except Exception:
-                continue
-        # Ultimate fallback — let PortAudio pick its default
-        return 48000
+                audio_array = np.concatenate([audio_array, pad], axis=1)
+        elif target_channels < src_ch:
+            audio_array = audio_array[:, :target_channels]
+
+        if target_dtype == "int16":
+            clipped = np.clip(audio_array, -1.0, 1.0)
+            audio_array = (clipped * 32767.0).astype(np.int16)
+        else:
+            audio_array = audio_array.astype(np.float32)
+
+        return np.ascontiguousarray(audio_array), target_sr
 
     def _play_wav_via_output_stream(
         self,
@@ -2454,9 +2538,9 @@ class SpeechWorker:
         with an already-open InputStream on some backends.  Opening our own
         OutputStream with an explicit device avoids this.
 
-        If the requested sample_rate is not supported by the output device
-        (common on Raspberry Pi ALSA where only 48000/44100 are valid), the
-        audio is resampled to a compatible rate using numpy interpolation.
+        Raspberry Pi ALSA frequently rejects float32/mono even after resampling
+        to 48000 Hz (PaErrorCode -9994).  Probe rate+dtype+channels and retry
+        with int16 stereo if opening the stream still fails.
 
         ``music_generation``: si se pasa, esta reproducción es música y se
         puede cortar con stop_music(). El TTS no lo pasa, así una pausa de
@@ -2464,53 +2548,82 @@ class SpeechWorker:
         """
         if audio_array.ndim == 1:
             audio_array = audio_array.reshape(-1, 1)
-        # Normalise int types to float32 for OutputStream compatibility
         if audio_array.dtype != np.float32:
             info = np.iinfo(audio_array.dtype)
             audio_array = audio_array.astype(np.float32) / float(info.max)
 
-        channels = audio_array.shape[1] if audio_array.ndim > 1 else 1
+        orig_channels = audio_array.shape[1] if audio_array.ndim > 1 else 1
+        probed = self._find_supported_output_config(sample_rate, orig_channels)
+        configs: list[tuple[int, str, int]] = []
+        for cfg in (probed, (48000, "int16", 2), (44100, "int16", 2)):
+            if cfg not in configs:
+                configs.append(cfg)
 
-        # --- Resample if the device does not support the original rate ---
-        device_sr = self._find_supported_samplerate(sample_rate, channels)
-        if device_sr != sample_rate:
-            self._log(f"Resampleando audio de {sample_rate} Hz → {device_sr} Hz (compatibilidad ALSA)")
-            audio_array = self._resample_audio(audio_array, sample_rate, device_sr)
-            sample_rate = device_sr
+        last_exc: Exception | None = None
+        for device_sr, dtype, channels in configs:
+            play_audio, play_sr = self._adapt_playback_audio(
+                audio_array,
+                orig_sr=sample_rate,
+                target_sr=device_sr,
+                target_dtype=dtype,
+                target_channels=channels,
+            )
+            if (device_sr, dtype, channels) != (sample_rate, "float32", orig_channels):
+                self._log(
+                    f"Ajustando audio {sample_rate} Hz/{orig_channels}ch/float32 → "
+                    f"{play_sr} Hz/{channels}ch/{dtype}"
+                )
 
-        finished = threading.Event()
-        pos = [0]  # mutable counter shared with callback
+            finished = threading.Event()
+            pos = [0]
 
-        def _callback(outdata: np.ndarray, frames: int, _time_info: Any, _status: Any) -> None:
-            if self._stop_event.is_set():
-                finished.set()
-                raise sd.CallbackStop()
-            if music_generation is not None and (
-                self._music_stop_event.is_set()
-                or self._music_generation != music_generation
-            ):
-                finished.set()
-                raise sd.CallbackStop()
-            start = pos[0]
-            end = start + frames
-            chunk = audio_array[start:end]
-            if len(chunk) < frames:
-                outdata[:len(chunk)] = chunk
-                outdata[len(chunk):] = 0
-                finished.set()
-                raise sd.CallbackStop()
-            else:
+            def _callback(
+                outdata: np.ndarray,
+                frames: int,
+                _time_info: Any,
+                _status: Any,
+                _audio: np.ndarray = play_audio,
+                _finished: threading.Event = finished,
+                _pos: list[int] = pos,
+            ) -> None:
+                if self._stop_event.is_set():
+                    _finished.set()
+                    raise sd.CallbackStop()
+                if music_generation is not None and (
+                    self._music_stop_event.is_set()
+                    or self._music_generation != music_generation
+                ):
+                    _finished.set()
+                    raise sd.CallbackStop()
+                start = _pos[0]
+                end = start + frames
+                chunk = _audio[start:end]
+                if len(chunk) < frames:
+                    outdata[: len(chunk)] = chunk
+                    outdata[len(chunk) :] = 0
+                    _finished.set()
+                    raise sd.CallbackStop()
                 outdata[:] = chunk
-            pos[0] = end
+                _pos[0] = end
 
-        with sd.OutputStream(
-            samplerate=sample_rate,
-            channels=channels,
-            dtype="float32",
-            device=self._output_device_index,
-            callback=_callback,
-        ):
-            finished.wait(timeout=len(audio_array) / sample_rate + 5.0)
+            try:
+                with sd.OutputStream(
+                    samplerate=play_sr,
+                    channels=channels,
+                    dtype=dtype,
+                    device=self._output_device_index,
+                    callback=_callback,
+                ):
+                    finished.wait(timeout=len(play_audio) / play_sr + 5.0)
+                return
+            except Exception as exc:
+                last_exc = exc
+                self._log(
+                    f"Salida {dtype}/{channels}ch/{play_sr} Hz falló: {exc}"
+                )
+
+        if last_exc is not None:
+            raise last_exc
 
     def _run(self) -> None:
         log_action("SpeechWorker", "tarea _run comenzada")
@@ -2580,7 +2693,7 @@ class SpeechWorker:
     @staticmethod
     def _ensure_piper_model() -> Path:
         """Return path to the piper ONNX model, downloading it on first use."""
-        model_name = "es_MX-claude-high"
+        model_name = SpeechWorker.PIPER_MODEL_NAME
         cache_dir = Path.home() / ".edge_ai_models" / "piper"
         cache_dir.mkdir(parents=True, exist_ok=True)
 
@@ -2592,7 +2705,7 @@ class SpeechWorker:
 
         base_url = (
             "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
-            f"es/es_MX/claude/high/{model_name}"
+            f"{SpeechWorker.PIPER_MODEL_HF_PATH}/{model_name}"
         )
 
         for suffix, target in [(".onnx", model_file), (".onnx.json", config_file)]:
@@ -2609,9 +2722,9 @@ class SpeechWorker:
         try:
             from piper.config import SynthesisConfig
             syn_config = SynthesisConfig(
-                length_scale=1.25,     # Habla más pausada, dulce y clara para niños
-                noise_scale=0.667,     # Variación natural en fonemas
-                noise_w_scale=0.8,     # Cadencia y ritmo natural
+                length_scale=SpeechWorker.PIPER_LENGTH_SCALE,
+                noise_scale=SpeechWorker.PIPER_NOISE_SCALE,
+                noise_w_scale=SpeechWorker.PIPER_NOISE_W_SCALE,
             )
         except Exception:
             syn_config = None
