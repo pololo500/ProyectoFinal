@@ -12,6 +12,8 @@ Expresiones soportadas:
   - enojado   : cejas fruncidas
   - escuchando: brillo sutil pulsante
   - hablando  : parpadeo rítmico suave
+  - dormido   : ojos casi cerrados (modo noche / apagado)
+
 
 La interfaz es minimalista y no sobreestimulante, siguiendo los
 lineamientos del proyecto para niños con TEA.
@@ -64,6 +66,7 @@ class EyeDisplay:
         self._is_blinking: bool = False
         self._pulse_phase: float = 0.0
         self._is_pulsing: bool = False  # Para "escuchando"
+        self._pictogram: str | None = None
 
         # IDs de elementos del canvas para updates eficientes
         self._canvas_ids: dict[str, int] = {}
@@ -85,12 +88,14 @@ class EyeDisplay:
 
         Args:
             expression: neutral, feliz, triste, sorprendido, enojado,
-                       escuchando, hablando.
+                       escuchando, hablando, dormido.
             transition_ms: Duración de la transición (no usado directamente,
                           la interpolación es per-frame).
         """
         self._current_expression = expression
         self._is_pulsing = expression in ("escuchando", "hablando")
+        if expression == "dormido":
+            self._is_blinking = False
         target = self._expression_params(expression)
         self._target_params.update(target)
 
@@ -100,6 +105,17 @@ class EyeDisplay:
         Configuración sensorial para evitar hipersensibilidad visual.
         """
         self._brightness = max(0.0, min(1.0, level))
+
+    def set_pictogram(self, name: str | None) -> None:
+        """Muestra un pictograma simple bajo los ojos (rutina / abrazo)."""
+        self._pictogram = name
+        if name:
+            shown = name
+            self.canvas.after(8000, lambda: self._clear_pictogram_if(shown))
+
+    def _clear_pictogram_if(self, name: str) -> None:
+        if self._pictogram == name:
+            self._pictogram = None
 
     def get_expression(self) -> str:
         """Retorna la expresión actual."""
@@ -162,6 +178,13 @@ class EyeDisplay:
                 "pupil_size": 1.0,
                 "eye_width_mult": 1.0,
             },
+            "dormido": {
+                "eye_open": 0.08,
+                "eye_curve": 0.2,
+                "brow_angle": 0.0,
+                "pupil_size": 0.7,
+                "eye_width_mult": 1.0,
+            },
         }
         return expressions.get(expression, expressions["neutral"])
 
@@ -196,7 +219,7 @@ class EyeDisplay:
 
     def _schedule_blink(self) -> None:
         """Programa un parpadeo natural aleatorio."""
-        if self._is_blinking:
+        if self._is_blinking or self._current_expression == "dormido":
             return
         # Parpadeo cada 3-6 segundos (rango natural)
         delay_ms = random.randint(3000, 6000)
@@ -365,3 +388,28 @@ class EyeDisplay:
                     fill=_BG_COLOR,
                     outline="",
                 )
+
+        self._draw_pictogram(cx, cy, h)
+
+    def _draw_pictogram(self, cx: float, cy: float, h: float) -> None:
+        name = self._pictogram
+        if not name:
+            return
+        labels = {
+            "abrazo": "ABRAZO",
+            "manos": "MANOS",
+            "plato": "COMIDA",
+            "luna": "DORMIR",
+            "caja": "ORDEN",
+            "pelota": "JUEGO",
+        }
+        label = labels.get(name, name.upper())
+        color = self._brightness_adjusted_color(_HIGHLIGHT_COLOR)
+        y = cy + min(h * 0.38, 160)
+        self.canvas.create_text(
+            cx,
+            y,
+            text=label,
+            fill=color,
+            font=("Segoe UI", 22, "bold"),
+        )

@@ -167,7 +167,7 @@ object ReminderScheduler {
             val whenCal = parseAppointmentDate(obj.optString("date")) ?: continue
             if (whenCal.timeInMillis <= System.currentTimeMillis()) continue
             val isVaccine = title.contains("vacun", ignoreCase = true)
-            val kind = if (isVaccine) ReminderReceiver.KIND_VACUNA else ReminderReceiver.KIND_VACUNA
+            val kind = if (isVaccine) ReminderReceiver.KIND_VACUNA else ReminderReceiver.KIND_TURNO
             val channelTitle = if (isVaccine) "TEO: vacunación" else "TEO: turno médico"
             val id = BASE_APPT + (title.hashCode() and 0x0FFF)
             setAlarm(context, id, whenCal, kind, channelTitle, "$title · ${obj.optString("date")}", null)

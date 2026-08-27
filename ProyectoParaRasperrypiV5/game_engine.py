@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from debug_logger import log_action
+from stt_correct import correct_stt_text
 
 
 def _normalize_letter(char: str) -> str:
@@ -248,7 +249,10 @@ class PiedraPapelTijeraSession:
 
     def process_input(self, text: str) -> GameResponse:
         """Procesa la elección del niño."""
-        normalized = text.lower().strip()
+        normalized = correct_stt_text(
+            text,
+            extra_words=_PIEDRA_PAPEL_CHOICES,
+        ).lower().strip()
 
         # Detectar si quiere salir (BUG-1 fix: word boundary match)
         if _wants_to_exit(normalized):

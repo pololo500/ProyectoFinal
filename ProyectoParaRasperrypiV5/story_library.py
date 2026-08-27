@@ -19,7 +19,6 @@ from story_validate import (
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_STORIES_DIR = APP_DIR / "stories"
 MAX_PDF_BYTES = 8 * 1024 * 1024
-MAX_PDF_PAGES = 15
 
 
 @dataclass(frozen=True)
@@ -140,8 +139,6 @@ def extract_pdf_text(pdf_bytes: bytes) -> tuple[str, int, str | None]:
     except Exception:
         return "", 0, "No pude abrir ese PDF."
     n_pages = len(reader.pages)
-    if n_pages > MAX_PDF_PAGES:
-        return "", n_pages, f"El PDF tiene más de {MAX_PDF_PAGES} páginas."
     parts: list[str] = []
     for page in reader.pages:
         try:

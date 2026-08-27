@@ -33,6 +33,7 @@ class TestPrepareTtsText(unittest.TestCase):
         worker = SpeechWorker()
         worker.speak("hola")
         self.assertEqual(worker._queue.get_nowait(), "hola.")
+        self.assertTrue(worker.is_busy())
 
     def test_speak_no_encola_si_solo_habia_markup(self) -> None:
         worker = SpeechWorker()
@@ -46,9 +47,9 @@ class TestPiperVoiceConfig(unittest.TestCase):
         self.assertEqual(SpeechWorker.PIPER_MODEL_HF_PATH, "es/es_AR/daniela/high")
 
     def test_parametros_de_sintesis(self) -> None:
-        self.assertAlmostEqual(SpeechWorker.PIPER_LENGTH_SCALE, 1.08)
+        self.assertAlmostEqual(SpeechWorker.PIPER_LENGTH_SCALE, 1.20)
         self.assertAlmostEqual(SpeechWorker.PIPER_NOISE_SCALE, 0.667)
-        self.assertAlmostEqual(SpeechWorker.PIPER_NOISE_W_SCALE, 0.90)
+        self.assertAlmostEqual(SpeechWorker.PIPER_NOISE_W_SCALE, 0.98)
 
     def test_ensure_piper_model_descarga_daniela_si_falta(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

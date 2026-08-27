@@ -23,11 +23,13 @@ object RobotApiClient {
     private const val PREFS_NAME = "robot_connection"
     private const val KEY_ROBOT_IP = "robot_ip"
     private const val KEY_ROBOT_PORT = "robot_port"
+    private const val KEY_TOKEN = "pairing_token"
     private const val DEFAULT_PORT = 8080
     private const val CONNECT_TIMEOUT = 3000
     private const val READ_TIMEOUT = 10000
 
     private var baseUrl: String = ""
+    private var pairingToken: String = ""
 
     /**
      * Inicializa el cliente con la IP guardada en SharedPreferences.
@@ -36,6 +38,7 @@ object RobotApiClient {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val ip = prefs.getString(KEY_ROBOT_IP, "") ?: ""
         val port = prefs.getInt(KEY_ROBOT_PORT, DEFAULT_PORT)
+        pairingToken = prefs.getString(KEY_TOKEN, "") ?: ""
         if (ip.isNotBlank()) {
             baseUrl = "http://$ip:$port"
         }
@@ -51,6 +54,22 @@ object RobotApiClient {
             .putString(KEY_ROBOT_IP, ip)
             .putInt(KEY_ROBOT_PORT, port)
             .apply()
+    }
+
+    fun setPairingToken(context: Context, token: String) {
+        pairingToken = token
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_TOKEN, token).apply()
+    }
+
+    fun refreshPairingToken(context: Context) {
+        when (val result = doGet("/api/server-info")) {
+            is ApiResult.Success -> {
+                val token = result.data.optString("pairing_token", "")
+                if (token.isNotBlank()) setPairingToken(context, token)
+            }
+            is ApiResult.Error -> { /* keep */ }
+        }
     }
 
     fun getRobotIp(context: Context): String {
@@ -73,6 +92,10 @@ object RobotApiClient {
     /** Obtiene la telemetría de una fecha específica (YYYY-MM-DD). */
     fun getTelemetry(date: String): ApiResult<JSONObject> = doGet("/api/telemetry/$date")
 
+    /** Agrega telemetría de N días (1–31) para la vista Mes. */
+    fun getTelemetryRange(days: Int): ApiResult<JSONObject> =
+        doGet("/api/telemetry/range?days=$days")
+
     /** Obtiene la lista de rutinas configuradas. */
     fun getRoutines(): ApiResult<JSONObject> = doGet("/api/routines")
 
@@ -90,10 +113,11 @@ object RobotApiClient {
     // ------------------------------------------------------------------
 
     /** Envía la configuración sensorial al robot. */
-    fun postConfig(volumeLimit: Int, brightness: Float): ApiResult<JSONObject> {
+    fun postConfig(volumeLimit: Int, brightness: Float, playtimeLimitMinutes: Int = 0): ApiResult<JSONObject> {
         val body = JSONObject().apply {
             put("volume_limit", volumeLimit)
             put("brightness", brightness.toDouble())
+            put("playtime_limit_minutes", playtimeLimitMinutes)
         }
         return doPost("/api/config", body)
     }
@@ -139,7 +163,6 @@ object RobotApiClient {
         doPost("/api/stories/stop", JSONObject())
 
     /** Sube un archivo de música al robot. */
-    /** Sube un archivo de música al robot. */
     fun uploadMusic(filename: String, data: ByteArray): ApiResult<JSONObject> {
         if (!isConfigured()) return ApiResult.Error("Robot no configurado")
         return try {
@@ -153,6 +176,7 @@ object RobotApiClient {
                 setRequestProperty("Content-Type", "application/octet-stream")
                 setRequestProperty("Content-Length", data.size.toString())
                 setRequestProperty("X-Filename", encodedFilename)
+                applyAuth()
                 doOutput = true
             }
             conn.outputStream.use { it.write(data) }
@@ -176,6 +200,7 @@ object RobotApiClient {
                 setRequestProperty("Content-Type", "application/octet-stream")
                 setRequestProperty("Content-Length", data.size.toString())
                 setRequestProperty("X-Filename", encodedFilename)
+                applyAuth()
                 doOutput = true
             }
             conn.outputStream.use { it.write(data) }
@@ -203,6 +228,12 @@ object RobotApiClient {
     // Helpers HTTP
     // ------------------------------------------------------------------
 
+    private fun HttpURLConnection.applyAuth() {
+        if (pairingToken.isNotBlank()) {
+            setRequestProperty("X-Robot-Token", pairingToken)
+        }
+    }
+
     private fun doGet(path: String): ApiResult<JSONObject> {
         if (!isConfigured()) return ApiResult.Error("Robot no configurado")
         return try {
@@ -211,6 +242,7 @@ object RobotApiClient {
                 requestMethod = "GET"
                 connectTimeout = CONNECT_TIMEOUT
                 readTimeout = READ_TIMEOUT
+                applyAuth()
             }
             readResponse(conn)
         } catch (e: Exception) {
@@ -227,6 +259,7 @@ object RobotApiClient {
                 connectTimeout = CONNECT_TIMEOUT
                 readTimeout = READ_TIMEOUT
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                applyAuth()
                 doOutput = true
             }
             val bodyBytes = body.toString().toByteArray(Charsets.UTF_8)
@@ -245,6 +278,7 @@ object RobotApiClient {
                 requestMethod = "DELETE"
                 connectTimeout = CONNECT_TIMEOUT
                 readTimeout = READ_TIMEOUT
+                applyAuth()
             }
             readResponse(conn)
         } catch (e: Exception) {

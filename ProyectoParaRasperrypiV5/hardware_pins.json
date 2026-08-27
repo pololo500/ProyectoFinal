@@ -1,0 +1,6 @@
+{
+  "hug_button_pin": null,
+  "servo_left_pin": null,
+  "servo_right_pin": null,
+  "_comment": "Pines BCM de la Raspberry Pi. Dejar null hasta que Teo indique el cableado del botón de panza y los servos. La lógica de abrazo ya corre en software (simulado)."
+}

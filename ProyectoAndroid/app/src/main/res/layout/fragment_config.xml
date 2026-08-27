@@ -275,6 +275,46 @@
                     app:trackColorActive="@color/card_emotion_happy"
                     app:thumbColor="@color/card_emotion_happy" />
 
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:layout_marginTop="8dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/config_playtime_limit"
+                        android:textSize="15sp" />
+
+                    <TextView
+                        android:id="@+id/txt_playtime_value"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/config_playtime_unlimited"
+                        android:textSize="14sp"
+                        android:textColor="@color/primary" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/config_playtime_limit_subtitle"
+                    android:textAppearance="@style/TextAppearance.App.CardSubtitle" />
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/slider_playtime"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:valueFrom="0"
+                    android:valueTo="240"
+                    android:value="0"
+                    android:stepSize="10"
+                    app:trackColorActive="@color/tertiary"
+                    app:thumbColor="@color/tertiary" />
+
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btn_apply_config"
                     android:layout_width="match_parent"

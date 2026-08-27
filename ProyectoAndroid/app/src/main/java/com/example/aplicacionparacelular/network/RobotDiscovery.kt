@@ -60,7 +60,8 @@ object RobotDiscovery {
         val ip: String,
         val port: Int,
         val deviceName: String,
-        val deviceId: String
+        val deviceId: String,
+        val pairingToken: String = ""
     )
 
     private val _discoveredRobot = MutableLiveData<DiscoveredRobot?>()
@@ -168,7 +169,8 @@ object RobotDiscovery {
                         ip = ip.ifBlank { packet.address.hostAddress ?: "" },
                         port = port,
                         deviceName = name,
-                        deviceId = deviceId
+                        deviceId = deviceId,
+                        pairingToken = json.optString("pairing_token", "")
                     )
 
                     mainHandler.post {

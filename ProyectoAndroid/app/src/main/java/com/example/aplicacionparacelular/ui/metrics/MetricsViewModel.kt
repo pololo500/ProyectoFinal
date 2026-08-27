@@ -94,6 +94,41 @@ class MetricsViewModel : ViewModel() {
         }
     }
 
+    fun loadRangeMetrics(days: Int) {
+        _isLoading.value = true
+        RobotConnectionManager.fetchTelemetryRange(days) { result ->
+            _isLoading.value = false
+            when (result) {
+                is ApiResult.Success -> parseRange(result.data)
+                is ApiResult.Error -> { /* Keep current values */ }
+            }
+        }
+    }
+
+    private fun parseRange(data: JSONObject) {
+        parseDailySummary(data, isToday = true)
+        val summary = data.optJSONObject("summary") ?: return
+        val daily = summary.optJSONArray("daily") ?: return
+        val summaries = mutableListOf<DailySummary>()
+        var totalNewWords = 0
+        for (i in 0 until daily.length()) {
+            val row = daily.optJSONObject(i) ?: continue
+            val ds = DailySummary(
+                date = row.optString("date", ""),
+                interactions = row.optInt("interactions", 0),
+                durationMinutes = (row.optDouble("duration_s", 0.0) / 60).toInt(),
+                crisisCount = row.optInt("crisis_count", 0),
+                newWords = row.optInt("new_words", 0),
+                gamesPlayed = row.optInt("games_played", 0),
+                routinesCompleted = row.optInt("routines_completed", 0)
+            )
+            summaries.add(ds)
+            totalNewWords += ds.newWords
+        }
+        _weekSummaries.value = summaries
+        _newWordsWeek.value = totalNewWords
+    }
+
     private fun parseDailySummary(data: JSONObject, isToday: Boolean) {
         val summary = data.optJSONObject("summary") ?: return
         val dateStr = data.optString("date", "")

@@ -47,8 +47,7 @@ class DashboardFragment : Fragment() {
         RobotConnectionManager.robotStatus.observe(viewLifecycleOwner) { status ->
             if (status != null) {
                 val powerOn = status.optBoolean("power_on", true)
-                val nightMode = status.optBoolean("night_mode", false)
-                updatePowerUI(powerOn, nightMode)
+                updatePowerUI(powerOn)
                 viewModel.applyRobotStatus(status)
             }
             refreshAlerts()
@@ -141,13 +140,11 @@ class DashboardFragment : Fragment() {
         viewModel.refreshMusic()
     }
 
-    private fun updatePowerUI(powerOn: Boolean, nightMode: Boolean) {
-        if (nightMode) {
-            binding.btnPowerToggle.text = "🌙 Modo Noche"
-        } else if (powerOn) {
-            binding.btnPowerToggle.text = getString(R.string.dashboard_power_on)
+    private fun updatePowerUI(powerOn: Boolean) {
+        binding.btnPowerToggle.text = if (powerOn) {
+            getString(R.string.dashboard_power_on)
         } else {
-            binding.btnPowerToggle.text = getString(R.string.dashboard_power_off)
+            getString(R.string.dashboard_power_off)
         }
     }
 

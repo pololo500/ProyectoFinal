@@ -12,6 +12,7 @@ class ReminderReceiver : BroadcastReceiver() {
         val id = intent.getIntExtra(EXTRA_ID, kind.hashCode())
         val channel = when (kind) {
             KIND_VACUNA -> AppNotificationHelper.CHANNEL_VACUNA
+            KIND_TURNO -> AppNotificationHelper.CHANNEL_TURNO
             KIND_RUTINA -> AppNotificationHelper.CHANNEL_RUTINA
             else -> AppNotificationHelper.CHANNEL_PELUCHE
         }
@@ -29,6 +30,7 @@ class ReminderReceiver : BroadcastReceiver() {
         const val EXTRA_ID = "id"
         const val EXTRA_ROUTINE_HHMM = "hhmm"
         const val KIND_VACUNA = "vacuna"
+        const val KIND_TURNO = "turno"
         const val KIND_RUTINA = "rutina"
     }
 }

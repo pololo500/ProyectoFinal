@@ -210,6 +210,9 @@ class EyeModeApp(tk.Tk):
         self._brightness: float = 1.0
         self._night_mode: bool = False
         self._power_on: bool = True
+        self._playtime_limit_minutes: int = 0
+        self._last_devices: tuple[int, int, int | None] | None = None
+        self._companion = None
 
         # Cloud mode (#CLOUD-001)
         self._cloud_mode: bool = False
@@ -507,6 +510,7 @@ class EyeModeApp(tk.Tk):
             )
 
         # Start workers with the selected devices
+        self._last_devices = (cam_idx, mic_idx, out_idx)
         self._start_workers(cam_idx, mic_idx, out_idx)
 
         # Start API server for Android app communication
@@ -517,6 +521,8 @@ class EyeModeApp(tk.Tk):
 
     def _start_workers(self, cam_idx: int, mic_idx: int, out_idx: int | None) -> None:
         """Initialize and start all workers with the selected devices."""
+        if self.audio_worker is not None:
+            return
         try:
             self.intent_dispatcher = IntentDispatcher.from_file(INTENT_RULES_PATH)
         except Exception as exc:
@@ -540,6 +546,8 @@ class EyeModeApp(tk.Tk):
             cloud_mode=self._cloud_mode,
             cloud_tts=cloud_tts,
         )
+        self.speech_worker.set_volume_limit(self._volume_limit)
+        self.speech_worker.set_night_mode(self._night_mode)
         self.speech_worker.start()
 
         self.camera_worker = CameraWorker(
@@ -568,6 +576,24 @@ class EyeModeApp(tk.Tk):
 
         self.camera_worker.start()
         self.audio_worker.start()
+        try:
+            from hardware import PhysicalCompanion, load_pins
+
+            self._companion = PhysicalCompanion(load_pins())
+
+            def _on_belly() -> None:
+                if self._companion is not None:
+                    self._companion.hug()
+                if self.speech_worker:
+                    self.speech_worker.speak("¡Qué abrazo rico!")
+                if self._eye_display is not None:
+                    self.after(0, lambda: self._eye_display.set_pictogram("abrazo"))
+                    self.after(0, lambda: self._eye_display.set_expression("feliz"))
+
+            self._companion.start_button_watch(_on_belly)
+        except Exception as exc:
+            print(f"[EyeMode] Hardware físico en simulación: {exc}", flush=True)
+            self._companion = None
         print("[EyeMode] Workers iniciados", flush=True)
         log_action(
             "APP",
@@ -586,6 +612,7 @@ class EyeModeApp(tk.Tk):
         robot_state.speech_worker = self.speech_worker
         robot_state.volume_limit = self._volume_limit
         robot_state.brightness = self._brightness
+        robot_state.playtime_limit_minutes = self._playtime_limit_minutes
 
         # Callbacks from Android app → robot
         def _on_celebrate() -> None:
@@ -600,6 +627,10 @@ class EyeModeApp(tk.Tk):
             log_action("APP", f"config sensorial actualizada: {cfg}")
             if "volume_limit" in cfg:
                 self._volume_limit = cfg["volume_limit"]
+                if self.speech_worker:
+                    self.speech_worker.set_volume_limit(self._volume_limit)
+            if "playtime_limit_minutes" in cfg:
+                self._playtime_limit_minutes = int(cfg["playtime_limit_minutes"])
             if "brightness" in cfg:
                 self._brightness = cfg["brightness"]
                 if self._eye_display is not None:
@@ -608,24 +639,26 @@ class EyeModeApp(tk.Tk):
         def _on_night_mode(enabled: bool) -> None:
             log_action("APP", f"modo noche={'ON' if enabled else 'OFF'}")
             self._night_mode = enabled
+            if self.speech_worker:
+                self.speech_worker.set_night_mode(enabled)
             if enabled:
                 if self.speech_worker:
+                    self.speech_worker.stop_music()
                     self.speech_worker.speak("Buenas noches. Voy a descansar un ratito.")
                 if self._eye_display is not None:
+                    self.after(0, lambda: self._eye_display.set_brightness(0.25))
                     self.after(0, lambda: self._eye_display.set_expression("dormido"))
             else:
                 if self.speech_worker:
                     self.speech_worker.speak("¡Buenos días! ¡Qué lindo verte!")
                 if self._eye_display is not None:
+                    self.after(0, lambda: self._eye_display.set_brightness(self._brightness))
                     self.after(0, lambda: self._eye_display.set_expression("neutral"))
 
         def _on_power(on: bool) -> None:
             log_action("APP", f"power={'ON' if on else 'OFF'}")
             self._power_on = on
-            if not on:
-                self.stop_workers()
-                if self._eye_display is not None:
-                    self.after(0, lambda: self._eye_display.set_expression("dormido"))
+            self.after(0, lambda enabled=on: self._apply_power(enabled))
 
         robot_state.on_celebrate = _on_celebrate
         robot_state.on_config_changed = _on_config_changed
@@ -638,6 +671,22 @@ class EyeModeApp(tk.Tk):
             self.api_server.start()
         except Exception as exc:
             print(f"[EyeMode] Error al iniciar API server: {exc}", flush=True)
+
+    def _apply_power(self, on: bool) -> None:
+        """Enciende o apaga workers sin cortar la API (la app parental debe poder volver a prender)."""
+        if not on:
+            self.stop_workers()
+            if self._eye_display is not None:
+                self._eye_display.set_expression("dormido")
+            return
+        if self._last_devices is None or self.audio_worker is not None:
+            return
+        cam_idx, mic_idx, out_idx = self._last_devices
+        self._start_workers(cam_idx, mic_idx, out_idx)
+        if robot_state is not None:
+            robot_state.speech_worker = self.speech_worker
+        if self._eye_display is not None:
+            self._eye_display.set_expression("neutral")
 
     # ------------------------------------------------------------------
     # Config panel (accessible via 'C' key during eye display)
@@ -685,6 +734,8 @@ class EyeModeApp(tk.Tk):
 
     def _set_volume_limit(self, value: int) -> None:
         self._volume_limit = value
+        if self.speech_worker:
+            self.speech_worker.set_volume_limit(value)
 
     def _set_brightness(self, value: float) -> None:
         self._brightness = value
@@ -763,6 +814,17 @@ class EyeModeApp(tk.Tk):
                 for msg in messages:
                     print(f"[ROUTINE] {msg}", flush=True)
                     self.speech_worker.speak(msg)
+                    if self._eye_display is not None:
+                        from hardware import pictogram_for_routine
+                        picto = None
+                        if self.routine_scheduler is not None:
+                            pending_id = self.routine_scheduler.get_pending_routine_id()
+                            for routine in self.routine_scheduler.routines:
+                                if routine.id == pending_id:
+                                    picto = pictogram_for_routine(routine.transition_to)
+                                    break
+                        if picto:
+                            self._eye_display.set_pictogram(picto)
                     if robot_state is not None:
                         robot_state.push_notification("rutina", msg)
             except Exception:
@@ -780,6 +842,12 @@ class EyeModeApp(tk.Tk):
         if self.speech_worker:
             self.speech_worker.stop()
             self.speech_worker = None
+        if getattr(self, "_companion", None) is not None:
+            try:
+                self._companion.stop()
+            except Exception:
+                pass
+            self._companion = None
 
     def on_close(self) -> None:
         if hasattr(self, 'api_server') and self.api_server:
@@ -812,6 +880,8 @@ class EdgeAiDesktopApp(tk.Tk):
         self.intent_dispatcher: IntentDispatcher | None = None
         self.speech_worker: SpeechWorker | None = None
         self.api_server: object | None = None
+        self._companion = None
+        self._playtime_limit_minutes: int = 0
         self._mic_test_stop = threading.Event()
         self._mic_test_thread: threading.Thread | None = None
 
@@ -1136,6 +1206,10 @@ class EdgeAiDesktopApp(tk.Tk):
             cloud_mode=self._cloud_mode,
             cloud_tts=cloud_tts,
         )
+        try:
+            self.speech_worker.set_volume_limit(int(self._volume_var.get()))
+        except Exception:
+            pass
         self.speech_worker.start()
 
         self._camera_desc = "inactiva"
@@ -1171,6 +1245,22 @@ class EdgeAiDesktopApp(tk.Tk):
 
         self.camera_worker.start()
         self.audio_worker.start()
+        try:
+            from hardware import PhysicalCompanion, load_pins
+
+            self._companion = PhysicalCompanion(load_pins())
+
+            def _on_belly() -> None:
+                if self._companion is not None:
+                    self._companion.hug()
+                if self.speech_worker:
+                    self.speech_worker.speak("¡Qué abrazo rico!")
+                self.after(0, lambda: self._append_log("Abrazo (botón de panza / simulado)"))
+
+            self._companion.start_button_watch(_on_belly)
+        except Exception as exc:
+            self._append_log(f"Hardware físico en simulación: {exc}")
+            self._companion = None
         self.start_button.configure(state="disabled")
         self.stop_button.configure(state="normal")
 
@@ -1188,6 +1278,7 @@ class EdgeAiDesktopApp(tk.Tk):
         robot_state.routine_scheduler = self.routine_scheduler
         robot_state.speech_worker = self.speech_worker
         robot_state.volume_limit = self._volume_var.get()
+        robot_state.playtime_limit_minutes = getattr(self, "_playtime_limit_minutes", 0)
         _bind_playback_callbacks(self)
 
         def _on_celebrate() -> None:
@@ -1201,11 +1292,17 @@ class EdgeAiDesktopApp(tk.Tk):
             log_action("APP", f"config sensorial actualizada: {cfg}")
             if "volume_limit" in cfg:
                 self.after(0, lambda v=cfg["volume_limit"]: self._volume_var.set(v))
+                if self.speech_worker:
+                    self.speech_worker.set_volume_limit(int(cfg["volume_limit"]))
+            if "playtime_limit_minutes" in cfg:
+                self._playtime_limit_minutes = int(cfg["playtime_limit_minutes"])
 
         def _on_night_mode(enabled: bool) -> None:
             log_action("APP", f"modo noche={'ON' if enabled else 'OFF'}")
             if self.speech_worker:
+                self.speech_worker.set_night_mode(enabled)
                 if enabled:
+                    self.speech_worker.stop_music()
                     self.speech_worker.speak("Buenas noches. Voy a descansar un ratito.")
                 else:
                     self.speech_worker.speak("¡Buenos días! ¡Qué lindo verte!")
@@ -1213,12 +1310,17 @@ class EdgeAiDesktopApp(tk.Tk):
         def _on_power(on: bool) -> None:
             log_action("APP", f"power={'ON' if on else 'OFF'}")
             if not on:
-                self.after(0, self.stop_workers)
+                self.after(0, lambda: self.stop_workers(stop_api=False))
+            else:
+                self.after(0, self.start_workers)
 
         robot_state.on_celebrate = _on_celebrate
         robot_state.on_config_changed = _on_config_changed
         robot_state.on_night_mode_changed = _on_night_mode
         robot_state.on_power_changed = _on_power
+
+        if getattr(self, "api_server", None) is not None:
+            return
 
         try:
             self.api_server = ApiServer()
@@ -1228,12 +1330,12 @@ class EdgeAiDesktopApp(tk.Tk):
             print(f"[Debug] Error al iniciar API server: {exc}", flush=True)
             self._append_log(f"⚠️ Error al iniciar API server: {exc}")
 
-    def stop_workers(self) -> None:
+    def stop_workers(self, stop_api: bool = True) -> None:
         _dlog = get_debug_logger()
         if _dlog:
             _dlog.log_input("WORKERS", "Deteniendo workers...")
         _t0 = time.monotonic()
-        if hasattr(self, 'api_server') and self.api_server:
+        if stop_api and hasattr(self, 'api_server') and self.api_server:
             self.api_server.stop()
             self.api_server = None
         if self.camera_worker:
@@ -1245,6 +1347,12 @@ class EdgeAiDesktopApp(tk.Tk):
         if self.speech_worker:
             self.speech_worker.stop()
             self.speech_worker = None
+        if getattr(self, "_companion", None) is not None:
+            try:
+                self._companion.stop()
+            except Exception:
+                pass
+            self._companion = None
 
         self.start_button.configure(state="normal")
         self.stop_button.configure(state="disabled")

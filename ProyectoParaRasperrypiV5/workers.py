@@ -51,6 +51,7 @@ except ImportError:
     spacy = None  # type: ignore[assignment]
 
 from debug_logger import get_debug_logger, log_action
+from stt_correct import polish_stt_text, spanish_vocab_checker
 
 APP_DIR = Path(__file__).resolve().parent
 
@@ -164,6 +165,7 @@ class IntentDispatcher:
         self._sentence_model: Any = self._load_sentence_model()
         self._example_docs: dict[str, list[tuple[str, Any]]] = {}
         self._example_embeddings: dict[str, list[tuple[str, np.ndarray]]] = {}
+        self._last_canned: dict[str, str] = {}
         self._precompute_examples()
 
     @property
@@ -326,10 +328,23 @@ class IntentDispatcher:
             }
 
         intent_definition = self.intents.get(chosen_name, {})
+        if self._utterance_too_thin(candidate_text, chosen_name):
+            if _dlog:
+                _dlog.log_output(
+                    "INTENT_DISPATCH",
+                    f"thin={chosen_name!r} text={candidate_text!r} → unknown",
+                    elapsed_ms=(time.monotonic() - _t0) * 1000,
+                )
+            return {
+                "intent_name": "unknown",
+                "confidence": float(chosen_score),
+                "response": "",
+            }
+
         result = {
             "intent_name": chosen_name,
             "confidence": float(chosen_score),
-            "response": self._pick_response(intent_definition.get("response", "")),
+            "response": self._pick_response(chosen_name, intent_definition.get("response", "")),
             "pilar": intent_definition.get("pilar", "general"),
         }
         if _dlog:
@@ -385,39 +400,51 @@ class IntentDispatcher:
     @staticmethod
     def _keyword_intent(text: str) -> str | None:
         """Skills con frases muy claras: no depender del umbral de embeddings."""
-        normalized = IntentDispatcher._normalize_text(text)
-        if re.search(
-            r"piedra.{0,40}papel|papel.{0,30}tijera|piedra\s*papel|juguem\w*.{0,25}tijera",
-            normalized,
-        ):
-            return "play_piedra_papel"
-        if re.search(r"\bveo[\s\-]?veo\b", normalized):
-            return "play_veo_veo"
-        if re.search(
-            r"(cont(a|ame)|lee(me)?|narra(me)?).{0,24}cuento|\b(un|el)\s+cuento\b|\bcuentos\b",
-            normalized,
-        ):
-            return "story_request"
-        if re.search(
-            r"\b(par[aoá]|paro|cort[aá]|stop|silencio|apag[aá]r?).{0,25}(m[uú]sica|canci)",
-            normalized,
-        ):
-            return "stop_music_request"
-        if re.search(
-            r"\b(canci[oó]n|m[uú]sica|cantame|canta\b|reproduc[ií].{0,12}canci|"
-            r"pon[ée]\s+(una\s+)?(canci|m[uú]sica)|escuchar\s+m[uú]sica)\b",
-            normalized,
-        ):
-            return "song_request"
-        return None
+        from session_policy import is_clear_keyword_intent
 
-    @staticmethod
-    def _pick_response(response_field: Any) -> str:
+        return is_clear_keyword_intent(text)
+
+    _THIN_INTENTS = frozenset({
+        "emotion_sad",
+        "emotion_angry",
+        "emotion_happy",
+        "emotion_fear",
+        "crisis_cry",
+        "routine_ack",
+        "routine_resist",
+        "routine_hygiene",
+        "routine_tidy",
+        "call_parent",
+        "frustration_support",
+    })
+    _EMOTION_HINT = re.compile(
+        r"triste|enojad|furios|llor|asust|miedo|cuco|feliz|content|nervios|solo|sola",
+        re.IGNORECASE,
+    )
+
+    def _utterance_too_thin(self, text: str, intent_name: str) -> bool:
+        """Sí/no/dale no deben reactivar el mismo intent emocional o de rutina."""
+        if intent_name not in self._THIN_INTENTS:
+            return False
+        folded = self._normalize_text(text)
+        words = folded.split()
+        if self._EMOTION_HINT.search(folded):
+            return False
+        if len(words) <= 2:
+            return True
+        return False
+
+    def _pick_response(self, intent_name: str, response_field: Any) -> str:
         if isinstance(response_field, list):
             options = [str(item).strip() for item in response_field if str(item).strip()]
             if not options:
                 return ""
-            return random.choice(options)
+            last = self._last_canned.get(intent_name)
+            if last and len(options) > 1:
+                options = [item for item in options if item != last] or options
+            chosen = random.choice(options)
+            self._last_canned[intent_name] = chosen
+            return chosen
         return str(response_field or "")
 
     def _similarity(self, left_doc, right_doc) -> float:
@@ -1042,6 +1069,7 @@ class AudioWorker:
         self.emotion_reactor = EmotionReactor()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._echo_mute_until = 0.0
 
         # New subsystems for pillar coverage
         self.telemetry = telemetry
@@ -1078,6 +1106,21 @@ class AudioWorker:
             self.story_engine: Any = StoryEngine()
         except ImportError:
             self.story_engine = None
+
+        try:
+            from yoga_engine import YogaEngine
+            self.yoga_engine: Any = YogaEngine()
+        except ImportError:
+            self.yoga_engine = None
+
+        try:
+            from hardware import PhysicalCompanion, load_pins
+            self.companion: Any = PhysicalCompanion(load_pins())
+        except Exception:
+            self.companion = None
+
+        from session_policy import PlaytimeGuard
+        self.playtime_guard = PlaytimeGuard(limit_minutes=0)
 
         from conversation_memory import ConversationMemory
         self.conversation_memory = ConversationMemory()
@@ -1316,6 +1359,11 @@ class AudioWorker:
         def callback(indata, frames, time_info, status) -> None:  # noqa: ANN001
             if status:
                 _queue_message_with_semaphore(self.message_queue, self.message_semaphore, "log", f"Audio callback: {status}")
+            from session_policy import mic_open_for_listen
+
+            speaker_on = self.speech_worker is not None and self.speech_worker.is_busy()
+            if not mic_open_for_listen(speaker_on, time.monotonic(), self._echo_mute_until):
+                return
             try:
                 audio_block = indata[:, 0].copy()
                 audio_queue.put_nowait(audio_block)
@@ -1388,6 +1436,20 @@ class AudioWorker:
                         },
                     )
 
+                    from session_policy import mic_open_for_listen
+
+                    speaker_on = self.speech_worker is not None and self.speech_worker.is_busy()
+                    if not mic_open_for_listen(speaker_on, time.monotonic(), self._echo_mute_until):
+                        if speech_active:
+                            speech_active = False
+                            silence_seconds = 0.0
+                            listen_seconds = 0.0
+                            current_segment = []
+                            circular_buffer.clear()
+                            if hasattr(vad, "reset"):
+                                vad.reset()
+                        continue
+
                     speech_detected = vad.has_speech(audio_block)
 
                     # Adaptive silence threshold based on current emotion (#EPIC-005 CA#2)
@@ -1458,6 +1520,27 @@ class AudioWorker:
         finally:
             log_action("AudioWorker", "tarea _run finalizada")
 
+    @staticmethod
+    def _drain_audio_queue(audio_queue: queue.Queue) -> None:
+        while True:
+            try:
+                audio_queue.get_nowait()
+            except queue.Empty:
+                break
+
+    def _silence_mic_after_speaker(self, audio_queue: queue.Queue) -> None:
+        from session_policy import ECHO_MUTE_SECONDS
+
+        self._drain_audio_queue(audio_queue)
+        self._echo_mute_until = time.monotonic() + ECHO_MUTE_SECONDS
+
+    def _sync_playtime_limit(self) -> None:
+        state = self._robot_state
+        if state is None:
+            return
+        limit = int(getattr(state, "playtime_limit_minutes", 0) or 0)
+        self.playtime_guard.limit_minutes = limit
+
     def _handle_segment(self, audio_segment: np.ndarray, whisper_model: Any, audio_queue: queue.Queue) -> None:
         if audio_segment.size == 0:
             return
@@ -1497,6 +1580,27 @@ class AudioWorker:
                 extra = f" ({', '.join(conf_bits)})" if conf_bits else ""
                 _dlog.log_output("TRANSCRIPTION", f"\"{raw_text}\"{extra}", elapsed_ms=(time.monotonic() - _t_transcribe) * 1000)
 
+            whisper_raw = raw_text
+            extra_words: tuple[str, ...] = ()
+            if (
+                self.game_engine is not None
+                and self.game_engine.is_active
+                and self.game_engine.game_type == "piedra_papel_tijera"
+            ):
+                extra_words = ("piedra", "papel", "tijera")
+            checker = spanish_vocab_checker(getattr(self.intent_dispatcher, "nlp", None))
+            raw_text = polish_stt_text(
+                raw_text,
+                extra_words=extra_words,
+                is_known_spanish=checker,
+            )
+            if raw_text != whisper_raw:
+                log_action("STT", f'crudo="{whisper_raw}" filtrado="{raw_text}"')
+                if _dlog:
+                    _dlog.log_output("STT_FILTER", f'"{whisper_raw}" → "{raw_text}"')
+            elif raw_text.strip():
+                log_action("STT", f'"{raw_text}"')
+
             elapsed_stt_ms = (time.monotonic() - _t_transcribe) * 1000
             if low_confidence:
                 _queue_message_with_semaphore(
@@ -1509,6 +1613,7 @@ class AudioWorker:
                 )
                 if segment_duration_s > 1.5 and self.speech_worker is not None:
                     self.speech_worker.speak_and_wait("No te escuché bien, ¿me lo decís de nuevo?")
+                    self._silence_mic_after_speaker(audio_queue)
                 return
             if raw_text.strip():
                 _queue_message_with_semaphore(
@@ -1582,14 +1687,43 @@ class AudioWorker:
             if _dlog:
                 _dlog.log_output("EMOTION_REACTOR", f"is_crisis={is_crisis}", elapsed_ms=(time.monotonic() - _t_reactor) * 1000)
 
-            # 7. Game engine — multi-turn games (#EPIC-006)
-            if self.game_engine is not None:
-                intent_payload = self.game_engine.process_or_passthrough(sanitized_text, intent_payload)
+            from session_policy import (
+                NIGHT_DECLINE_PHRASE,
+                PLAYTIME_DECLINE_PHRASE,
+                night_should_engage,
+            )
 
-            if self.story_engine is not None:
-                if self.story_engine.is_waiting_for_child:
-                    self._invalidate_story_timer()
-                intent_payload = self.story_engine.process_or_passthrough(sanitized_text, intent_payload)
+            self._sync_playtime_limit()
+            night_on = bool(getattr(self._robot_state, "night_mode", False)) if self._robot_state else False
+            intent_name = str(intent_payload.get("intent_name", ""))
+            gated = False
+            if night_on and not night_should_engage(intent_name):
+                intent_payload = {
+                    "intent_name": "night_rest",
+                    "confidence": 1.0,
+                    "response": NIGHT_DECLINE_PHRASE,
+                    "pilar": "emocional",
+                }
+                gated = True
+            elif not self.playtime_guard.allows_intent(intent_name):
+                intent_payload = {
+                    "intent_name": "playtime_rest",
+                    "confidence": 1.0,
+                    "response": PLAYTIME_DECLINE_PHRASE,
+                    "pilar": "emocional",
+                }
+                gated = True
+
+            # 7. Game / yoga / cuento — multi-turno
+            if not gated:
+                if self.game_engine is not None:
+                    intent_payload = self.game_engine.process_or_passthrough(sanitized_text, intent_payload)
+                if self.yoga_engine is not None:
+                    intent_payload = self.yoga_engine.process_or_passthrough(sanitized_text, intent_payload)
+                if self.story_engine is not None:
+                    if self.story_engine.is_waiting_for_child:
+                        self._invalidate_story_timer()
+                    intent_payload = self.story_engine.process_or_passthrough(sanitized_text, intent_payload)
 
             # 8. Routine acknowledgment (#EPIC-007)
             intent_name = intent_payload.get("intent_name", "")
@@ -1605,12 +1739,32 @@ class AudioWorker:
                 self.stop_story_from_api()
                 self.speech_worker.stop_music()
 
+            if intent_name == "hug_request":
+                if self.companion is not None:
+                    try:
+                        self.companion.hug()
+                    except Exception:
+                        pass
+                if self.eye_display is not None and hasattr(self.eye_display, "set_pictogram"):
+                    try:
+                        self.eye_display.set_pictogram("abrazo")
+                    except Exception:
+                        pass
+
             # 8.5. Fallback LLM — generate empathetic response for unknown intents
             intent_name = intent_payload.get("intent_name", "")
             game_active = self.game_engine is not None and self.game_engine.is_active
             story_active = self.story_engine is not None and self.story_engine.is_active
+            yoga_active = self.yoga_engine is not None and self.yoga_engine.is_active
             story_reflect = intent_payload.get("intent_name") == "story_reflect_answer"
-            allow_llm = (intent_name == "unknown" and not game_active and not story_active) or story_reflect
+            _LLM_INTENTS = frozenset({"unknown", "question_curiosity", "help_request"})
+            allow_llm = (
+                intent_name in _LLM_INTENTS
+                and not game_active
+                and not story_active
+                and not yoga_active
+                and not gated
+            ) or story_reflect
             llm_history = self.conversation_memory.messages()
             if allow_llm and self.cloud_mode and self.cloud_llm is not None and self.cloud_llm.is_available:
                 _t_llm = time.monotonic()
@@ -1628,9 +1782,13 @@ class AudioWorker:
                 else:
                     llm_response = self.cloud_llm.generate(sanitized_text, emotion_context, history=llm_history)
                 if llm_response:
-                    intent_payload["intent_name"] = "llm_fallback" if not story_reflect else "story_reflect_answer"
+                    if story_reflect:
+                        intent_payload["intent_name"] = "story_reflect_answer"
+                        intent_payload["pilar"] = "cognitivo"
+                    elif intent_name == "unknown":
+                        intent_payload["intent_name"] = "llm_fallback"
+                        intent_payload["pilar"] = "general"
                     intent_payload["response"] = llm_response
-                    intent_payload["pilar"] = "general" if not story_reflect else "cognitivo"
                 if _dlog:
                     _dlog.log_output(
                         "LLM_FALLBACK",
@@ -1653,9 +1811,13 @@ class AudioWorker:
                 else:
                     llm_response = self.fallback_llm.generate(sanitized_text, emotion_context, history=llm_history)
                 if llm_response:
-                    intent_payload["intent_name"] = "llm_fallback" if not story_reflect else "story_reflect_answer"
+                    if story_reflect:
+                        intent_payload["intent_name"] = "story_reflect_answer"
+                        intent_payload["pilar"] = "cognitivo"
+                    elif intent_name == "unknown":
+                        intent_payload["intent_name"] = "llm_fallback"
+                        intent_payload["pilar"] = "general"
                     intent_payload["response"] = llm_response
-                    intent_payload["pilar"] = "general" if not story_reflect else "cognitivo"
                 if _dlog:
                     _dlog.log_output(
                         "LLM_FALLBACK",
@@ -1664,8 +1826,14 @@ class AudioWorker:
                     )
 
             if intent_name == "unknown" and not str(intent_payload.get("response", "")).strip():
-                intent_payload["response"] = (
-                    "¿Querés jugar al veo veo, escuchar música, un cuento o charlar un rato?"
+                intent_payload["response"] = self.intent_dispatcher._pick_response(
+                    "unknown_fallback",
+                    [
+                        "¿Querés jugar al veo veo, escuchar música, un cuento o charlar un rato?",
+                        "Contame un poco más, te escucho.",
+                        "No te seguí del todo. ¿Me lo decís de otra forma?",
+                        "¿Seguimos charlando o preferís un juego?",
+                    ],
                 )
                 intent_payload["pilar"] = "general"
 
@@ -1716,6 +1884,7 @@ class AudioWorker:
 
             # 11. Telemetry logging (#EPIC-004)
             duration_s = time.monotonic() - segment_start
+            self.playtime_guard.add_seconds(duration_s)
             if self.telemetry is not None:
                 try:
                     self.telemetry.log_interaction(
@@ -1740,7 +1909,6 @@ class AudioWorker:
                                 extra={
                                     "emotion": emotion_context.get("label"),
                                     "score": float(emotion_context.get("score", 0.0)),
-                                    "response_given": intent_payload.get("response", ""),
                                 },
                             )
                     if new_words and self.vocabulary_tracker is not None:
@@ -1757,7 +1925,7 @@ class AudioWorker:
                 self._robot_state.push_notification(
                     "pedido",
                     "El nene está pidiendo hablar con mamá o papá.",
-                    extra={"intent": "call_parent", "text": sanitized_text},
+                    extra={"intent": "call_parent"},
                 )
 
             # 12. TTS — speak the response and block until playback finishes.
@@ -1777,7 +1945,8 @@ class AudioWorker:
                 elif response_text:
                     if _dlog:
                         _dlog.log_input("TTS", f"text=\"{response_text}\"")
-                    self.speech_worker.speak_and_wait(response_text)
+                    self.speech_worker.speak_and_wait(response_text, timeout=60.0)
+                self._silence_mic_after_speaker(audio_queue)
                 if _dlog:
                     _dlog.log_output("TTS", "Reproducción completada", elapsed_ms=(time.monotonic() - _t_tts) * 1000)
 
@@ -1788,6 +1957,7 @@ class AudioWorker:
             if music_to_play and self.speech_worker is not None:
                 self.stop_story_from_api()
                 self.speech_worker.play_audio_file(music_to_play)
+                self._silence_mic_after_speaker(audio_queue)
 
             if _dlog:
                 _dlog.log_output("SEGMENT", "Pipeline completo", elapsed_ms=(time.monotonic() - segment_start) * 1000)
@@ -1952,7 +2122,7 @@ class AudioWorker:
                         self._robot_state.push_notification(
                             "logro",
                             achievement,
-                            extra={"utterance": user_text, "detail": param},
+                            extra={"detail": param},
                         )
                     if _dlog:
                         _dlog.log_output("ACTION", f"CELEBRATE -> {achievement}")
@@ -1973,17 +2143,12 @@ class AudioWorker:
     # hallucinations (e.g. injecting "mamá" into adult speech).  Uses common
     # Argentine expressions to condition the decoder for rioplatense accent.
     _WHISPER_INITIAL_PROMPT: str = (
-        "Hola TEO, buen día. ¿Cómo estás? Quiero jugar. "
-        "Sí, dale. No quiero. Dame eso. Mirá, vení. "
-        "Está bueno. Vamos a hacer algo divertido. "
-        "¿Jugamos a las adivinanzas? Me gusta el peluche. "
-        "Estoy contento. Tengo miedo. Quiero a mi mamá. "
-        "¿Qué es eso? Contame un cuento. Estoy aburrido. "
-        "No me gusta. ¡Qué lindo! Dale, otra vez."
+        "Hola. ¿Cómo estás? Quiero jugar a piedra, papel o tijera. "
+        "Sí, dale. No quiero. Juguemos. Contame un cuento. ¿Qué es eso?"
     )
 
     def _load_whisper_model(self):
-        model_size = (os.environ.get("WHISPER_MODEL") or "small").strip() or "small"
+        model_size = (os.environ.get("WHISPER_MODEL") or "medium").strip() or "medium"
         _dlog = get_debug_logger()
         if _dlog:
             _dlog.log_input("WHISPER", f"Cargando modelo {model_size} (int8)...")
@@ -1991,15 +2156,13 @@ class AudioWorker:
         try:
             from faster_whisper import WhisperModel
 
-            # Default 'small' (~500MB int8): ~3-4x más rápido que medium en CPU
-            # con poca pérdida de español. Override: WHISPER_MODEL=medium.
-            # LATENCIA punto 5: 2 hilos (antes 4). En Pi 5 de 4 cores, 4 hilos
-            # peleaban con cámara y Piper. Si Whisper solo se siente más lento, volver a 4.
+            # Default 'medium' (~1.5GB int8): mejor español infantil. Override: WHISPER_MODEL=small.
+            # 4 hilos: el usuario prioriza calidad; tarda unos segundos más.
             model = WhisperModel(
                 model_size,
                 device="cpu",
                 compute_type="int8",
-                cpu_threads=2,
+                cpu_threads=4,
                 num_workers=1,
             )
             if _dlog:
@@ -2340,8 +2503,9 @@ class AudioWorker:
         audio = (audio - np.mean(audio)).astype(np.float32)
         # 6. Normalize — consistent level (necesario para Whisper)
         audio = self._normalize_audio(audio)
-        # LATENCIA punto 6: sin pad a 1.5s. Restaurar si Whisper alucina más en clips cortos:
-        # audio = self._pad_audio(audio, sample_rate=16000, min_duration_s=1.5)
+        # Clips de una sílaba (tijera, papel) alucinan menos con un poco de silencio.
+        if len(audio) / 16000.0 < 1.2:
+            audio = self._pad_audio(audio, sample_rate=16000, min_duration_s=1.5)
         return audio
 
     _LOW_LOGPROB_THRESHOLD: float = -0.9
@@ -2366,7 +2530,7 @@ class AudioWorker:
             audio_segment,
             language="es",
             vad_filter=False,
-            beam_size=1,
+            beam_size=5,
             initial_prompt=self._WHISPER_INITIAL_PROMPT,
             no_speech_threshold=0.6,
             log_prob_threshold=-1.0,
@@ -2458,6 +2622,17 @@ class AudioWorker:
         if len(low) <= 1:
             return ""
 
+        # Eco de prompts viejos / frases que Whisper copia del contexto.
+        _PROMPT_ECHO = (
+            "me gusta el peluche",
+            "vamos a hacer algo divertido",
+            "jugamos a las adivinanzas",
+        )
+        folded_words = " ".join(words)
+        for echo in _PROMPT_ECHO:
+            if echo in folded_words and len(words) <= 8:
+                return ""
+
         return text
 
     def _load_vad(self, sample_rate: int):
@@ -2467,9 +2642,12 @@ class AudioWorker:
 class SpeechWorker:
     PIPER_MODEL_NAME = "es_AR-daniela-high"
     PIPER_MODEL_HF_PATH = "es/es_AR/daniela/high"
-    PIPER_LENGTH_SCALE = 1.08
+    # Más alto = más lento. 1.20 = ritmo actual (pausado, menos “orden”).
+    # Si sigue sonando apurada: probar 1.30 (cambio más marcado; puede arrastrar).
+    PIPER_LENGTH_SCALE = 1.20
     PIPER_NOISE_SCALE = 0.667
-    PIPER_NOISE_W_SCALE = 0.90
+    # Más alto = duraciones de sílaba menos rígidas (menos cadencia de mandato).
+    PIPER_NOISE_W_SCALE = 0.98
 
     def __init__(
         self,
@@ -2499,6 +2677,9 @@ class SpeechWorker:
         # Cloud mode (#CLOUD-001)
         self._cloud_mode = cloud_mode
         self._cloud_tts = cloud_tts
+        self._volume_limit = 100
+        self._night_mode = False
+        self._playback_generation = 0
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -2517,6 +2698,25 @@ class SpeechWorker:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=2)
         log_action("SpeechWorker", "detenido")
+
+    def is_busy(self) -> bool:
+        return not self._idle_event.is_set() or self._is_playing_music
+
+    def set_volume_limit(self, value: int) -> None:
+        self._volume_limit = max(0, min(100, int(value)))
+
+    def set_night_mode(self, enabled: bool) -> None:
+        self._night_mode = bool(enabled)
+
+    def interrupt_playback(self) -> None:
+        """Corta TTS en curso (barge-in) sin matar el worker."""
+        self._playback_generation += 1
+        try:
+            while True:
+                self._queue.get_nowait()
+        except queue.Empty:
+            pass
+        self._idle_event.set()
 
     @staticmethod
     def _strip_tts_markup(text: str) -> str:
@@ -2537,10 +2737,12 @@ class SpeechWorker:
         speech_text = self._prepare_tts_text(self._strip_tts_markup((text or "").strip()))
         if not speech_text:
             return
+        self._idle_event.clear()
         try:
             self._queue.put_nowait(speech_text)
             log_action("SpeechWorker", f"enqueued TTS ({len(speech_text)} chars)")
         except queue.Full:
+            self._idle_event.set()
             log_action("SpeechWorker", "cola TTS llena, se descarta frase")
 
     def set_output_device(self, output_device_index: int | None) -> None:
@@ -2706,6 +2908,11 @@ class SpeechWorker:
             audio_array = audio_array.astype(np.float32) / float(info.max)
 
         orig_channels = audio_array.shape[1] if audio_array.ndim > 1 else 1
+        from session_policy import apply_gain, effective_volume_limit, gain_from_limit
+
+        limit = effective_volume_limit(self._volume_limit, self._night_mode)
+        audio_array = apply_gain(audio_array, gain_from_limit(limit))
+        playback_gen = self._playback_generation
         probed = self._find_supported_output_config(sample_rate, orig_channels)
         configs: list[tuple[int, str, int]] = []
         for cfg in (probed, (48000, "int16", 2), (44100, "int16", 2)):
@@ -2740,6 +2947,9 @@ class SpeechWorker:
                 _pos: list[int] = pos,
             ) -> None:
                 if self._stop_event.is_set():
+                    _finished.set()
+                    raise sd.CallbackStop()
+                if playback_gen != self._playback_generation:
                     _finished.set()
                     raise sd.CallbackStop()
                 if music_generation is not None and (

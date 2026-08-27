@@ -73,7 +73,7 @@ class DashboardViewModel : ViewModel() {
         // Build alert messages
         val alerts = mutableListOf<String>()
         if (crisis > 0) {
-            alerts.add("⚠️ $crisis episodio(s) de desregulación emocional detectado(s) hoy")
+            alerts.add("⚠️ $crisis momento(s) difícil(es) detectado(s) hoy")
         }
         if (newWords > 0) {
             alerts.add("📚 $newWords palabra(s) nueva(s) registrada(s) hoy")

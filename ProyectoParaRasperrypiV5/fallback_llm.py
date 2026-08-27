@@ -1,16 +1,17 @@
 """fallback_llm.py — LLM local de fallback para intents no reconocidos.
 
 Cuando el IntentDispatcher retorna ``unknown``, este módulo genera una
-respuesta empática usando un LLM pequeño (Llama-3.2-3B-Instruct Q4_K_M)
-ejecutado localmente vía ``llama-cpp-python``.
+respuesta usando un GGUF local vía ``llama-cpp-python``.
 
-El modelo se descarga automáticamente desde HuggingFace la primera vez
-y se cachea en ``~/.edge_ai_models/llm/``.
+Por defecto: Llama 3.1 8B Instruct Q4_K_M (RAM justa junto a Whisper medium).
+Rollback al 3B de hoy: ``LLM_PROFILE=3b``.
 
-Diseñado para Raspberry Pi 5 (ARM64, CPU-only, ~2.2 GB RAM).
+El modelo se descarga la primera vez a ``~/.edge_ai_models/llm/``.
+Override fino: ``LLM_HF_REPO`` + ``LLM_GGUF``.
 """
 from __future__ import annotations
 
+import os
 import re
 import time
 import urllib.request
@@ -23,12 +24,29 @@ from debug_logger import get_debug_logger
 # Modelo y descarga
 # ---------------------------------------------------------------------------
 
-_MODEL_REPO = "bartowski/Llama-3.2-3B-Instruct-GGUF"
-_MODEL_FILENAME = "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
-_MODEL_URL = (
-    f"https://huggingface.co/{_MODEL_REPO}/resolve/main/{_MODEL_FILENAME}"
-)
+_LLM_PROFILES: dict[str, tuple[str, str]] = {
+    # Rollback: lo que corre hoy (Llama 3.2 3B + Whisper medium).
+    "3b": (
+        "bartowski/Llama-3.2-3B-Instruct-GGUF",
+        "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+    ),
+    "8b": (
+        "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF",
+        "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+    ),
+}
+
 _CACHE_DIR = Path.home() / ".edge_ai_models" / "llm"
+
+
+def selected_llm_spec() -> tuple[str, str]:
+    """Repo HF y archivo GGUF según LLM_PROFILE o override explícito."""
+    repo_ov = (os.environ.get("LLM_HF_REPO") or "").strip()
+    file_ov = (os.environ.get("LLM_GGUF") or "").strip()
+    if repo_ov and file_ov:
+        return repo_ov, file_ov
+    profile = (os.environ.get("LLM_PROFILE") or "8b").strip().lower()
+    return _LLM_PROFILES.get(profile, _LLM_PROFILES["8b"])
 
 # ---------------------------------------------------------------------------
 # System prompt — personalidad empática en español argentino (3 a 7 años)
@@ -39,25 +57,65 @@ _SYSTEM_PROMPT = (
     "Hablá siempre en primera persona y dirigite directamente al nene (usando 'vos', 'mirá', 'dale'). "
     "NUNCA hables del nene en tercera persona. NUNCA menciones 'el nene', 'el usuario' ni 'el LLM'. "
     "Si te preguntan cómo te llamás, respondé simplemente 'Me llamo TEO' y nada más.\n"
-    "Tus respuestas deben ser MUY CORTAS (máximo 20 palabras, 1 o 2 oraciones breves). "
-        "Si escuchás algo que no se entiende bien, seguile la corriente con alegría o hacele una pregunta sencilla. "
-        "No uses emojis, ni comillas, ni asteriscos.\n\n"
-        "NO juegues vos al piedra-papel-tijera ni al veo veo: el robot tiene una skill para eso. "
-        "NO inventes cuentos ni historias largas: el robot lee cuentos que subieron mamá o papá. "
-        "Si el nene pide un cuento, respondé corto tipo '¡Dale, pedime un cuento!' SIN narrar. "
-        "Si el nene pide un juego, respondé corto tipo '¡Dale, juguemos!' SIN tags de música y SIN elegir piedra/papel/tijera.\n"
-        "ACCIONES DISPONIBLES: Podés incluir estos tags especiales AL FINAL de tu respuesta. "
-        "Los tags NUNCA se dicen en voz alta. Usá MÁXIMO 1 tag. NO inventes tags (nada de [DALE], [TAGS] ni texto suelto NOTIFY_PARENT:).\n"
-        "- [PLAY_MUSIC] — SOLO si el nene pide EXPLÍCITAMENTE una canción, música o bailar. NUNCA para juegos, rimas o charla.\n"
-        "- [STOP_MUSIC] — Para la música. Usalo si el nene pide silencio o parar la canción.\n"
-        "- [NOTIFY_PARENT:razón] — Avisa a mamá/papá. Usalo si el nene pide llamar a sus padres, tiene mucho miedo, "
-        "está en crisis o dice algo preocupante. La razón debe ser breve.\n"
-        "- [EXPRESSION:nombre] — Cambia tu cara. Opciones: feliz, triste, sorprendido, enojado, neutral.\n"
-        "- [CELEBRATE:qué hizo] — Celebración. En el tag explicá BREVE qué logró "
-        "(ej. [CELEBRATE:ganó al veo veo] o [CELEBRATE:contó que armó un rompecabezas]). "
-        "NO uses [CELEBRATE] vacío. NO lo uses por palabras nuevas de vocabulario.\n"
-        "- [CALM_MODE] — Modo calma. Usalo si el nene tiene sueño o está muy cansado.\n"
-    )
+    "Tus respuestas deben ser MUY CORTAS (máximo 25 palabras, 1 o 2 oraciones). "
+    "Si el audio no se entiende o parece inventado, pedí que lo repita. "
+    "NO sigas la corriente de frases sin sentido. No inventes países, ciudades ni datos. "
+    "Si no sabés, decí no sé. Si preguntan una cuenta simple (sumar, restar), da el resultado. "
+    "No uses emojis, ni comillas, ni asteriscos.\n\n"
+    "NO juegues vos al piedra-papel-tijera ni al veo veo: el robot tiene una skill para eso. "
+    "NO ofrezcas cuentos ni historias. No invites a narrar ni a leer nada. "
+    "Los cuentos los pide el nene; hay una skill aparte. "
+    "Acá solo respondé a lo que dijo (comida, juegos, emociones, preguntas, charla). "
+    "Si el nene pide un juego, respondé corto tipo '¡Dale, juguemos!' SIN tags de música y SIN elegir piedra/papel/tijera.\n"
+    "ACCIONES DISPONIBLES: Podés incluir estos tags especiales AL FINAL de tu respuesta. "
+    "Los tags NUNCA se dicen en voz alta. Usá MÁXIMO 1 tag. NO inventes tags (nada de [DALE], [TAGS] ni texto suelto NOTIFY_PARENT:).\n"
+    "- [PLAY_MUSIC] — SOLO si el nene pide EXPLÍCITAMENTE una canción, música o bailar. NUNCA para juegos, rimas o charla.\n"
+    "- [STOP_MUSIC] — Para la música. Usalo si el nene pide silencio o parar la canción.\n"
+    "- [NOTIFY_PARENT:razón] — Avisa a mamá/papá. Usalo si el nene pide llamar a sus padres, tiene mucho miedo, "
+    "está en crisis o dice algo preocupante. La razón debe ser breve.\n"
+    "- [EXPRESSION:nombre] — Cambia tu cara. Opciones: feliz, triste, sorprendido, enojado, neutral.\n"
+    "- [CELEBRATE:qué hizo] — Celebración. En el tag explicá BREVE qué logró "
+    "(ej. [CELEBRATE:ganó al veo veo] o [CELEBRATE:contó que armó un rompecabezas]). "
+    "NO uses [CELEBRATE] vacío. NO lo uses por palabras nuevas de vocabulario.\n"
+    "- [CALM_MODE] — Modo calma. Usalo si el nene tiene sueño o está muy cansado.\n"
+)
+
+_CHILD_ASKED_STORY = re.compile(
+    r"(cont(a|ame)|lee(me)?|narra(me)?).{0,24}(cuento|historia)"
+    r"|\b(un|el)\s+cuento\b"
+    r"|\bcuentos\b",
+    re.IGNORECASE,
+)
+_STORY_OFFER = re.compile(
+    r"(?i)("
+    r"pedime\s+(un|una)?\s*(cuento|historia)"
+    r"|historia\s+corta"
+    r"|te\s+(cuento|narro|leo)\b"
+    r"|quer[eé]s\s+(que\s+)?(te\s+)?cuente"
+    r"|vamos\s+a\s+(leer|contar)\s"
+    r"|te\s+cuento\s+una"
+    r"|\bun\s+cuento\b"
+    r"|\buna\s+historia\b"
+    r")"
+)
+_NEUTRAL_AFTER_STRIP = "¡Qué bueno! Contame más."
+
+
+def drop_unsolicited_story_offer(user_text: str, reply: str) -> str:
+    """Saca invitaciones a cuento/historia si el nene no pidió una.
+
+    Llama-3.2-3B copia la plantilla del system prompt y ofrece un cuento
+    aunque el nene hable de otra cosa (p. ej. un sándwich).
+    """
+    if not (reply or "").strip():
+        return reply
+    user = user_text or ""
+    if _CHILD_ASKED_STORY.search(user) or "leímos" in user.lower():
+        return reply
+    parts = re.split(r"(?<=[.!?])\s+", reply.strip())
+    kept = [part for part in parts if part and not _STORY_OFFER.search(part)]
+    cleaned = " ".join(kept).strip()
+    return cleaned or _NEUTRAL_AFTER_STRIP
 
 
 class FallbackLLM:
@@ -104,17 +162,21 @@ class FallbackLLM:
                 )
             return
 
+        _repo, filename = selected_llm_spec()
         model_path = self._ensure_model()
         if _dlog:
-            _dlog.log_input("LLM_INIT", f"Cargando {_MODEL_FILENAME}...")
+            _dlog.log_input("LLM_INIT", f"Cargando {filename} (RAM justa con Whisper medium)...")
 
         _t0 = time.monotonic()
+        n_threads = int(os.environ.get("LLM_THREADS") or "4")
+        n_batch = 64 if filename.startswith("Meta-Llama-3.1-8B") else 128
         try:
             self._llm = Llama(
                 model_path=str(model_path),
-                n_ctx=2048,         # 10 turnos + digest de cuento
-                n_threads=4,        # 4 cores de CPU
-                n_batch=128,        # Batch eficiente
+                n_ctx=2048,
+                n_threads=max(1, n_threads),
+                n_batch=n_batch,
+                n_gpu_layers=0,
                 verbose=False,
             )
             self._loaded = True
@@ -126,7 +188,10 @@ class FallbackLLM:
                 )
         except Exception as exc:
             if _dlog:
-                _dlog.log_output("LLM_INIT", f"ERROR al cargar: {exc}")
+                _dlog.log_output(
+                    "LLM_INIT",
+                    f"ERROR al cargar: {exc}. Rollback: LLM_PROFILE=3b",
+                )
 
     @property
     def is_available(self) -> bool:
@@ -182,6 +247,7 @@ class FallbackLLM:
             )
 
             response_text = self._clean_response(raw_text)
+            response_text = drop_unsolicited_story_offer(text, response_text)
 
             if _dlog:
                 _dlog.log_output(
@@ -278,8 +344,9 @@ class FallbackLLM:
     @staticmethod
     def _ensure_model() -> Path:
         """Retorna la ruta al modelo GGUF, descargándolo si es necesario."""
+        repo, filename = selected_llm_spec()
         _CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        model_path = _CACHE_DIR / _MODEL_FILENAME
+        model_path = _CACHE_DIR / filename
 
         if model_path.exists() and model_path.stat().st_size > 100_000_000:
             return model_path
@@ -288,25 +355,26 @@ class FallbackLLM:
         if _dlog:
             _dlog.log_input(
                 "LLM_DOWNLOAD",
-                f"Descargando {_MODEL_FILENAME} (solo primera vez)...",
+                f"Descargando {filename} (solo primera vez, ~5 GB)...",
             )
 
         _t0 = time.monotonic()
+        model_url = f"https://huggingface.co/{repo}/resolve/main/{filename}"
 
         # Intentar descargar usando huggingface_hub si está disponible (maneja redirects y LFS)
         try:
             from huggingface_hub import hf_hub_download
 
             downloaded = hf_hub_download(
-                repo_id=_MODEL_REPO,
-                filename=_MODEL_FILENAME,
+                repo_id=repo,
+                filename=filename,
                 local_dir=_CACHE_DIR,
             )
             return Path(downloaded)
         except Exception:
             # Fallback con urllib incluyendo User-Agent para evitar HTTP 401 de HF
             req = urllib.request.Request(
-                _MODEL_URL,
+                model_url,
                 headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) EdgeAI/1.0"},
             )
             with urllib.request.urlopen(req) as resp, open(model_path, "wb") as out_file:

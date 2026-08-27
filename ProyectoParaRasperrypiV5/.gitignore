@@ -37,6 +37,7 @@ exe_stderr.txt
 
 # API keys and secrets
 .env
+pairing_token.txt
 
 # OS files
 .DS_Store

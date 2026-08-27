@@ -76,6 +76,8 @@ CASES: list[tuple[str, str]] = [
     # curiosity
     ("que es eso", "question_curiosity"),
     ("como se llama", "question_curiosity"),
+    ("como te llamas", "identity_name"),
+    ("quien sos", "identity_name"),
     ("por que", "question_curiosity"),
     # song
     ("cantame una cancion", "song_request"),
@@ -116,6 +118,14 @@ CASES: list[tuple[str, str]] = [
     ("hay que ordenar", "routine_tidy"),
     ("gracias teo", "gratitude"),
     ("muchas gracias", "gratitude"),
+    ("contame un chiste", "joke_request"),
+    ("bailemos", "dance_play"),
+    ("hace frio", "weather_talk"),
+    ("fui al jardin", "school_day"),
+    ("mira lo que hice", "look_at_this"),
+    ("me duele la panza", "body_hurt"),
+    ("es mi cumple", "birthday_talk"),
+    ("quiero jugar", "play_generic"),
     # typical whisper typos / child phrasing
     ("ola teo", "greeting"),
     ("kiero a mama", "crisis_cry"),

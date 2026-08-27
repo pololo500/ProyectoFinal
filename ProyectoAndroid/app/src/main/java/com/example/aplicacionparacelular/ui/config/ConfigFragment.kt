@@ -9,6 +9,7 @@ import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.example.aplicacionparacelular.BuildConfig
+import com.example.aplicacionparacelular.R
 import com.example.aplicacionparacelular.databinding.FragmentConfigBinding
 import com.example.aplicacionparacelular.network.RobotApiClient
 import com.example.aplicacionparacelular.network.RobotConnectionManager
@@ -127,6 +128,10 @@ class ConfigFragment : Fragment() {
                     val json = org.json.JSONObject(body)
                     val serverIp = json.optString("server_ip", "?")
                     val serverPort = json.optInt("server_port", 8080)
+                    val token = json.optString("pairing_token", "")
+                    if (token.isNotBlank()) {
+                        RobotApiClient.setPairingToken(requireContext(), token)
+                    }
                     activity?.runOnUiThread {
                         if (_binding != null) {
                             binding.txtDebugServerIp.text = "🖥️ IP del servidor Python: $serverIp:$serverPort"
@@ -208,6 +213,9 @@ class ConfigFragment : Fragment() {
 
                 // Auto-connect if not already connected
                 if (!RobotApiClient.isConfigured() || RobotApiClient.getRobotIp(requireContext()) != robot.ip) {
+                    if (robot.pairingToken.isNotBlank()) {
+                        RobotApiClient.setPairingToken(requireContext(), robot.pairingToken)
+                    }
                     connectToRobot(robot.ip, robot.port)
                 }
             }
@@ -280,6 +288,19 @@ class ConfigFragment : Fragment() {
             binding.txtBrightnessValue.text = "$value%"
         }
 
+        binding.sliderPlaytime.addOnChangeListener { _, value, fromUser ->
+            if (fromUser) {
+                val minutes = value.toInt()
+                viewModel.setPlaytimeLimit(minutes)
+                binding.txtPlaytimeValue.text = formatPlaytime(minutes)
+            }
+        }
+        viewModel.playtimeLimit.observe(viewLifecycleOwner) { value ->
+            val stepped = (value / 10) * 10
+            binding.sliderPlaytime.value = stepped.coerceIn(0, 240).toFloat()
+            binding.txtPlaytimeValue.text = formatPlaytime(value)
+        }
+
         // Apply config button
         binding.btnApplyConfig.setOnClickListener {
             viewModel.applyConfig()
@@ -295,9 +316,13 @@ class ConfigFragment : Fragment() {
         viewModel.nightMode.observe(viewLifecycleOwner) { enabled ->
             binding.switchNightMode.isChecked = enabled
         }
-        binding.switchNightMode.setOnCheckedChangeListener { _, _ ->
-            viewModel.toggleNightMode()
+        binding.switchNightMode.setOnCheckedChangeListener { _, isChecked ->
+            viewModel.setNightMode(isChecked)
         }
+    }
+
+    private fun formatPlaytime(minutes: Int): String {
+        return if (minutes <= 0) getString(R.string.config_playtime_unlimited) else "$minutes min"
     }
 
     // ------------------------------------------------------------------

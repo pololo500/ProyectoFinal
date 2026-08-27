@@ -41,7 +41,7 @@
     <string name="dashboard_alerts_title">Alertas Recientes</string>
     <string name="dashboard_no_alerts">No hay alertas nuevas</string>
     <string name="dashboard_alert_vocab">Vocabulario limitado detectado</string>
-    <string name="dashboard_alert_emotion">Episodio de desregulación detectado</string>
+    <string name="dashboard_alert_emotion">Momento difícil detectado</string>
 
     <!-- Metrics -->
     <string name="metrics_title">Cómo estuvo</string>
@@ -94,7 +94,7 @@
     <string name="config_volume_label">Volumen Máximo</string>
     <string name="config_brightness_label">Brillo de los Ojos</string>
     <string name="config_night_mode">Modo Noche</string>
-    <string name="config_night_mode_subtitle">Reduce estímulos automáticamente al atardecer</string>
+    <string name="config_night_mode_subtitle">TEO habla menos y baja el volumen</string>
     <string name="config_songs_title">Catálogo de Canciones</string>
     <string name="config_songs_subtitle">Gestioná las canciones que el peluche puede reproducir</string>
     <string name="config_songs_manage">Administrar canciones</string>
@@ -107,7 +107,8 @@
     <string name="config_version">Versión 1.0.0</string>
     <string name="config_overstimulation_title">Control de Sobreestimulación</string>
     <string name="config_playtime_limit">Límite de tiempo de juego</string>
-    <string name="config_playtime_limit_subtitle">Máximo diario de interacción continua</string>
+    <string name="config_playtime_limit_subtitle">Máximo diario de interacción continua. 0 = sin límite</string>
+    <string name="config_playtime_unlimited">Sin límite</string>
 
     <!-- Medical -->
     <string name="medical_title">Agenda Médica</string>

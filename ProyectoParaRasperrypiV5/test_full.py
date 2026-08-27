@@ -175,6 +175,12 @@ ok("Elección inválida pide reintentar",
 ok("Rondas no aumentan con elección inválida",
    ppt2.rounds_played == 0)
 
+ppt_stt = PiedraPapelTijeraSession()
+resp_tiguera = ppt_stt.process_input("¡Tiguera!")
+ok("tiguera se entiende como tijera",
+   "No entendí" not in resp_tiguera.text,
+   f"resp={resp_tiguera.text!r}")
+
 # 2.3 — El juego termina después de max_rounds
 ppt3 = PiedraPapelTijeraSession(max_rounds=2)
 random.seed(1)
@@ -260,6 +266,15 @@ ok("Trunca a ≤25 palabras",
 
 # 4.5 — Cadena vacía
 ok("Cadena vacía retorna vacío", llm._clean_response("") == "")
+
+from fallback_llm import drop_unsolicited_story_offer
+story_stripped = drop_unsolicited_story_offer(
+    "Quiero comer un zanguche.",
+    "Un zanguche, eso suena delicioso. Dale, pedime una historia corta sobre un zanguche.",
+)
+ok("Fallback no invita a cuento si el nene no lo pidió",
+   "historia" not in story_stripped.lower() and "zanguche" in story_stripped.lower(),
+   f"stripped={story_stripped!r}")
 
 # 4.6 — Texto con solo roleplay queda vacío → usa fallback
 cleaned3 = llm._clean_response("*sonríe*")

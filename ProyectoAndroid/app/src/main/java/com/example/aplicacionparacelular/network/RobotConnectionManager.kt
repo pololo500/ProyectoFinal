@@ -78,18 +78,25 @@ object RobotConnectionManager {
         com.example.aplicacionparacelular.notifications.AppNotificationHelper.ensureChannels(ctx)
 
         if (RobotApiClient.isConfigured()) {
-            // Ya tenemos IP guardada, arrancar polling de inmediato
             Log.d(TAG, "IP ya configurada, arrancando polling")
-            startPolling()
+            executor.execute {
+                RobotApiClient.refreshPairingToken(ctx)
+                postToMain { startPolling() }
+            }
         } else {
-            // No hay IP guardada — iniciar descubrimiento automático
             Log.d(TAG, "No hay IP configurada, iniciando descubrimiento automático")
 
             RobotDiscovery.discoveredRobot.observeForever { robot ->
                 if (robot != null && !RobotApiClient.isConfigured()) {
                     Log.d(TAG, "Robot descubierto: ${robot.ip}:${robot.port} (${robot.deviceName})")
                     RobotApiClient.setRobotAddress(ctx, robot.ip, robot.port)
-                    startPolling()
+                    if (robot.pairingToken.isNotBlank()) {
+                        RobotApiClient.setPairingToken(ctx, robot.pairingToken)
+                    }
+                    executor.execute {
+                        RobotApiClient.refreshPairingToken(ctx)
+                        postToMain { startPolling() }
+                    }
                 }
             }
             RobotDiscovery.startScan(ctx)
@@ -103,7 +110,10 @@ object RobotConnectionManager {
     fun connectManually(context: Context, ip: String, port: Int = 8080) {
         Log.d(TAG, "Conexión manual a $ip:$port")
         RobotApiClient.setRobotAddress(context, ip, port)
-        startPolling()
+        executor.execute {
+            RobotApiClient.refreshPairingToken(context)
+            postToMain { startPolling() }
+        }
     }
 
     /**
@@ -193,8 +203,13 @@ object RobotConnectionManager {
     /**
      * Actualiza la configuración sensorial del robot.
      */
-    fun updateConfig(volumeLimit: Int, brightness: Float, onResult: (ApiResult<JSONObject>) -> Unit) {
-        executeAsync({ RobotApiClient.postConfig(volumeLimit, brightness) }, onResult)
+    fun updateConfig(
+        volumeLimit: Int,
+        brightness: Float,
+        playtimeLimitMinutes: Int = 0,
+        onResult: (ApiResult<JSONObject>) -> Unit
+    ) {
+        executeAsync({ RobotApiClient.postConfig(volumeLimit, brightness, playtimeLimitMinutes) }, onResult)
     }
 
     /**
@@ -216,6 +231,10 @@ object RobotConnectionManager {
      */
     fun fetchTelemetry(date: String, onResult: (ApiResult<JSONObject>) -> Unit) {
         executeAsync({ RobotApiClient.getTelemetry(date) }, onResult)
+    }
+
+    fun fetchTelemetryRange(days: Int, onResult: (ApiResult<JSONObject>) -> Unit) {
+        executeAsync({ RobotApiClient.getTelemetryRange(days) }, onResult)
     }
 
     /**
@@ -347,6 +366,7 @@ object RobotConnectionManager {
             "vocabulario" -> "📚 Vocabulario"
             "rutina" -> "🗓️ Rutina"
             "vacuna" -> "💉 Vacuna"
+            "turno" -> "🩺 Turno"
             else -> "ℹ️ Aviso"
         }
         return "$prefix: $message"
@@ -363,11 +383,13 @@ object RobotConnectionManager {
             "vocabulario" -> "TEO: palabras nuevas"
             "rutina" -> "TEO: rutina"
             "vacuna" -> "TEO: vacunación"
+            "turno" -> "TEO: turno médico"
             else -> "Aviso de TEO"
         }
         val channel = when (t) {
             "rutina" -> com.example.aplicacionparacelular.notifications.AppNotificationHelper.CHANNEL_RUTINA
             "vacuna" -> com.example.aplicacionparacelular.notifications.AppNotificationHelper.CHANNEL_VACUNA
+            "turno" -> com.example.aplicacionparacelular.notifications.AppNotificationHelper.CHANNEL_TURNO
             else -> com.example.aplicacionparacelular.notifications.AppNotificationHelper.CHANNEL_PELUCHE
         }
         com.example.aplicacionparacelular.notifications.AppNotificationHelper.show(

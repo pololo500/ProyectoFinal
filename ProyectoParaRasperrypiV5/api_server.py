@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import shutil
 import threading
 import time
@@ -22,8 +23,11 @@ from datetime import date, datetime
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import parse_qs, urlparse
 
 from debug_logger import log_action
+from pairing import load_or_create_token
+from session_policy import sanitize_notification_extra, telemetry_range_summary
 
 APP_DIR = Path(__file__).resolve().parent
 MUSIC_DIR = APP_DIR / "music"
@@ -40,6 +44,8 @@ class RobotState:
         self.night_mode: bool = False
         self.volume_limit: int = 100       # 0-100
         self.brightness: float = 1.0       # 0.0-1.0
+        self.playtime_limit_minutes: int = 0  # 0 = sin límite
+        self.pairing_token: str = load_or_create_token()
         self.current_emotion: str | None = None
         self.current_emotion_score: float = 0.0
         self.currently_playing_song: str | None = None  # Canción en reproducción
@@ -76,6 +82,7 @@ class RobotState:
                 "night_mode": self.night_mode,
                 "volume_limit": self.volume_limit,
                 "brightness": self.brightness,
+                "playtime_limit_minutes": self.playtime_limit_minutes,
                 "current_emotion": self.current_emotion,
                 "current_emotion_score": self.current_emotion_score,
                 "currently_playing": playing,
@@ -89,10 +96,13 @@ class RobotState:
                 self.volume_limit = max(0, min(100, int(data["volume_limit"])))
             if "brightness" in data:
                 self.brightness = max(0.0, min(1.0, float(data["brightness"])))
+            if "playtime_limit_minutes" in data:
+                self.playtime_limit_minutes = max(0, min(240, int(data["playtime_limit_minutes"])))
         if self.on_config_changed:
             self.on_config_changed({
                 "volume_limit": self.volume_limit,
                 "brightness": self.brightness,
+                "playtime_limit_minutes": self.playtime_limit_minutes,
             })
 
     def set_night_mode(self, enabled: bool) -> None:
@@ -126,7 +136,9 @@ class RobotState:
             "timestamp": datetime.now().isoformat(),
         }
         if extra:
-            notif["extra"] = extra
+            cleaned = sanitize_notification_extra(extra)
+            if cleaned:
+                notif["extra"] = cleaned
         with self._notifications_lock:
             # Máximo 50 notificaciones en cola (evitar memory leak)
             if len(self._notifications) >= 50:
@@ -163,7 +175,7 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Robot-Token, X-Filename")
         self.end_headers()
 
     def _send_json(self, data: Any, status: int = 200) -> None:
@@ -216,13 +228,33 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
     # GET endpoints
     # ------------------------------------------------------------------
 
+    _PUBLIC_GET = {"/api/status", "/api/server-info"}
+
+    def _authorized(self, path: str, mutating: bool) -> bool:
+        if not mutating and path in self._PUBLIC_GET:
+            return True
+        token = robot_state.pairing_token
+        if not token:
+            return True
+        provided = self.headers.get("X-Robot-Token", "")
+        if provided and secrets.compare_digest(provided, token):
+            return True
+        self._send_error_json(401, "Token de vínculo inválido")
+        return False
+
     def do_GET(self) -> None:
-        path = self.path.rstrip("/")
+        parsed = urlparse(self.path)
+        path = parsed.path.rstrip("/")
+        query = parse_qs(parsed.query)
+        if not self._authorized(path, mutating=False):
+            return
 
         if path == "/api/status":
             self._handle_get_status()
         elif path == "/api/server-info":
             self._handle_get_server_info()
+        elif path == "/api/telemetry/range":
+            self._handle_get_telemetry_range(query)
         elif path == "/api/telemetry/today":
             self._handle_get_telemetry(date.today().isoformat())
         elif path.startswith("/api/telemetry/"):
@@ -258,6 +290,7 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
             "server_port": 8080,
             "device_name": "MiCompañero Peluche",
             "connect_url": f"http://{local_ip}:8080",
+            "pairing_token": robot_state.pairing_token,
         })
 
     def _handle_get_telemetry(self, date_str: str) -> None:
@@ -309,6 +342,26 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
                 },
                 "events": [],
             })
+
+    def _handle_get_telemetry_range(self, query: dict[str, list[str]]) -> None:
+        from datetime import timedelta
+
+        try:
+            days = int((query.get("days") or ["7"])[0])
+        except (TypeError, ValueError):
+            days = 7
+        days = max(1, min(31, days))
+        end = date.today()
+        start = end - timedelta(days=days - 1)
+        telemetry = robot_state.telemetry
+        data_dir = telemetry.data_dir if telemetry is not None else APP_DIR / "telemetry_data"
+        summary = telemetry_range_summary(data_dir, start, end)
+        self._send_json({
+            "from": start.isoformat(),
+            "to": end.isoformat(),
+            "summary": summary,
+            "events": [],
+        })
 
     def _handle_get_routines(self) -> None:
         scheduler = robot_state.routine_scheduler
@@ -382,7 +435,9 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
 
     def do_POST(self) -> None:
-        path = self.path.rstrip("/")
+        path = urlparse(self.path).path.rstrip("/")
+        if not self._authorized(path, mutating=True):
+            return
 
         if path == "/api/routines":
             self._handle_post_routines()
@@ -444,6 +499,7 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
             "status": "ok",
             "volume_limit": robot_state.volume_limit,
             "brightness": robot_state.brightness,
+            "playtime_limit_minutes": robot_state.playtime_limit_minutes,
         })
 
     def _handle_post_celebrate(self) -> None:
@@ -586,7 +642,9 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
     # ------------------------------------------------------------------
 
     def do_DELETE(self) -> None:
-        path = self.path.rstrip("/")
+        path = urlparse(self.path).path.rstrip("/")
+        if not self._authorized(path, mutating=True):
+            return
 
         if path.startswith("/api/music/"):
             filename = path.split("/api/music/")[1]
@@ -685,6 +743,7 @@ class _DiscoveryBeacon:
             "device_name": "MiCompañero Peluche",
             "api_port": self.api_port,
             "local_ip": local_ip,
+            "pairing_token": robot_state.pairing_token,
         }, ensure_ascii=False).encode("utf-8")
 
         print(
@@ -715,6 +774,7 @@ class _DiscoveryBeacon:
                         "device_name": "MiCompañero Peluche",
                         "api_port": self.api_port,
                         "local_ip": local_ip,
+                        "pairing_token": robot_state.pairing_token,
                     }, ensure_ascii=False).encode("utf-8")
                 print(
                     f"\n┌─────────────────────────────────────────┐\n"
@@ -772,6 +832,7 @@ class ApiServer:
         print("║  👉 En emulador Android, usá:   10.0.2.2        ║", flush=True)
         print("╠══════════════════════════════════════════════════╣", flush=True)
         print("║  ℹ️  La IP se repetirá en consola cada 60 seg   ║", flush=True)
+        print(f"║  Token vínculo: {robot_state.pairing_token[:12]}… (pairing_token.txt) ║", flush=True)
         print("╚══════════════════════════════════════════════════╝", flush=True)
         print(flush=True)
 
@@ -818,7 +879,7 @@ if __name__ == "__main__":
     print(f"  GET  http://localhost:8080/api/routines")
     print(f"  GET  http://localhost:8080/api/music")
     print(f"  POST http://localhost:8080/api/stories/play")
-  print(f"  POST http://localhost:8080/api/stories/stop")
+    print(f"  POST http://localhost:8080/api/stories/stop")
     print(f"  POST http://localhost:8080/api/celebrate")
     print(f"  POST http://localhost:8080/api/config")
     print(f"  POST http://localhost:8080/api/night-mode")

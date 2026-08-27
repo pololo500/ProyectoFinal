@@ -44,7 +44,7 @@ class MetricsFragment : Fragment() {
             highlightPeriodButton(1)
         }
         binding.btnMonth.setOnClickListener {
-            viewModel.loadWeekMetrics() // Same data for now
+            viewModel.loadRangeMetrics(30)
             highlightPeriodButton(2)
         }
 

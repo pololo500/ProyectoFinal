@@ -9,10 +9,11 @@ Este proyecto es el "cerebro" local para un sistema embebido interactivo. Todo e
 ## Stack Tecnológico Obligatorio
 - **Video:** `opencv-python` (captura a 320×240, 1 fps; MediaPipe de emoción apagado por defecto) y `mediapipe` (opcional si `infer_emotion=True`).
 - **Audio (Captura):** `sounddevice` (I/O) y `silero-vad` (detección de silencios y actividad de voz).
-- **Audio (Procesamiento):** `faster-whisper` (transcripción STT, modelo `base` con `compute_type="int8"`, `beam_size=5`, `initial_prompt` contextual para habla infantil argentina).
-- **Audio (Síntesis/TTS):** `piper-tts` (TTS neural local, modelo `es_AR-daniela-high`, `length_scale=1.08`, `noise_scale=0.667`, `noise_w_scale=0.90`). Si piper no está disponible, fallback a `System.Speech` (Windows) o `espeak-ng` (Linux).
+- **Audio (Procesamiento):** `faster-whisper` (transcripción STT, modelo `medium` con `compute_type="int8"`, `beam_size=5`, `initial_prompt` contextual. Override: `WHISPER_MODEL=small`).
+- **LLM de Fallback:** `llama-cpp-python` con Llama 3.1 8B Instruct Q4_K_M por defecto (`LLM_PROFILE=8b`, RAM justa con Whisper medium). Rollback: `LLM_PROFILE=3b` (Llama 3.2 3B). Contexto `n_ctx=2048`. Historial de **10 turnos**. Override: `LLM_HF_REPO` + `LLM_GGUF`.
+- **Audio (Síntesis/TTS):** `piper-tts` (TTS neural local, modelo `es_AR-daniela-high`, `length_scale=1.20`, `noise_scale=0.667`, `noise_w_scale=0.98`). Si piper no está disponible, fallback a `System.Speech` (Windows) o `espeak-ng` (Linux).
+  - Ritmo: `length_scale` más alto = más lento. Valor actual 1.20 (pausado, cadencia menos imperativa). Si no convence, siguiente paso documentado: **1.30** (más lento y marcado; puede arrastrar sílabas). Constantes en `SpeechWorker` (`workers.py`).
 - **Procesamiento de Lenguaje (NLU):** `spacy` (modelo `es_core_news_md` para similitud semántica con 20k vectores de palabras, docs de ejemplos pre-cacheados).
-- **LLM de Fallback:** `llama-cpp-python` con modelo `Llama-3.2-3B-Instruct` Q4_K_M. Contexto `n_ctx=2048`. Historial compartido de **10 turnos** (`conversation_memory.py`) con Groq y con los intents hablados (no solo fallback). Se carga secuencialmente al inicio después de Whisper y VAD. Si no está disponible, la app funciona sin él (graceful degradation).
 - **Saneamiento de Datos:** `scrubadub` (eliminación de PII).
 - **Interfaz (Solo para PoC):** `tkinter` o `PyQt` (a elección del agente para la prueba de concepto).
 

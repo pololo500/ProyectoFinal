@@ -18,6 +18,7 @@ object AppNotificationHelper {
     const val CHANNEL_PELUCHE = "teo_peluche"
     const val CHANNEL_RUTINA = "teo_rutina"
     const val CHANNEL_VACUNA = "teo_vacuna"
+    const val CHANNEL_TURNO = "teo_turno"
     const val CHANNEL_FOREGROUND = "teo_escucha_avisos"
     private const val FOREGROUND_OPEN = 71000
 
@@ -36,7 +37,12 @@ object AppNotificationHelper {
         )
         manager.createNotificationChannel(
             NotificationChannel(CHANNEL_VACUNA, "Vacunación", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Turnos y vacunas pendientes"
+                description = "Vacunas pendientes"
+            }
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(CHANNEL_TURNO, "Turnos médicos", NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Turnos y consultas"
             }
         )
         manager.createNotificationChannel(
