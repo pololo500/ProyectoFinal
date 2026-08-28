@@ -7,6 +7,7 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
@@ -184,6 +185,108 @@ def is_clear_keyword_intent(text: str) -> str | None:
     ):
         return "song_request"
     return None
+
+
+MUTE_FAILSAFE_TURNS = 3
+_GAME_KEYWORDS_WHILE_MUTED = frozenset({"play_veo_veo", "play_piedra_papel"})
+_CHILD_TEXT_LOG_MAX = 80
+LogFn = Callable[..., None]
+
+
+def should_run_intent_dispatcher(muted: bool) -> bool:
+    return not muted
+
+
+def game_keyword_while_muted(muted: bool, keyword: str | None) -> str | None:
+    if not muted or not keyword:
+        return None
+    if keyword in _GAME_KEYWORDS_WHILE_MUTED:
+        return keyword
+    return None
+
+
+def _clip_child_text(text: str) -> str:
+    clipped = (text or "").strip()
+    if len(clipped) > _CHILD_TEXT_LOG_MAX:
+        return clipped[:_CHILD_TEXT_LOG_MAX]
+    return clipped
+
+
+class IntentMute:
+    """Apaga el despacho de intents mientras el LLM espera una respuesta."""
+
+    def __init__(self, log_fn: LogFn | None = None) -> None:
+        self._muted = False
+        self.turns_while_muted = 0
+        self._log_fn = log_fn
+
+    @property
+    def is_muted(self) -> bool:
+        return self._muted
+
+    def apply_tag(self, on: bool, reason: str, child_text: str = "") -> bool:
+        want_muted = not on
+        if want_muted == self._muted:
+            return False
+        old = "off" if self._muted else "on"
+        self._muted = want_muted
+        if not self._muted:
+            self.turns_while_muted = 0
+        else:
+            self.turns_while_muted = 0
+        new = "off" if self._muted else "on"
+        self._emit(old, new, reason, child_text)
+        return True
+
+    def note_game_keyword(self, child_text: str) -> None:
+        self.apply_tag(on=True, reason="game_keyword", child_text=child_text)
+
+    def note_child_turn_still_muted(self, child_text: str = "") -> None:
+        if not self._muted:
+            return
+        self.turns_while_muted += 1
+        if self.turns_while_muted >= MUTE_FAILSAFE_TURNS:
+            self.apply_tag(on=True, reason="failsafe", child_text=child_text)
+
+    def reset(self) -> None:
+        self.apply_tag(on=True, reason="llm_tag", child_text="")
+
+    def _emit(self, old: str, new: str, reason: str, child_text: str) -> None:
+        message = f"{old}→{new} reason={reason}"
+        clipped = _clip_child_text(child_text)
+        if clipped:
+            message += f' text="{clipped}"'
+        if self._log_fn is not None:
+            self._log_fn("INTENTS", message)
+            return
+        from debug_logger import get_debug_logger, log_action
+
+        log_action("INTENTS", message)
+        logger = get_debug_logger()
+        if logger is not None:
+            logger.log_output("INTENTS", message)
+
+
+def apply_llm_intent_actions(
+    mute: IntentMute,
+    actions: list[dict[str, str]],
+    child_text: str = "",
+) -> None:
+    """Aplica INTENTS_ON/OFF (último gana). NOTIFY_PARENT fuerza ON."""
+    last_on: bool | None = None
+    notify = False
+    for item in actions:
+        name = str(item.get("action") or "").upper()
+        if name == "INTENTS_ON":
+            last_on = True
+        elif name == "INTENTS_OFF":
+            last_on = False
+        elif name == "NOTIFY_PARENT":
+            notify = True
+    if last_on is not None:
+        mute.apply_tag(on=last_on, reason="llm_tag", child_text=child_text)
+    if notify:
+        mute.apply_tag(on=True, reason="notify_parent", child_text=child_text)
 
 
 def telemetry_range_summary(data_dir: Path, start: date, end: date) -> dict[str, Any]:

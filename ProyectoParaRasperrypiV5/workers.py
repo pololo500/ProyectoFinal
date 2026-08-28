@@ -1119,8 +1119,9 @@ class AudioWorker:
         except Exception:
             self.companion = None
 
-        from session_policy import PlaytimeGuard
+        from session_policy import IntentMute, PlaytimeGuard
         self.playtime_guard = PlaytimeGuard(limit_minutes=0)
+        self.intent_mute = IntentMute()
 
         from conversation_memory import ConversationMemory
         self.conversation_memory = ConversationMemory()
@@ -1670,19 +1671,47 @@ class AudioWorker:
             _t_intent = time.monotonic()
             if _dlog:
                 _dlog.log_input("NLU", f"text=\"{sanitized_text}\", emotion={emotion_context}")
-            intent_payload = self.intent_dispatcher.dispatch(sanitized_text, emotion=emotion_context)
+            from session_policy import (
+                game_keyword_while_muted,
+                is_clear_keyword_intent,
+                should_run_intent_dispatcher,
+            )
+
+            began_muted = self.intent_mute.is_muted
+            keyword_now = is_clear_keyword_intent(sanitized_text)
+            game_kw = game_keyword_while_muted(began_muted, keyword_now)
+            if game_kw:
+                self.intent_mute.note_game_keyword(sanitized_text)
+                intent_payload = {
+                    "intent_name": game_kw,
+                    "confidence": 0.95,
+                    "response": "",
+                    "pilar": "cognitivo",
+                }
+            elif should_run_intent_dispatcher(self.intent_mute.is_muted):
+                intent_payload = self.intent_dispatcher.dispatch(sanitized_text, emotion=emotion_context)
+            else:
+                intent_payload = {
+                    "intent_name": "unknown",
+                    "confidence": 0.0,
+                    "response": "",
+                    "pilar": "general",
+                }
             if _dlog:
                 _dlog.log_output(
                     "NLU",
-                    f"intent={intent_payload.get('intent_name', '?')} conf={intent_payload.get('confidence', 0):.3f}",
+                    f"intent={intent_payload.get('intent_name', '?')} conf={intent_payload.get('confidence', 0):.3f}"
+                    f"{' muted' if began_muted else ''}",
                     elapsed_ms=(time.monotonic() - _t_intent) * 1000,
                 )
 
             # 6. Emotion reactor — crisis detection (#EPIC-005 CA#1)
+            awaiting_llm = began_muted and not game_kw
             _t_reactor = time.monotonic()
             if _dlog:
                 _dlog.log_input("EMOTION_REACTOR", f"emotion={emotion_context}, intent={intent_payload.get('intent_name')}")
-            intent_payload = self.emotion_reactor.evaluate(emotion_context, intent_payload)
+            if not awaiting_llm:
+                intent_payload = self.emotion_reactor.evaluate(emotion_context, intent_payload)
             is_crisis = intent_payload.get("is_crisis", False)
             if _dlog:
                 _dlog.log_output("EMOTION_REACTOR", f"is_crisis={is_crisis}", elapsed_ms=(time.monotonic() - _t_reactor) * 1000)
@@ -1697,7 +1726,9 @@ class AudioWorker:
             night_on = bool(getattr(self._robot_state, "night_mode", False)) if self._robot_state else False
             intent_name = str(intent_payload.get("intent_name", ""))
             gated = False
-            if night_on and not night_should_engage(intent_name):
+            if awaiting_llm:
+                gated = False
+            elif night_on and not night_should_engage(intent_name):
                 intent_payload = {
                     "intent_name": "night_rest",
                     "confidence": 1.0,
@@ -1865,6 +1896,9 @@ class AudioWorker:
                 clean_response = "Listo, le aviso a mamá o papá."
             intent_payload["response"] = clean_response
 
+            if began_muted and self.intent_mute.is_muted:
+                self.intent_mute.note_child_turn_still_muted(sanitized_text)
+
             # 9. Determine pilar for telemetry
             pilar = intent_payload.get("pilar", "general")
 
@@ -2001,7 +2035,7 @@ class AudioWorker:
     # [NOTIFY_PARENT:razón del aviso], etc.
     _ACTION_TAG_RE = re.compile(
         r"\["
-        r"(PLAY_MUSIC|STOP_MUSIC|NOTIFY_PARENT|EXPRESSION|CELEBRATE|CALM_MODE)"
+        r"(PLAY_MUSIC|STOP_MUSIC|NOTIFY_PARENT|EXPRESSION|CELEBRATE|CALM_MODE|INTENTS_OFF|INTENTS_ON)"
         r"(?::([^\]]*))?"
         r"\]",
         re.IGNORECASE,
@@ -2057,6 +2091,9 @@ class AudioWorker:
         - CALM_MODE: baja volumen y expresión tranquila
         """
         _dlog = get_debug_logger()
+        from session_policy import apply_llm_intent_actions
+
+        apply_llm_intent_actions(self.intent_mute, actions, user_text)
 
         for action_info in actions:
             action = action_info["action"]
@@ -2126,6 +2163,10 @@ class AudioWorker:
                         )
                     if _dlog:
                         _dlog.log_output("ACTION", f"CELEBRATE -> {achievement}")
+
+                elif action in {"INTENTS_OFF", "INTENTS_ON"}:
+                    if _dlog:
+                        _dlog.log_output("ACTION", f"{action} (mute={self.intent_mute.is_muted})")
 
                 elif action == "CALM_MODE":
                     # Expresión tranquila

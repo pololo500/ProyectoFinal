@@ -40,10 +40,10 @@
     ],
     "response": [
       "¡Hay de todo! Podemos jugar al veo veo, piedra papel o tijera, escuchar música, un cuento o charlar. ¿Cuál te copa?",
-      "¡Dale! ¿Jugamos al veo veo, ponemos una canción, te leo un cuento o hacemos yoga un ratito?",
-      "Podemos jugar, cantar, leer un cuento o conversar. Decime qué preferís.",
-      "Hoy podemos inventar un juego, mirar un dibujo o charlar de lo que quieras.",
-      "¿Te copa un juego rapidito o preferís que te haga una pregunta divertida?"
+      "¡Dale! ¿Jugamos al veo veo, ponemos una canción o te leo un cuento?",
+      "Podemos jugar al veo veo o piedra papel tijera, cantar, leer un cuento o conversar. Decime qué preferís.",
+      "Hoy hay veo veo, piedra papel o tijera, música o un cuento. ¿Cuál te copa?",
+      "¿Veo veo, piedra papel tijera, una canción o charlamos?"
     ]
   },
   "farewell": {
@@ -670,11 +670,11 @@
       "un juego"
     ],
     "response": [
-      "¡Juguemos! ¿Veo veo, piedra papel o tijera, o inventamos uno?",
-      "Dale, juego. ¿De adivinar, de manos, o de imaginar?",
-      "Estoy listo. Elegí: veo veo, piedra papel tijera, o charla loca.",
-      "¡Sí! Un juego. ¿Vos empezás o empiezo yo?",
-      "Jugar es lo mío. ¿Corto y rápido o más tranquilo?"
+      "¡Juguemos! ¿Veo veo o piedra papel o tijera?",
+      "Dale, juego. ¿Veo veo o piedra papel tijera? También hay música o un cuento.",
+      "Estoy listo. Elegí: veo veo o piedra papel tijera.",
+      "¡Sí! ¿Veo veo, piedra papel tijera, o preferís una canción?",
+      "Jugar es lo mío. ¿Veo veo o piedra papel tijera?"
     ]
   },
   "look_at_this": {

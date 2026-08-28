@@ -177,11 +177,13 @@
     "cayo",
     "celular",
     "cem",
+    "centro",
     "cerrar",
     "chama",
     "chame",
     "chao",
     "charlar",
+    "charlemos",
     "chas",
     "chaval",
     "che",
@@ -396,11 +398,13 @@
     "espacito",
     "espalda",
     "especial",
+    "esperate",
     "espere",
     "espero",
     "estaba",
     "estaban",
     "estamos",
+    "estan",
     "estando",
     "estar",
     "estas",
@@ -478,6 +482,7 @@
     "hablado",
     "hablan",
     "hablar",
+    "hablas",
     "hablemos",
     "hablen",
     "hablo",
@@ -491,6 +496,7 @@
     "hacia",
     "hacian",
     "haciendo",
+    "haga",
     "hagamos",
     "hagan",
     "hago",
@@ -518,6 +524,7 @@
     "hola",
     "hora",
     "horrible",
+    "hoy",
     "iban",
     "idea",
     "igual",
@@ -571,7 +578,9 @@
     "lento",
     "letra",
     "libre",
+    "lico",
     "limite",
+    "lindas",
     "lindo",
     "listazo",
     "listo",
@@ -588,6 +597,7 @@
     "llevo",
     "llm",
     "llogaste",
+    "llueve",
     "lnm",
     "loco",
     "logro",
@@ -605,6 +615,7 @@
     "mama",
     "manco",
     "mandan",
+    "mandarme",
     "mando",
     "manga",
     "manghiro",
@@ -643,6 +654,7 @@
     "mim",
     "mira",
     "mirando",
+    "mirar",
     "miras",
     "miren",
     "mis",
@@ -817,6 +829,7 @@
     "precarga",
     "pregunta",
     "preguntarte",
+    "preguntas",
     "preguntaste",
     "preguntes",
     "pregure",
@@ -919,6 +932,7 @@
     "respeta",
     "respeto",
     "responde",
+    "respondemos",
     "responder",
     "respondes",
     "respondiendo",
@@ -999,6 +1013,7 @@
     "slm",
     "sobre",
     "social",
+    "sol",
     "sola",
     "solamente",
     "solo",
@@ -1116,6 +1131,7 @@
     "vendi",
     "veni",
     "venir",
+    "ventana",
     "veo",
     "veoveo",
     "veras",
@@ -6871,11 +6887,91 @@
       "word": "fum",
       "date": "2026-08-27",
       "timestamp": "2026-08-27T01:35:43.038021"
+    },
+    {
+      "word": "preguntas",
+      "date": "2026-08-28",
+      "timestamp": "2026-08-28T12:29:38.899471"
+    },
+    {
+      "word": "haga",
+      "date": "2026-08-28",
+      "timestamp": "2026-08-28T12:29:54.151711"
+    },
+    {
+      "word": "hablas",
+      "date": "2026-08-28",
+      "timestamp": "2026-08-28T12:53:43.731374"
+    },
+    {
+      "word": "estan",
+      "date": "2026-08-28",
+      "timestamp": "2026-08-28T12:54:08.558411"
+    },
+    {
+      "word": "lindas",
+      "date": "2026-08-28",
+      "timestamp": "2026-08-28T12:54:08.558411"
+    },
+    {
+      "word": "centro",
+      "date": "2026-08-28",
+      "timestamp": "2026-08-28T12:54:51.014169"
+    },
+    {
+      "word": "respondemos",
+      "date": "2026-08-28",
+      "timestamp": "2026-08-28T12:54:51.014169"
+    },
+    {
+      "word": "charlemos",
+      "date": "2026-08-28",
+      "timestamp": "2026-08-28T12:57:35.812440"
+    },
+    {
+      "word": "hoy",
+      "date": "2026-08-28",
+      "timestamp": "2026-08-28T12:57:35.812440"
+    },
+    {
+      "word": "mandarme",
+      "date": "2026-08-28",
+      "timestamp": "2026-08-28T12:58:23.127790"
+    },
+    {
+      "word": "mirar",
+      "date": "2026-08-28",
+      "timestamp": "2026-08-28T12:58:23.127790"
+    },
+    {
+      "word": "ventana",
+      "date": "2026-08-28",
+      "timestamp": "2026-08-28T12:58:23.127790"
+    },
+    {
+      "word": "esperate",
+      "date": "2026-08-28",
+      "timestamp": "2026-08-28T12:58:23.127790"
+    },
+    {
+      "word": "lico",
+      "date": "2026-08-28",
+      "timestamp": "2026-08-28T12:58:23.127790"
+    },
+    {
+      "word": "sol",
+      "date": "2026-08-28",
+      "timestamp": "2026-08-28T12:58:23.127790"
+    },
+    {
+      "word": "llueve",
+      "date": "2026-08-28",
+      "timestamp": "2026-08-28T12:58:23.127790"
     }
   ],
   "stats": {
-    "total_words": 1145,
-    "new_words_today": 114,
-    "history_count": 1145
+    "total_words": 1161,
+    "new_words_today": 16,
+    "history_count": 1161
   }
 }

@@ -52,6 +52,14 @@ class TestSystemPromptNoStoryTemplate(unittest.TestCase):
         self.assertIn("no inventes", folded)
         self.assertIn("no sé", folded)
 
+    def test_intents_on_off_y_juegos_reales(self) -> None:
+        self.assertIn("[INTENTS_OFF]", _SYSTEM_PROMPT)
+        self.assertIn("[INTENTS_ON]", _SYSTEM_PROMPT)
+        folded = _SYSTEM_PROMPT.lower()
+        self.assertIn("veo veo", folded)
+        self.assertIn("piedra", folded)
+        self.assertIn("intents_on", folded)
+
 
 class TestLlmProfile(unittest.TestCase):
     def test_default_es_8b(self) -> None:
