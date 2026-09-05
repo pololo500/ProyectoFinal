@@ -3,8 +3,8 @@
 Cuando el IntentDispatcher retorna ``unknown``, este módulo genera una
 respuesta usando un GGUF local vía ``llama-cpp-python``.
 
-Por defecto: Llama 3.1 8B Instruct Q4_K_M (RAM justa junto a Whisper medium).
-Rollback al 3B de hoy: ``LLM_PROFILE=3b``.
+Por defecto: Llama 3.2 3B Instruct Q4_K_M.
+Opcional: ``LLM_PROFILE=1b`` (prueba descartada: calidad muy baja) o ``LLM_PROFILE=8b``.
 
 El modelo se descarga la primera vez a ``~/.edge_ai_models/llm/``.
 Override fino: ``LLM_HF_REPO`` + ``LLM_GGUF``.
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 import time
 import urllib.request
 from pathlib import Path
@@ -25,7 +26,10 @@ from debug_logger import get_debug_logger
 # ---------------------------------------------------------------------------
 
 _LLM_PROFILES: dict[str, tuple[str, str]] = {
-    # Rollback: lo que corre hoy (Llama 3.2 3B + Whisper medium).
+    "1b": (
+        "bartowski/Llama-3.2-1B-Instruct-GGUF",
+        "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+    ),
     "3b": (
         "bartowski/Llama-3.2-3B-Instruct-GGUF",
         "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
@@ -45,45 +49,58 @@ def selected_llm_spec() -> tuple[str, str]:
     file_ov = (os.environ.get("LLM_GGUF") or "").strip()
     if repo_ov and file_ov:
         return repo_ov, file_ov
-    profile = (os.environ.get("LLM_PROFILE") or "8b").strip().lower()
-    return _LLM_PROFILES.get(profile, _LLM_PROFILES["8b"])
+    profile = (os.environ.get("LLM_PROFILE") or "3b").strip().lower()
+    return _LLM_PROFILES.get(profile, _LLM_PROFILES["3b"])
+
+
+def llm_n_ctx() -> int:
+    """Default 2048. Rollback: LLM_N_CTX=1024 (el prompt largo no entra)."""
+    try:
+        return max(512, int(os.environ.get("LLM_N_CTX") or "2048"))
+    except ValueError:
+        return 2048
+
+
+def llm_n_threads() -> int:
+    """Default 4, como cuando respondía en ~30 s. Override: LLM_THREADS."""
+    raw = (os.environ.get("LLM_THREADS") or "").strip()
+    if raw:
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            return 4
+    return 4
+
+
+def llm_generate_timeout_s() -> float:
+    """Espera hasta 2 min a que Llama termine. Rollback: LLM_GENERATE_TIMEOUT=60."""
+    try:
+        return max(0.1, float(os.environ.get("LLM_GENERATE_TIMEOUT") or "120"))
+    except ValueError:
+        return 120.0
 
 # ---------------------------------------------------------------------------
 # System prompt — personalidad empática en español argentino (3 a 7 años)
 # ---------------------------------------------------------------------------
 
 _SYSTEM_PROMPT = (
-    "Tu nombre es TEO. Sos un robot de peluche mágico y cariñoso que habla con nenes de 3 a 7 años. "
-    "Hablá siempre en primera persona y dirigite directamente al nene (usando 'vos', 'mirá', 'dale'). "
-    "NUNCA hables del nene en tercera persona. NUNCA menciones 'el nene', 'el usuario' ni 'el LLM'. "
-    "Si te preguntan cómo te llamás, respondé simplemente 'Me llamo TEO' y nada más.\n"
-    "Tus respuestas deben ser MUY CORTAS (máximo 25 palabras, 1 o 2 oraciones). "
-    "Si el audio no se entiende o parece inventado, pedí que lo repita. "
-    "NO sigas la corriente de frases sin sentido. No inventes países, ciudades ni datos. "
-    "Si no sabés, decí no sé. Si preguntan una cuenta simple (sumar, restar), da el resultado. "
-    "No uses emojis, ni comillas, ni asteriscos.\n\n"
-    "NO juegues vos al piedra-papel-tijera ni al veo veo: el robot tiene una skill para eso. "
-    "NO ofrezcas cuentos ni historias. No invites a narrar ni a leer nada. "
-    "Los cuentos los pide el nene; hay una skill aparte. "
-    "Acá solo respondé a lo que dijo (comida, juegos, emociones, preguntas, charla). "
-    "Si el nene pide un juego, no lo juegues vos: el robot tiene skill de veo veo y piedra-papel-tijera. "
-    "Respondé corto ofreciendo esos dos. SIN tags de música y SIN jugar vos al PPT.\n"
-    "Si el nene pide un juego, ofrecé SOLO veo veo o piedra papel o tijera. "
-    "Podés mencionar música o un cuento. NO inventes otros juegos (escondidas, memoria, inventamos uno, adivinar, imaginar).\n"
-    "ACCIONES DISPONIBLES: Podés incluir estos tags especiales AL FINAL de tu respuesta. "
-    "Los tags NUNCA se dicen en voz alta. NO inventes tags (nada de [DALE], [TAGS] ni texto suelto NOTIFY_PARENT:).\n"
-    "- [INTENTS_OFF] — Si preguntás algo y esperás que el nene conteste (color, sí/no, qué vio). Ponelo en ESA respuesta.\n"
-    "- [INTENTS_ON] — OBLIGATORIO en la misma respuesta en que DEJÁS de preguntar. No dejes OFF por las dudas. "
-    "Si pide a mamá/papá: usá [NOTIFY_PARENT:razón] Y [INTENTS_ON].\n"
-    "- [PLAY_MUSIC] — SOLO si el nene pide EXPLÍCITAMENTE una canción, música o bailar. NUNCA para juegos, rimas o charla.\n"
-    "- [STOP_MUSIC] — Para la música. Usalo si el nene pide silencio o parar la canción.\n"
-    "- [NOTIFY_PARENT:razón] — Avisa a mamá/papá. Usalo si el nene pide llamar a sus padres, tiene mucho miedo, "
-    "está en crisis o dice algo preocupante. La razón debe ser breve.\n"
-    "- [EXPRESSION:nombre] — Cambia tu cara. Opciones: feliz, triste, sorprendido, enojado, neutral.\n"
-    "- [CELEBRATE:qué hizo] — Celebración. En el tag explicá BREVE qué logró "
-    "(ej. [CELEBRATE:ganó al veo veo] o [CELEBRATE:contó que armó un rompecabezas]). "
-    "NO uses [CELEBRATE] vacío. NO lo uses por palabras nuevas de vocabulario.\n"
-    "- [CALM_MODE] — Modo calma. Usalo si el nene tiene sueño o está muy cansado.\n"
+    "Tu nombre es TEO. Sos un peluche que habla con nenes de 3 a 7 años. "
+    "Primera persona; vos, mirá, dale. Nunca tercera persona ni 'el nene', 'el usuario' o 'el LLM'. "
+    "Si preguntan cómo te llamás: Me llamo TEO. Máximo 25 palabras. "
+    "Si no se entiende, pedí que repita. No inventes países ni datos. Si no sabés, decí no sé. "
+    "Cuentas simples: da el resultado. Sin emojis, comillas ni asteriscos. "
+    "NO ofrezcas cuentos ni historias. NO juegues veo veo ni Piedra Papel o Tijera: hay skill. "
+    "Si pide un juego, ofrecé SOLO veo veo o piedra papel o tijera. "
+    "Tags AL FINAL, nunca se dicen. No inventes tags. "
+    "[INTENTS_OFF] si preguntás y esperás respuesta. "
+    "[INTENTS_ON] obligatorio cuando dejás de preguntar. "
+    "Si pide a mamá/papá: [NOTIFY_PARENT:razón explicandole al padre] y [INTENTS_ON]. "
+    "[PLAY_MUSIC] solo si pide canción, música o bailar. [STOP_MUSIC] para parar. "
+    "[NOTIFY_PARENT:razón explicandole al padre] SOLO si pide a mamá/papá, miedo, crisis o duele de verdad. "
+    "NO uses [NOTIFY_PARENT] por una palabra suelta, un color, un juego, una verdura, un bicho o charla de jardín. "
+    "[EXPRESSION:feliz|triste|sorprendido|enojado|neutral] "
+    "[CELEBRATE:qué hizo] breve, no vacío. "
+    "[CALM_MODE] si tiene sueño, está cansado o si el nene se despide.\n"
 )
 
 _CHILD_ASKED_STORY = re.compile(
@@ -138,6 +155,8 @@ class FallbackLLM:
         self._llm: Any = None
         self._loaded = False
         self._history: list[dict[str, str]] = []
+        self._gen_lock = threading.Lock()
+        self.last_fail = ""
 
     def clear_history(self) -> None:
         """Borra el historial de conversación actual."""
@@ -148,14 +167,12 @@ class FallbackLLM:
     # ------------------------------------------------------------------
 
     def load(self) -> None:
-        """Descarga (si necesario) y carga el modelo GGUF en RAM.
-
-        Diseñado para ser invocado una vez durante el startup del
-        AudioWorker, secuencialmente después de Whisper y VAD.
-        """
+        """Carga el GGUF una sola vez en este proceso y lo deja en RAM."""
         if self._loaded:
             return
+        self._load_llama()
 
+    def _load_llama(self) -> None:
         _dlog = get_debug_logger()
 
         try:
@@ -170,16 +187,21 @@ class FallbackLLM:
 
         _repo, filename = selected_llm_spec()
         model_path = self._ensure_model()
+        n_threads = llm_n_threads()
         if _dlog:
-            _dlog.log_input("LLM_INIT", f"Cargando {filename} (RAM justa con Whisper medium)...")
+            _dlog.log_input(
+                "LLM_INIT",
+                f"Cargando {filename} n_ctx={llm_n_ctx()} "
+                f"threads={n_threads} timeout={llm_generate_timeout_s():.0f}s...",
+            )
 
         _t0 = time.monotonic()
-        n_threads = int(os.environ.get("LLM_THREADS") or "4")
         n_batch = 64 if filename.startswith("Meta-Llama-3.1-8B") else 128
         try:
+            os.environ["OMP_NUM_THREADS"] = str(n_threads)
             self._llm = Llama(
                 model_path=str(model_path),
-                n_ctx=2048,
+                n_ctx=llm_n_ctx(),
                 n_threads=max(1, n_threads),
                 n_batch=n_batch,
                 n_gpu_layers=0,
@@ -196,7 +218,7 @@ class FallbackLLM:
             if _dlog:
                 _dlog.log_output(
                     "LLM_INIT",
-                    f"ERROR al cargar: {exc}. Rollback: LLM_PROFILE=3b",
+                    f"ERROR al cargar: {exc}. Rollback: LLM_PROFILE=8b",
                 )
 
     @property
@@ -224,53 +246,107 @@ class FallbackLLM:
         Returns:
             Texto de respuesta o cadena vacía si no se pudo generar.
         """
+        self.last_fail = ""
         if not self.is_available:
+            self.last_fail = "no disponible"
             return ""
 
         _dlog = get_debug_logger()
-        messages = self._build_messages(text, emotion, history if history is not None else self._history)
+        if not self._gen_lock.acquire(blocking=False):
+            self.last_fail = "ocupado"
+            if _dlog:
+                _dlog.log_output("LLM_GENERATE", "ocupado — no lanzo otra inferencia")
+            return ""
 
         if _dlog:
             _dlog.log_input("LLM_GENERATE", f"text=\"{text}\"")
 
         _t0 = time.monotonic()
+        timeout_s = llm_generate_timeout_s()
+        box: list[Any] = []
+        err: list[BaseException] = []
+
+        def _run() -> None:
+            try:
+                box.append(self.complete_sync(text, emotion, history))
+            except BaseException as exc:
+                err.append(exc)
+            finally:
+                self._gen_lock.release()
+
+        # AudioWorker espera hasta 2 min. El decode corre en LLMGenerate
+        # para poder cortar la espera si OpenMP se cuelga.
+        worker = threading.Thread(target=_run, name="LLMGenerate", daemon=True)
         try:
-            result = self._llm.create_chat_completion(
-                messages=messages,
-                max_tokens=80,
-                temperature=0.70,
-                top_p=0.9,
-                top_k=40,
-                repeat_penalty=1.15,
-                stop=["<|eot_id|>", "<|start_header_id|>", "<|end_header_id|>", "<|im_end|>", "<|endoftext|>", "<|im_start|>"],
-            )
-
-            raw_text = (
-                result.get("choices", [{}])[0]
-                .get("message", {})
-                .get("content", "")
-                .strip()
-            )
-
-            response_text = self._clean_response(raw_text)
-            response_text = drop_unsolicited_story_offer(text, response_text)
-
+            worker.start()
+        except Exception:
+            self._gen_lock.release()
+            return ""
+        worker.join(timeout_s)
+        if worker.is_alive():
+            self.last_fail = "timeout"
             if _dlog:
                 _dlog.log_output(
                     "LLM_GENERATE",
-                    f"response=\"{response_text}\"",
-                    elapsed_ms=(time.monotonic() - _t0) * 1000,
-                )
-            return response_text
-
-        except Exception as exc:
-            if _dlog:
-                _dlog.log_output(
-                    "LLM_GENERATE",
-                    f"ERROR: {exc}",
+                    f"TIMEOUT {timeout_s:.0f}s — uso respuesta enlatada",
                     elapsed_ms=(time.monotonic() - _t0) * 1000,
                 )
             return ""
+
+        if err:
+            self.last_fail = str(err[0])
+            if _dlog:
+                _dlog.log_output(
+                    "LLM_GENERATE",
+                    f"ERROR: {err[0]}",
+                    elapsed_ms=(time.monotonic() - _t0) * 1000,
+                )
+            return ""
+
+        response_text = str(box[0] if box else "")
+        if _dlog:
+            _dlog.log_output(
+                "LLM_GENERATE",
+                f"response=\"{response_text}\"",
+                elapsed_ms=(time.monotonic() - _t0) * 1000,
+            )
+        return response_text
+
+    def complete_sync(
+        self,
+        text: str,
+        emotion: dict[str, Any] | None,
+        history: list[dict[str, str]] | None,
+    ) -> str:
+        """Inferencia bloqueante. El GGUF se queda en RAM entre turnos."""
+        if self._llm is None:
+            return ""
+        messages = self._build_messages(
+            text, emotion, history if history is not None else self._history
+        )
+        result = self._llm.create_chat_completion(
+            messages=messages,
+            max_tokens=80,
+            temperature=0.70,
+            top_p=0.9,
+            top_k=40,
+            repeat_penalty=1.15,
+            stop=[
+                "<|eot_id|>",
+                "<|start_header_id|>",
+                "<|end_header_id|>",
+                "<|im_end|>",
+                "<|endoftext|>",
+                "<|im_start|>",
+            ],
+        )
+        raw_text = (
+            result.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+            .strip()
+        )
+        return drop_unsolicited_story_offer(text, self._clean_response(raw_text))
 
     # ------------------------------------------------------------------
     # Limpieza y post-procesamiento de la respuesta
@@ -361,7 +437,7 @@ class FallbackLLM:
         if _dlog:
             _dlog.log_input(
                 "LLM_DOWNLOAD",
-                f"Descargando {filename} (solo primera vez, ~5 GB)...",
+                f"Descargando {filename} (solo primera vez)...",
             )
 
         _t0 = time.monotonic()

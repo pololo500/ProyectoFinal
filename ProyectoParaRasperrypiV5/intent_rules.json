@@ -403,6 +403,7 @@
       "¡Apapacho! Qué rico estar cerquita.",
       "Abrazo de peluche. Yo también te quiero."
     ],
+    "robot_ask": "Quiero un abrazo. ¿Me das uno?",
     "emotions": ["feliz", "triste", "neutral"],
     "emotion_threshold": 0.10
   },

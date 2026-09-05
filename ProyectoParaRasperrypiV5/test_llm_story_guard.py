@@ -47,6 +47,9 @@ class TestSystemPromptNoStoryTemplate(unittest.TestCase):
             _SYSTEM_PROMPT,
         )
 
+    def test_prompt_entra_en_n_ctx_1024(self) -> None:
+        self.assertLessEqual(len(_SYSTEM_PROMPT), 1800)
+
     def test_pide_hechos_y_no_inventar(self) -> None:
         folded = _SYSTEM_PROMPT.lower()
         self.assertIn("no inventes", folded)
@@ -60,22 +63,76 @@ class TestSystemPromptNoStoryTemplate(unittest.TestCase):
         self.assertIn("piedra", folded)
         self.assertIn("intents_on", folded)
 
+    def test_notify_solo_pedido_o_crisis(self) -> None:
+        folded = _SYSTEM_PROMPT.lower()
+        self.assertIn("[notify_parent", folded)
+        self.assertIn("palabra suelta", folded)
+        self.assertTrue(
+            "no avises" in folded or "no uses [notify_parent]" in folded,
+            _SYSTEM_PROMPT,
+        )
+
+    def test_prompt_teo_ppt_notify_calm(self) -> None:
+        self.assertIn("Piedra Papel o Tijera", _SYSTEM_PROMPT)
+        self.assertNotIn("al PPT.", _SYSTEM_PROMPT)
+        folded = _SYSTEM_PROMPT.lower()
+        self.assertIn("explicandole al padre", folded)
+        self.assertIn("despide", folded)
+
 
 class TestLlmProfile(unittest.TestCase):
-    def test_default_es_8b(self) -> None:
+    def test_default_es_3b(self) -> None:
         env = {k: v for k, v in os.environ.items() if k not in {"LLM_PROFILE", "LLM_HF_REPO", "LLM_GGUF"}}
         with patch.dict(os.environ, env, clear=True):
             _repo, filename = selected_llm_spec()
-        self.assertIn("8B", filename)
+        self.assertIn("Llama-3.2-3B", filename)
 
-    def test_rollback_3b(self) -> None:
+    def test_perfil_1b(self) -> None:
         with patch.dict(
             os.environ,
-            {"LLM_PROFILE": "3b", "LLM_HF_REPO": "", "LLM_GGUF": ""},
+            {"LLM_PROFILE": "1b", "LLM_HF_REPO": "", "LLM_GGUF": ""},
         ):
             _repo, filename = selected_llm_spec()
-        self.assertIn("Llama-3.2-3B", filename)
+        self.assertIn("Llama-3.2-1B", filename)
+
+    def test_rollback_8b(self) -> None:
+        with patch.dict(
+            os.environ,
+            {"LLM_PROFILE": "8b", "LLM_HF_REPO": "", "LLM_GGUF": ""},
+        ):
+            _repo, filename = selected_llm_spec()
+        self.assertIn("8B", filename)
+
+
+class TestLlmGenerateTimeout(unittest.TestCase):
+    def test_si_el_modelo_no_contesta_devuelve_vacio(self) -> None:
+        import time
+
+        from fallback_llm import FallbackLLM
+
+        llm = FallbackLLM()
+        llm._loaded = True
+
+        class Slow:
+            def create_chat_completion(self, **kwargs):  # noqa: ANN003
+                time.sleep(4)
+                return {"choices": [{"message": {"content": "hola"}}]}
+
+        llm._llm = Slow()
+        with patch.dict(os.environ, {"LLM_GENERATE_TIMEOUT": "0.3"}):
+            started = time.monotonic()
+            out = llm.generate("hola")
+        self.assertEqual(out, "")
+        self.assertLess(time.monotonic() - started, 2.0)
+
+    def test_aarch64_usa_cuatro_hilos(self) -> None:
+        from fallback_llm import llm_n_threads
+
+        with patch("platform.machine", return_value="aarch64"):
+            with patch.dict(os.environ, {"LLM_THREADS": ""}):
+                self.assertEqual(llm_n_threads(), 4)
 
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import platform
 import queue
 import random
 import re
@@ -202,49 +203,14 @@ class IntentDispatcher:
             self.current_emotion = {"label": label, "score": float(score or 0.0)}
 
     def _load_spacy_model(self):
-        if spacy is None:
-            return None
-        for model_name in ("es_core_news_md", "es_core_news_sm"):
-            try:
-                return spacy.load(model_name)
-            except Exception:
-                continue
-        try:
-            return spacy.blank("es")
-        except Exception:
-            return None
+        return None
 
     def _load_sentence_model(self) -> Any:
-        try:
-            from sentence_transformers import SentenceTransformer
-
-            return SentenceTransformer(self._EMBEDDING_MODEL_NAME)
-        except Exception:
-            return None
+        return None
 
     def _precompute_examples(self) -> None:
-        for intent_name, intent_def in self.intents.items():
-            examples = [str(ex) for ex in intent_def.get("examples", []) if str(ex).strip()]
-            if self.nlp is not None:
-                self._example_docs[intent_name] = [
-                    (ex, self.nlp(ex)) for ex in examples
-                ]
-            else:
-                self._example_docs[intent_name] = []
-            if self._sentence_model is not None and examples:
-                try:
-                    vectors = self._sentence_model.encode(
-                        examples,
-                        convert_to_numpy=True,
-                        normalize_embeddings=True,
-                        show_progress_bar=False,
-                    )
-                    self._example_embeddings[intent_name] = [
-                        (ex, np.asarray(vec, dtype=np.float32))
-                        for ex, vec in zip(examples, vectors)
-                    ]
-                except Exception:
-                    self._example_embeddings[intent_name] = []
+        self._example_docs = {name: [] for name in self.intents}
+        self._example_embeddings = {name: [] for name in self.intents}
 
     def dispatch(self, text: str, emotion: dict[str, Any] | None = None) -> dict[str, Any]:
         _dlog = get_debug_logger()
@@ -271,89 +237,35 @@ class IntentDispatcher:
                 "pilar": "general",
             }
 
-        intent_scores = self._score_intents(candidate_text)
-        ranked = sorted(intent_scores.items(), key=lambda item: item[1], reverse=True)
-        if not ranked and not keyword_intent:
-            return {"intent_name": "unknown", "confidence": 0.0, "response": ""}
-
-        top1_name, top1_score = ranked[0] if ranked else ("unknown", 0.0)
-        top2_score = ranked[1][1] if len(ranked) > 1 else 0.0
-        chosen_name, chosen_score = top1_name, top1_score
-        reject_reason = ""
-
         if keyword_intent and keyword_intent in self.intents:
-            chosen_name = keyword_intent
-            chosen_score = max(float(top1_score), 0.92)
-            reject_reason = ""
-        elif top1_score < self.MIN_CONFIDENCE:
-            reject_reason = (
-                f"rejected={top1_name} conf={top1_score:.3f} "
-                f"< {self.MIN_CONFIDENCE} → unknown"
-            )
-            chosen_name = "unknown"
-        elif top1_score >= self.EXACT_MATCH_THRESHOLD:
-            chosen_name, chosen_score = top1_name, top1_score
-        elif (top1_score - top2_score) < self.CONFIDENCE_MARGIN:
-            near = [
-                (name, score)
-                for name, score in ranked
-                if (top1_score - score) < self.CONFIDENCE_MARGIN
-            ]
-            max_priority = max(self._intent_priority(name) for name, _score in near)
-            winners = [
-                (name, score)
-                for name, score in near
-                if self._intent_priority(name) == max_priority
-            ]
-            if len(winners) == 1:
-                chosen_name, chosen_score = winners[0]
-            else:
-                reject_reason = (
-                    f"ambiguous top1={top1_name}({top1_score:.3f}) "
-                    f"top2={ranked[1][0]}({top2_score:.3f}) margin<{self.CONFIDENCE_MARGIN} → unknown"
-                )
-                chosen_name = "unknown"
-
-        if chosen_name == "unknown":
+            intent_definition = self.intents[keyword_intent]
+            result = {
+                "intent_name": keyword_intent,
+                "confidence": 0.92,
+                "response": self._pick_response(
+                    keyword_intent, intent_definition.get("response", "")
+                ),
+                "pilar": intent_definition.get("pilar", "general"),
+            }
             if _dlog:
                 _dlog.log_output(
                     "INTENT_DISPATCH",
-                    reject_reason or "unknown",
+                    f"intent={keyword_intent} conf=0.920 top2=0.000",
                     elapsed_ms=(time.monotonic() - _t0) * 1000,
                 )
-            return {
-                "intent_name": "unknown",
-                "confidence": float(top1_score),
-                "response": "",
-            }
+            return result
 
-        intent_definition = self.intents.get(chosen_name, {})
-        if self._utterance_too_thin(candidate_text, chosen_name):
-            if _dlog:
-                _dlog.log_output(
-                    "INTENT_DISPATCH",
-                    f"thin={chosen_name!r} text={candidate_text!r} → unknown",
-                    elapsed_ms=(time.monotonic() - _t0) * 1000,
-                )
-            return {
-                "intent_name": "unknown",
-                "confidence": float(chosen_score),
-                "response": "",
-            }
-
-        result = {
-            "intent_name": chosen_name,
-            "confidence": float(chosen_score),
-            "response": self._pick_response(chosen_name, intent_definition.get("response", "")),
-            "pilar": intent_definition.get("pilar", "general"),
-        }
         if _dlog:
             _dlog.log_output(
                 "INTENT_DISPATCH",
-                f"intent={chosen_name} conf={chosen_score:.3f} top2={top2_score:.3f}",
+                "unknown",
                 elapsed_ms=(time.monotonic() - _t0) * 1000,
             )
-        return result
+        return {
+            "intent_name": "unknown",
+            "confidence": 0.0,
+            "response": "",
+        }
 
     def _score_intents(self, candidate_text: str) -> dict[str, float]:
         scores: dict[str, float] = {}
@@ -730,6 +642,19 @@ class CameraWorker:
         last_emotion_label = ""
         log_action("CameraWorker", "tarea _run comenzada")
 
+        if self.camera_index is None or int(self.camera_index) < 0:
+            _queue_message_with_semaphore(
+                self.message_queue,
+                self.message_semaphore,
+                "log",
+                "Cámara desactivada (headless / sin OpenCV). Audio sigue.",
+            )
+            self.models_loaded_event.set()
+            while not self._stop_event.is_set():
+                time.sleep(0.2)
+            log_action("CameraWorker", "tarea _run finalizada (sin cámara)")
+            return
+
         try:
             # Auto-detect capture backend: DirectShow on Windows, V4L2 on Linux/RPi
             if sys.platform.startswith("win"):
@@ -1037,6 +962,69 @@ class CameraWorker:
             pass
 
 
+def whisper_beam_size() -> int:
+    """Default 1. Rollback de calidad STT: WHISPER_BEAM=5."""
+    try:
+        return max(1, int(os.environ.get("WHISPER_BEAM") or "1"))
+    except ValueError:
+        return 1
+
+
+STT_SAMPLE_RATE = 16000
+
+
+def find_supported_input_config(
+    device_index: int | None,
+    preferred_sr: int = STT_SAMPLE_RATE,
+) -> tuple[int, str, int]:
+    """Sample rate/dtype/channels that the input device accepts.
+
+    Cheap USB PnP mics reject 16000 Hz (PaErrorCode -9997) and only
+    open at 48000/44100.
+    """
+    rates: list[int] = []
+    for sr in (preferred_sr, 48000, 44100, 32000, 22050, 16000):
+        if sr not in rates:
+            rates.append(sr)
+    dtypes = ("float32", "int16")
+    channel_options = (1, 2)
+    for sr in rates:
+        for dtype in dtypes:
+            for ch in channel_options:
+                try:
+                    sd.check_input_settings(
+                        device=device_index,
+                        samplerate=float(sr),
+                        channels=ch,
+                        dtype=dtype,
+                    )
+                    return sr, dtype, ch
+                except Exception:
+                    continue
+    return preferred_sr, "float32", 1
+
+
+def mic_block_to_stt(
+    indata: np.ndarray,
+    capture_sr: int,
+    target_sr: int = STT_SAMPLE_RATE,
+) -> np.ndarray:
+    """Mono float32 at target_sr for VAD/Whisper/Vosk."""
+    arr = np.asarray(indata)
+    if arr.ndim == 2:
+        arr = arr[:, 0]
+    else:
+        arr = arr.reshape(-1)
+    if np.issubdtype(arr.dtype, np.integer):
+        info = np.iinfo(arr.dtype)
+        arr = arr.astype(np.float32) / float(info.max)
+    else:
+        arr = arr.astype(np.float32, copy=False)
+    if capture_sr != target_sr:
+        arr = SpeechWorker._resample_audio(arr, capture_sr, target_sr)
+    return arr
+
+
 class AudioWorker:
     # Tope duro de captura: silencio (VAD) o este máximo, lo que ocurra primero.
     # LATENCIA punto 10: antes 15.0s. Revertir si corta monólogos del nene.
@@ -1114,8 +1102,8 @@ class AudioWorker:
             self.yoga_engine = None
 
         try:
-            from hardware import PhysicalCompanion, load_pins
-            self.companion: Any = PhysicalCompanion(load_pins())
+            from hardware import get_companion
+            self.companion: Any = get_companion()
         except Exception:
             self.companion = None
 
@@ -1143,6 +1131,23 @@ class AudioWorker:
             self._thread.join(timeout=2)
         self._flush_vocab_parent_alert(force_session=True)
         log_action("AudioWorker", "detenido")
+
+    def _thinking_eyes(self, on: bool) -> None:
+        display = self.eye_display
+        if display is None or not hasattr(display, "set_expression"):
+            return
+        try:
+            if on:
+                self._eyes_before_think = display.get_expression()
+                display.set_expression("pensando")
+                return
+            prev = getattr(self, "_eyes_before_think", None)
+            self._eyes_before_think = None
+            if not prev or prev == "pensando":
+                prev = "escuchando"
+            display.set_expression(prev)
+        except Exception:
+            pass
 
     def _notify_vocab_parent(self, message: str) -> None:
         if not message or self._robot_state is None:
@@ -1306,6 +1311,7 @@ class AudioWorker:
         silence_seconds = 0.0
         listen_seconds = 0.0
         speech_active = False
+        audio_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=32)
 
         # Wait for camera models to finish loading before loading Whisper
         # to avoid CPU contention from concurrent heavy model initialization.
@@ -1318,7 +1324,15 @@ class AudioWorker:
 
         whisper_model = None
         if not self.cloud_mode:
+            _queue_message_with_semaphore(
+                self.message_queue, self.message_semaphore, "log",
+                "AudioWorker: cargando Whisper (puede tardar la primera vez)...",
+            )
             whisper_model = self._load_whisper_model()
+            _queue_message_with_semaphore(
+                self.message_queue, self.message_semaphore, "log",
+                "AudioWorker: Whisper listo" if whisper_model is not None else "AudioWorker: Whisper no disponible",
+            )
         else:
             _queue_message_with_semaphore(
                 self.message_queue, self.message_semaphore, "log",
@@ -1326,36 +1340,39 @@ class AudioWorker:
             )
         vad = self._load_vad(sample_rate)
 
-        # LLM en segundo plano: no bloquear la primera escucha (puede tardar 30-60s).
+        # LLM al inicio, una vez, antes de abrir el mic. Si carga en segundo
+        # plano el primer unknown sale enlatado.
         if not self.cloud_mode and self.fallback_llm is not None:
-            def _load_llm_background() -> None:
+            _queue_message_with_semaphore(
+                self.message_queue, self.message_semaphore, "log",
+                "AudioWorker: cargando LLM de fallback...",
+            )
+            if self.eye_display is not None and hasattr(self.eye_display, "set_expression"):
+                try:
+                    self.eye_display.set_expression("pensando")
+                except Exception:
+                    pass
+            try:
+                self.fallback_llm.load()
                 _queue_message_with_semaphore(
                     self.message_queue, self.message_semaphore, "log",
-                    "AudioWorker: cargando LLM de fallback en segundo plano...",
+                    "AudioWorker: LLM de fallback listo",
                 )
+            except Exception as exc:
+                _queue_message_with_semaphore(
+                    self.message_queue, self.message_semaphore, "log",
+                    f"AudioWorker: LLM de fallback no disponible: {exc}",
+                )
+            if self.eye_display is not None and hasattr(self.eye_display, "set_expression"):
                 try:
-                    self.fallback_llm.load()
-                    _queue_message_with_semaphore(
-                        self.message_queue, self.message_semaphore, "log",
-                        "AudioWorker: LLM de fallback listo",
-                    )
-                except Exception as exc:
-                    _queue_message_with_semaphore(
-                        self.message_queue, self.message_semaphore, "log",
-                        f"AudioWorker: LLM de fallback no disponible: {exc}",
-                    )
-
-            threading.Thread(
-                target=_load_llm_background,
-                name="LLMLoader",
-                daemon=True,
-            ).start()
+                    self.eye_display.set_expression("escuchando")
+                except Exception:
+                    pass
 
         _dlog = get_debug_logger()
         if _dlog:
             llm_status = "disponible" if (self.fallback_llm and self.fallback_llm.is_available) else "no disponible"
             _dlog.log_output("AUDIO_INIT", f"AudioWorker modelos cargados (Whisper + VAD + LLM={llm_status})")
-        audio_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=32)
 
         def callback(indata, frames, time_info, status) -> None:  # noqa: ANN001
             if status:
@@ -1366,12 +1383,12 @@ class AudioWorker:
             if not mic_open_for_listen(speaker_on, time.monotonic(), self._echo_mute_until):
                 return
             try:
-                audio_block = indata[:, 0].copy()
+                audio_block = mic_block_to_stt(indata, capture_sr, sample_rate)
                 audio_queue.put_nowait(audio_block)
             except queue.Full:
                 pass
 
-        if self.microphone_device_index == -1 or self.microphone_device_index is None:
+        if self.microphone_device_index == -1:
             _queue_message_with_semaphore(
                 self.message_queue,
                 self.message_semaphore,
@@ -1390,25 +1407,17 @@ class AudioWorker:
             return
 
         try:
-            with sd.InputStream(
-                device=self.microphone_device_index,
-                channels=1,
-                samplerate=sample_rate,
-                blocksize=block_size,
-                dtype="float32",
-                callback=callback,
-            ):
+            def listen_loop(mic_label: str) -> None:
+                nonlocal speech_active, silence_seconds, listen_seconds, current_segment
                 _queue_message_with_semaphore(
                     self.message_queue,
                     self.message_semaphore,
                     "status",
-                    {
-                        "mic": f"{self.microphone_device_index} activo",
-                        "volume": 0,
-                    },
+                    {"mic": mic_label, "volume": 0},
                 )
-                _queue_message_with_semaphore(self.message_queue, self.message_semaphore, "log", "silero-vad: escuchando...")
-
+                _queue_message_with_semaphore(
+                    self.message_queue, self.message_semaphore, "log", "silero-vad: escuchando..."
+                )
                 while not self._stop_event.is_set():
                     try:
                         audio_block = audio_queue.get(timeout=0.5)
@@ -1416,8 +1425,7 @@ class AudioWorker:
                         continue
 
                     circular_buffer.append(audio_block)
-                    
-                    # Calculate volume (0-100%) using RMS, safely handling any unexpected NaN/Inf
+
                     try:
                         rms = float(np.sqrt(np.mean(audio_block ** 2)))
                         if np.isnan(rms) or np.isinf(rms):
@@ -1426,15 +1434,12 @@ class AudioWorker:
                             volume_pct = min(100, int(rms * 300))
                     except Exception:
                         volume_pct = 0
-                        
+
                     _queue_message_with_semaphore(
                         self.message_queue,
                         self.message_semaphore,
                         "status",
-                        {
-                            "mic": f"{self.microphone_device_index} activo",
-                            "volume": volume_pct,
-                        },
+                        {"mic": mic_label, "volume": volume_pct},
                     )
 
                     from session_policy import mic_open_for_listen
@@ -1453,7 +1458,6 @@ class AudioWorker:
 
                     speech_detected = vad.has_speech(audio_block)
 
-                    # Adaptive silence threshold based on current emotion (#EPIC-005 CA#2)
                     emotion_context = getattr(self.intent_dispatcher, "current_emotion", None)
                     silence_threshold_seconds = self.emotion_reactor.get_silence_threshold(emotion_context)
 
@@ -1461,8 +1465,6 @@ class AudioWorker:
                         if not speech_active:
                             speech_active = True
                             listen_seconds = 0.0
-                            # Pre-roll: incluir hasta 2 bloques previos (~1.0s) del buffer circular
-                            # para evitar que se corte la primera sílaba o palabra al empezar a hablar
                             buf_list = list(circular_buffer)
                             pre_roll = buf_list[:-1][-pre_roll_blocks:] if len(buf_list) > 1 else []
                             current_segment = pre_roll + [audio_block]
@@ -1508,6 +1510,31 @@ class AudioWorker:
                             if hasattr(vad, "reset"):
                                 vad.reset()
                             self._handle_segment(segment_audio, whisper_model, audio_queue)
+
+            capture_sr, capture_dtype, capture_ch = find_supported_input_config(
+                self.microphone_device_index,
+                preferred_sr=sample_rate,
+            )
+            capture_block = max(1, int(capture_sr * block_duration_seconds))
+            if (capture_sr, capture_dtype, capture_ch) != (sample_rate, "float32", 1):
+                _queue_message_with_semaphore(
+                    self.message_queue,
+                    self.message_semaphore,
+                    "log",
+                    (
+                        f"AudioWorker: mic USB {capture_sr} Hz "
+                        f"{capture_ch}ch {capture_dtype} → STT {sample_rate} Hz"
+                    ),
+                )
+            with sd.InputStream(
+                device=self.microphone_device_index,
+                channels=capture_ch,
+                samplerate=capture_sr,
+                blocksize=capture_block,
+                dtype=capture_dtype,
+                callback=callback,
+            ):
+                listen_loop(f"{self.microphone_device_index} activo")
 
         except Exception as exc:
             log_action("AudioWorker", f"ERROR: {exc}")
@@ -1624,12 +1651,33 @@ class AudioWorker:
                     f"[STT] Transcrito ({elapsed_stt_ms:.0f}ms): \"{raw_text}\"",
                 )
             else:
+                from whisper_process import stt_empty_log
+
                 _queue_message_with_semaphore(
                     self.message_queue,
                     self.message_semaphore,
                     "log",
-                    f"[STT] Audio procesado ({elapsed_stt_ms:.0f}ms) — no se detectó texto",
+                    stt_empty_log(
+                        whisper_available=whisper_model is not None,
+                        elapsed_ms=elapsed_stt_ms,
+                    ),
                 )
+                return
+
+            from session_policy import is_clear_keyword_intent, utterance_too_thin
+
+            if utterance_too_thin(raw_text) and not is_clear_keyword_intent(raw_text):
+                _queue_message_with_semaphore(
+                    self.message_queue,
+                    self.message_semaphore,
+                    "log",
+                    f'[STT] Muy corto para una respuesta: "{raw_text}"',
+                )
+                if segment_duration_s > 0.8 and self.speech_worker is not None:
+                    self.speech_worker.speak_and_wait(
+                        "No te escuché bien, ¿me lo decís de nuevo?",
+                    )
+                    self._silence_mic_after_speaker(audio_queue)
                 return
 
             # 2. Sanitize (PII removal)
@@ -1788,73 +1836,104 @@ class AudioWorker:
             story_active = self.story_engine is not None and self.story_engine.is_active
             yoga_active = self.yoga_engine is not None and self.yoga_engine.is_active
             story_reflect = intent_payload.get("intent_name") == "story_reflect_answer"
-            _LLM_INTENTS = frozenset({"unknown", "question_curiosity", "help_request"})
-            allow_llm = (
-                intent_name in _LLM_INTENTS
-                and not game_active
-                and not story_active
-                and not yoga_active
-                and not gated
-            ) or story_reflect
+            from session_policy import should_allow_llm, stt_looks_like_garbage
+
+            allow_llm = should_allow_llm(
+                intent_name,
+                game_active=game_active,
+                story_active=story_active,
+                yoga_active=yoga_active,
+                gated=gated,
+                story_reflect=story_reflect,
+                garbage_stt=stt_looks_like_garbage(sanitized_text),
+            )
             llm_history = self.conversation_memory.messages()
-            if allow_llm and self.cloud_mode and self.cloud_llm is not None and self.cloud_llm.is_available:
-                _t_llm = time.monotonic()
-                if _dlog:
-                    _dlog.log_input("LLM_FALLBACK", f'text="{sanitized_text}" [CLOUD]')
-                if story_reflect:
-                    title = intent_payload.get("story_title") or "el cuento"
-                    digest = intent_payload.get("story_digest") or ""
-                    prompt = (
-                        f"Leímos '{title}'. Recorte: {digest}. "
-                        f"El nene dijo: {sanitized_text}. "
-                        "Comentá en una frase corta. No narres el cuento."
-                    )
-                    llm_response = self.cloud_llm.generate(prompt, emotion_context, history=llm_history)
-                else:
-                    llm_response = self.cloud_llm.generate(sanitized_text, emotion_context, history=llm_history)
-                if llm_response:
+            will_llm = allow_llm and (
+                (self.cloud_mode and self.cloud_llm is not None and self.cloud_llm.is_available)
+                or (
+                    not self.cloud_mode
+                    and self.fallback_llm is not None
+                    and self.fallback_llm.is_available
+                )
+            )
+            if will_llm:
+                self._thinking_eyes(True)
+            try:
+                if allow_llm and self.cloud_mode and self.cloud_llm is not None and self.cloud_llm.is_available:
+                    _t_llm = time.monotonic()
+                    if _dlog:
+                        _dlog.log_input("LLM_FALLBACK", f'text="{sanitized_text}" [CLOUD]')
                     if story_reflect:
-                        intent_payload["intent_name"] = "story_reflect_answer"
-                        intent_payload["pilar"] = "cognitivo"
-                    elif intent_name == "unknown":
-                        intent_payload["intent_name"] = "llm_fallback"
-                        intent_payload["pilar"] = "general"
-                    intent_payload["response"] = llm_response
-                if _dlog:
-                    _dlog.log_output(
-                        "LLM_FALLBACK",
-                        f'response="{llm_response}"' if llm_response else "sin respuesta",
-                        elapsed_ms=(time.monotonic() - _t_llm) * 1000,
+                        title = intent_payload.get("story_title") or "el cuento"
+                        digest = intent_payload.get("story_digest") or ""
+                        prompt = (
+                            f"Leímos '{title}'. Recorte: {digest}. "
+                            f"El nene dijo: {sanitized_text}. "
+                            "Comentá en una frase corta. No narres el cuento."
+                        )
+                        llm_response = self.cloud_llm.generate(prompt, emotion_context, history=llm_history)
+                    else:
+                        llm_response = self.cloud_llm.generate(sanitized_text, emotion_context, history=llm_history)
+                    if llm_response:
+                        if story_reflect:
+                            intent_payload["intent_name"] = "story_reflect_answer"
+                            intent_payload["pilar"] = "cognitivo"
+                        elif intent_name == "unknown":
+                            intent_payload["intent_name"] = "llm_fallback"
+                            intent_payload["pilar"] = "general"
+                        intent_payload["response"] = llm_response
+                    if _dlog:
+                        _dlog.log_output(
+                            "LLM_FALLBACK",
+                            f'response="{llm_response}"' if llm_response else "sin respuesta",
+                            elapsed_ms=(time.monotonic() - _t_llm) * 1000,
+                        )
+                elif allow_llm and self.fallback_llm is not None and self.fallback_llm.is_available:
+                    _t_llm = time.monotonic()
+                    _queue_message_with_semaphore(
+                        self.message_queue,
+                        self.message_semaphore,
+                        "log",
+                        "AudioWorker: pensando la respuesta...",
                     )
-            elif allow_llm and self.fallback_llm is not None and self.fallback_llm.is_available:
-                _t_llm = time.monotonic()
-                if _dlog:
-                    _dlog.log_input("LLM_FALLBACK", f"text=\"{sanitized_text}\"")
-                if story_reflect:
-                    title = intent_payload.get("story_title") or "el cuento"
-                    digest = intent_payload.get("story_digest") or ""
-                    prompt = (
-                        f"Leímos '{title}'. Recorte: {digest}. "
-                        f"El nene dijo: {sanitized_text}. "
-                        "Comentá en una frase corta. No narres el cuento."
-                    )
-                    llm_response = self.fallback_llm.generate(prompt, emotion_context, history=llm_history)
-                else:
-                    llm_response = self.fallback_llm.generate(sanitized_text, emotion_context, history=llm_history)
-                if llm_response:
+                    if _dlog:
+                        _dlog.log_input("LLM_FALLBACK", f"text=\"{sanitized_text}\"")
                     if story_reflect:
-                        intent_payload["intent_name"] = "story_reflect_answer"
-                        intent_payload["pilar"] = "cognitivo"
-                    elif intent_name == "unknown":
-                        intent_payload["intent_name"] = "llm_fallback"
-                        intent_payload["pilar"] = "general"
-                    intent_payload["response"] = llm_response
-                if _dlog:
-                    _dlog.log_output(
-                        "LLM_FALLBACK",
-                        f"response=\"{llm_response}\"" if llm_response else "sin respuesta",
-                        elapsed_ms=(time.monotonic() - _t_llm) * 1000,
-                    )
+                        title = intent_payload.get("story_title") or "el cuento"
+                        digest = intent_payload.get("story_digest") or ""
+                        prompt = (
+                            f"Leímos '{title}'. Recorte: {digest}. "
+                            f"El nene dijo: {sanitized_text}. "
+                            "Comentá en una frase corta. No narres el cuento."
+                        )
+                        llm_response = self.fallback_llm.generate(prompt, emotion_context, history=llm_history)
+                    else:
+                        llm_response = self.fallback_llm.generate(sanitized_text, emotion_context, history=llm_history)
+                    if llm_response:
+                        if story_reflect:
+                            intent_payload["intent_name"] = "story_reflect_answer"
+                            intent_payload["pilar"] = "cognitivo"
+                        elif intent_name == "unknown":
+                            intent_payload["intent_name"] = "llm_fallback"
+                            intent_payload["pilar"] = "general"
+                        intent_payload["response"] = llm_response
+                    else:
+                        why = getattr(self.fallback_llm, "last_fail", "") or "vacío"
+                        _queue_message_with_semaphore(
+                            self.message_queue,
+                            self.message_semaphore,
+                            "log",
+                            f"AudioWorker: LLM no respondió ({why})",
+                        )
+                    if _dlog:
+                        _dlog.log_output(
+                            "LLM_FALLBACK",
+                            f"response=\"{llm_response}\"" if llm_response else "sin respuesta",
+                            elapsed_ms=(time.monotonic() - _t_llm) * 1000,
+                        )
+            finally:
+                if will_llm:
+                    self._thinking_eyes(False)
 
             if intent_name == "unknown" and not str(intent_payload.get("response", "")).strip():
                 intent_payload["response"] = self.intent_dispatcher._pick_response(
@@ -2189,33 +2268,68 @@ class AudioWorker:
     )
 
     def _load_whisper_model(self):
-        model_size = (os.environ.get("WHISPER_MODEL") or "medium").strip() or "medium"
+        preferred = (os.environ.get("WHISPER_MODEL") or "medium").strip() or "medium"
         _dlog = get_debug_logger()
         if _dlog:
-            _dlog.log_input("WHISPER", f"Cargando modelo {model_size} (int8)...")
+            _dlog.log_input("WHISPER", f"Cargando modelo {preferred} (proceso hijo)...")
         _t0 = time.monotonic()
-        try:
-            from faster_whisper import WhisperModel
 
-            # Default 'medium' (~1.5GB int8): mejor español infantil. Override: WHISPER_MODEL=small.
-            # 4 hilos: el usuario prioriza calidad; tarda unos segundos más.
-            model = WhisperModel(
-                model_size,
-                device="cpu",
-                compute_type="int8",
-                cpu_threads=4,
-                num_workers=1,
+        def _log(text: str) -> None:
+            _queue_message_with_semaphore(
+                self.message_queue, self.message_semaphore, "log", f"AudioWorker: {text}"
             )
+
+        try:
+            from vosk_stt import start_vosk
+            from whisper_process import (
+                ctranslate2_compatible,
+                default_compute_type,
+                page_size_hint,
+                start_whisper_process,
+                whisper_model_candidates,
+            )
+
+            if not ctranslate2_compatible():
+                hint = page_size_hint() or "Kernel con páginas > 4K"
+                _log(hint)
+                _log("CTranslate2 no es usable; paso a Vosk.")
+                return start_vosk(log=_log)
+
+            compute = default_compute_type()
+            model = None
+            machine = platform.machine().lower()
+            sizes = whisper_model_candidates(preferred)
+            if machine in ("aarch64", "arm64"):
+                sizes = sizes[:1]
+            last_bus = False
+            for size in sizes:
+                if size != preferred:
+                    _log(f"Reintento Whisper con modelo={size}")
+                model = start_whisper_process(
+                    size,
+                    compute_type=compute,
+                    log=_log,
+                )
+                if model is not None:
+                    if size != preferred:
+                        _log(f"Whisper usando {size} (el pedido {preferred} no cargó)")
+                    break
+                last_bus = True
+            if model is None:
+                if last_bus:
+                    _log("CTranslate2 pegó Bus error; uso Vosk para transcribir.")
+                model = start_vosk(log=_log)
             if _dlog:
                 _dlog.log_output(
                     "WHISPER",
-                    f"Modelo {model_size} cargado",
+                    "Modelo listo" if model is not None else "Whisper no disponible",
                     elapsed_ms=(time.monotonic() - _t0) * 1000,
                 )
             return model
-        except Exception:
+        except Exception as exc:
+            _log(f"Whisper no se pudo iniciar: {exc}")
             if _dlog:
-                _dlog.log_output("WHISPER", f"ERROR: No se pudo cargar modelo {model_size}")
+                _dlog.log_output("WHISPER", f"ERROR: {exc}")
             return None
 
     @staticmethod
@@ -2571,7 +2685,7 @@ class AudioWorker:
             audio_segment,
             language="es",
             vad_filter=False,
-            beam_size=5,
+            beam_size=whisper_beam_size(),
             initial_prompt=self._WHISPER_INITIAL_PROMPT,
             no_speech_threshold=0.6,
             log_prob_threshold=-1.0,
@@ -3403,6 +3517,11 @@ class SileroVadAdapter:
         self._remainder = np.zeros(0, dtype=np.float32)
 
     def _load(self) -> None:
+        machine = platform.machine().lower()
+        if sys.platform.startswith("linux") and machine in ("aarch64", "arm64"):
+            # torch/silero en el proceso principal también puede Bus error en Pi 5.
+            self._mode = "energy"
+            return
         try:
             from silero_vad import load_silero_vad
 

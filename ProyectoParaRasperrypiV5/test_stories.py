@@ -13,6 +13,8 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+import re
+
 from story_engine import StoryEngine
 from story_library import StoryLibrary, ingest_pdf
 from story_validate import MIN_WORDS, split_for_speech, validate_children_story
@@ -73,10 +75,45 @@ def test_validate_rejects_blocklist() -> None:
     ok("motivo no cita la palabra", "porn" not in result.reason.lower())
 
 
+def _long_story_text() -> str:
+    sents = [
+        f"El sapo saltó la piedra número {i} y saludó a sus amigos del arroyo."
+        for i in range(1, 31)
+    ]
+    return "El sapo valiente\n\n" + " ".join(sents)
+
+
 def test_split_paragraphs() -> None:
-    text = "Uno. Dos. Tres.\n\nCuatro. Cinco. Seis. Siete."
-    chunks = split_for_speech(text, max_chars=40)
-    ok("split produce varios bloques", len(chunks) >= 2, f"chunks={chunks}")
+    from story_validate import CHECKIN_AFTER_WORDS, _word_count
+
+    short = "Uno. Dos. Tres.\n\nCuatro. Cinco. Seis. Siete."
+    short_chunks = split_for_speech(short)
+    ok("cuento corto un solo bloque", len(short_chunks) == 1, f"chunks={short_chunks}")
+
+    many_paras = "\n\n".join(
+        f"Había un sapo muy valiente en el arroyo {i}." for i in range(1, 12)
+    )
+    packed = split_for_speech(many_paras)
+    ok(
+        "párrafos cortos no hacen un check-in cada uno",
+        len(packed) <= 2,
+        f"n={len(packed)} chunks={packed}",
+    )
+
+    long = _long_story_text()
+    chunks = split_for_speech(long)
+    ok("cuento largo tiene más de un bloque", len(chunks) >= 2, f"n={len(chunks)}")
+    for i, chunk in enumerate(chunks[:-1]):
+        ok(
+            f"bloque {i} termina en punto",
+            bool(re.search(r"[.!?]\s*$", chunk)),
+            chunk[-20:],
+        )
+        ok(
+            f"bloque {i} llega a {CHECKIN_AFTER_WORDS} palabras",
+            _word_count(chunk) >= CHECKIN_AFTER_WORDS,
+            str(_word_count(chunk)),
+        )
 
 
 def test_library_save_list_delete() -> None:
@@ -190,24 +227,20 @@ def test_engine_delete_missing() -> None:
 def test_engine_checkin_and_silence() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         lib = StoryLibrary(Path(tmp))
-        lib.save_story("El sapo valiente", _story_text())
+        lib.save_story("El sapo valiente", _long_story_text())
         engine = StoryEngine(lib)
         engine.process_or_passthrough(
             "cuento",
             {"intent_name": "story_request", "response": "", "confidence": 1.0},
         )
         first = engine.process_or_passthrough("sí", {"intent_name": "unknown", "response": ""})
-        if engine.state == "checking_in":
-            ok("primer bloque pide seguimos", first.get("story_checkin") == "¿Seguimos?")
-            engine.advance_silence()
-            ok("silencio avanza", engine.state in ("checking_in", "reflecting"), engine.state)
-            stop = engine.process_or_passthrough("basta", {"intent_name": "unknown", "response": ""})
-            ok("basta en check-in para", not engine.is_active)
-            ok("cierre", "paramos" in stop["response"].lower() or "listo" in stop["response"].lower())
-        else:
-            ok("cuento corto va a reflexión", engine.state == "reflecting" and bool(first.get("story_need_reflection")))
-            digest = first.get("story_digest") or ""
-            ok("digest acotado", 0 < len(digest) <= 401)
+        ok("primer bloque pide seguimos", first.get("story_checkin") == "¿Seguimos?")
+        ok("sigue en check-in", engine.state == "checking_in", engine.state)
+        engine.advance_silence()
+        ok("silencio avanza", engine.state in ("checking_in", "reflecting"), engine.state)
+        stop = engine.process_or_passthrough("basta", {"intent_name": "unknown", "response": ""})
+        ok("basta en check-in para", not engine.is_active)
+        ok("cierre", "paramos" in stop["response"].lower() or "listo" in stop["response"].lower())
 
 
 def test_engine_last_chunk_reflection() -> None:

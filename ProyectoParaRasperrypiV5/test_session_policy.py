@@ -137,6 +137,85 @@ class TestMicHalfDuplex(unittest.TestCase):
             is_clear_keyword_intent("Tengo un poco más alegría. Quiero comer un zanguche."),
             "needs_basic",
         )
+        self.assertIsNone(is_clear_keyword_intent("no quiero comer"))
+        self.assertIsNone(is_clear_keyword_intent("no tengo hambre"))
+
+
+class TestGreetingFarewellExact(unittest.TestCase):
+    def test_saludos_cortos(self) -> None:
+        for phrase in (
+            "hola",
+            "Hola.",
+            "hola teo",
+            "holi",
+            "holis",
+            "hey",
+            "que tal",
+            "buenos dias teo",
+            "buenas tardes",
+        ):
+            self.assertEqual(is_clear_keyword_intent(phrase), "greeting", phrase)
+
+    def test_despedidas_cortas(self) -> None:
+        for phrase in ("chau", "Chau!", "adios teo", "nos vemos", "me voy", "hasta luego"):
+            self.assertEqual(is_clear_keyword_intent(phrase), "farewell", phrase)
+
+    def test_hola_con_nombre_no_es_saludo(self) -> None:
+        self.assertIsNone(is_clear_keyword_intent("hola me llamo tomas"))
+
+    def test_hola_como_va_no_es_saludo(self) -> None:
+        self.assertIsNone(is_clear_keyword_intent("hola como va"))
+
+    def test_hey_hola_no_es_saludo_exacto(self) -> None:
+        self.assertIsNone(is_clear_keyword_intent("hey hola"))
+
+
+class TestUtteranceTooThin(unittest.TestCase):
+    def test_palabra_suelta_no_va_al_llm(self) -> None:
+        from session_policy import utterance_too_thin
+
+        self.assertTrue(utterance_too_thin("es"))
+        self.assertTrue(utterance_too_thin("hijo"))
+        self.assertTrue(utterance_too_thin("hola"))
+
+    def test_si_no_y_frases_no_son_thin(self) -> None:
+        from session_policy import utterance_too_thin
+
+        self.assertFalse(utterance_too_thin("quiero jugar"))
+        self.assertFalse(utterance_too_thin("sí"))
+        self.assertFalse(utterance_too_thin("no"))
+
+    def test_ensalada_larga_es_basura(self) -> None:
+        from session_policy import stt_looks_like_garbage
+
+        self.assertTrue(
+            stt_looks_like_garbage(
+                "no no tengo ganas halaga treinta segundos west caemos escuchando del miraflores"
+            )
+        )
+        self.assertFalse(stt_looks_like_garbage("quiero que hagamos un pozo"))
+
+
+class TestShouldAllowLlm(unittest.TestCase):
+    def test_unknown_va_al_llm(self) -> None:
+        from session_policy import should_allow_llm
+
+        self.assertTrue(should_allow_llm("unknown"))
+
+    def test_needs_basic_no_va_al_llm(self) -> None:
+        from session_policy import should_allow_llm
+
+        self.assertFalse(should_allow_llm("needs_basic"))
+
+    def test_basura_stt_no_va_al_llm(self) -> None:
+        from session_policy import should_allow_llm
+
+        self.assertFalse(should_allow_llm("unknown", garbage_stt=True))
+
+    def test_cuento_reflect_si(self) -> None:
+        from session_policy import should_allow_llm
+
+        self.assertTrue(should_allow_llm("story_reflect_answer", story_reflect=True))
 
 
 class TestTelemetryRange(unittest.TestCase):

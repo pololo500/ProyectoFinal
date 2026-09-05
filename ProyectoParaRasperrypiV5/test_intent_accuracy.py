@@ -3,8 +3,7 @@
 Ejecutar con:  python test_intent_accuracy.py
 
 No usa micrófono ni cámara. Carga intent_rules.json y mide cuántas
-frases caen en el intent esperado. Sirve para calibrar MIN_CONFIDENCE
-y CONFIDENCE_MARGIN.
+frases caen en el intent esperado (keyword vs unknown/LLM).
 """
 from __future__ import annotations
 
@@ -29,43 +28,36 @@ sys.modules.setdefault("sounddevice", MagicMock())
 from workers import IntentDispatcher
 
 CASES: list[tuple[str, str]] = [
-    # greeting
     ("hola", "greeting"),
     ("buenos dias teo", "greeting"),
     ("holi", "greeting"),
     ("que tal", "greeting"),
-    ("hey hola", "greeting"),
-    # farewell
+    ("hey hola", "unknown"),
     ("chau", "farewell"),
     ("me voy", "farewell"),
     ("nos vemos", "farewell"),
     ("adios teo", "farewell"),
-    # emotion_sad
-    ("estoy triste", "emotion_sad"),
-    ("quiero llorar", "emotion_sad"),
-    ("me siento mal", "emotion_sad"),
-    ("estoy llorando", "emotion_sad"),
-    # emotion_angry
-    ("estoy enojado", "emotion_angry"),
-    ("me enoja", "emotion_angry"),
-    ("dejame", "emotion_angry"),
-    ("estoy furiosa", "emotion_angry"),
-    # emotion_happy
-    ("estoy feliz", "emotion_happy"),
-    ("estoy contento", "emotion_happy"),
-    ("que divertido", "emotion_happy"),
-    # crisis_cry (priority 20)
-    ("quiero a mama", "crisis_cry"),
-    ("quiero a mi papa", "crisis_cry"),
-    ("no puedo mas", "crisis_cry"),
-    ("no quiero estar solo", "crisis_cry"),
-    # regulation / yoga
-    ("quiero respirar", "regulation_breathing"),
-    ("ayudame a calmarme", "regulation_breathing"),
-    ("estoy nervioso", "regulation_breathing"),
+    ("hola me llamo tomas", "unknown"),
+    ("estoy triste", "unknown"),
+    ("quiero llorar", "unknown"),
+    ("me siento mal", "unknown"),
+    ("estoy llorando", "unknown"),
+    ("estoy enojado", "unknown"),
+    ("me enoja", "unknown"),
+    ("dejame", "unknown"),
+    ("estoy furiosa", "unknown"),
+    ("estoy feliz", "unknown"),
+    ("estoy contento", "unknown"),
+    ("que divertido", "unknown"),
+    ("quiero a mama", "unknown"),
+    ("quiero a mi papa", "unknown"),
+    ("no puedo mas", "unknown"),
+    ("no quiero estar solo", "unknown"),
+    ("quiero respirar", "unknown"),
+    ("ayudame a calmarme", "unknown"),
+    ("estoy nervioso", "unknown"),
     ("hagamos yoga", "yoga_request"),
     ("quiero estirarme", "yoga_request"),
-    # games
     ("juguemos veo veo", "play_veo_veo"),
     ("veo veo", "play_veo_veo"),
     ("dale veo veo", "play_veo_veo"),
@@ -73,68 +65,61 @@ CASES: list[tuple[str, str]] = [
     ("juguemos piedra papel tijera", "play_piedra_papel"),
     ("quiero jugar al Piedra, papel o tijera", "play_piedra_papel"),
     ("paro la musica", "stop_music_request"),
-    # curiosity
-    ("que es eso", "question_curiosity"),
-    ("como se llama", "question_curiosity"),
+    ("que es eso", "unknown"),
+    ("como se llama", "unknown"),
     ("como te llamas", "identity_name"),
     ("quien sos", "identity_name"),
-    ("por que", "question_curiosity"),
-    # song
+    ("por que", "unknown"),
     ("cantame una cancion", "song_request"),
     ("quiero musica", "song_request"),
     ("pone musica", "song_request"),
-    # routines
-    ("ya termine", "routine_ack"),
-    ("ya me lave", "routine_ack"),
-    ("un ratito mas", "routine_resist"),
-    ("cinco minutos mas", "routine_resist"),
-    ("todavia no", "routine_resist"),
-    ("ayudame", "help_request"),
-    ("necesito ayuda", "help_request"),
-    ("elijo este", "autonomy_decision"),
-    ("quiero este", "autonomy_decision"),
-    # parents / hug / sensory / fear
+    ("ya termine", "unknown"),
+    ("ya me lave", "unknown"),
+    ("un ratito mas", "unknown"),
+    ("cinco minutos mas", "unknown"),
+    ("todavia no", "unknown"),
+    ("ayudame", "unknown"),
+    ("necesito ayuda", "unknown"),
+    ("elijo este", "unknown"),
+    ("quiero este", "unknown"),
     ("llama a mama", "call_parent"),
     ("quiero hablar con papa", "call_parent"),
     ("dame un abrazo", "hug_request"),
     ("abrazame", "hug_request"),
-    ("te quiero", "hug_request"),
-    ("hay mucho ruido", "sensory_discomfort"),
-    ("me duelen los oidos", "sensory_discomfort"),
-    ("tengo miedo", "emotion_fear"),
-    ("estoy asustado", "emotion_fear"),
-    ("tengo cuco", "emotion_fear"),
-    # tired / frustration / needs
-    ("tengo sueño", "tired_sleepy"),
-    ("quiero dormir", "tired_sleepy"),
-    ("no me sale", "frustration_support"),
-    ("estoy frustrado", "frustration_support"),
+    ("te quiero", "unknown"),
+    ("hay mucho ruido", "unknown"),
+    ("me duelen los oidos", "unknown"),
+    ("tengo miedo", "unknown"),
+    ("estoy asustado", "unknown"),
+    ("tengo cuco", "unknown"),
+    ("tengo sueño", "unknown"),
+    ("quiero dormir", "unknown"),
+    ("no me sale", "unknown"),
+    ("estoy frustrado", "unknown"),
     ("tengo hambre", "needs_basic"),
     ("quiero agua", "needs_basic"),
     ("tengo sed", "needs_basic"),
-    ("quiero ir al baño", "routine_hygiene"),
-    ("me lavo las manos", "routine_hygiene"),
-    ("a guardar los juguetes", "routine_tidy"),
-    ("hay que ordenar", "routine_tidy"),
-    ("gracias teo", "gratitude"),
-    ("muchas gracias", "gratitude"),
-    ("contame un chiste", "joke_request"),
-    ("bailemos", "dance_play"),
-    ("hace frio", "weather_talk"),
-    ("fui al jardin", "school_day"),
-    ("mira lo que hice", "look_at_this"),
-    ("me duele la panza", "body_hurt"),
-    ("es mi cumple", "birthday_talk"),
-    ("quiero jugar", "play_generic"),
-    # typical whisper typos / child phrasing
-    ("ola teo", "greeting"),
-    ("kiero a mama", "crisis_cry"),
-    ("dame un abraso", "hug_request"),
+    ("quiero ir al baño", "unknown"),
+    ("me lavo las manos", "unknown"),
+    ("a guardar los juguetes", "unknown"),
+    ("hay que ordenar", "unknown"),
+    ("gracias teo", "unknown"),
+    ("muchas gracias", "unknown"),
+    ("contame un chiste", "unknown"),
+    ("bailemos", "unknown"),
+    ("hace frio", "unknown"),
+    ("fui al jardin", "unknown"),
+    ("mira lo que hice", "unknown"),
+    ("me duele la panza", "unknown"),
+    ("es mi cumple", "unknown"),
+    ("quiero jugar", "unknown"),
+    ("ola teo", "unknown"),
+    ("kiero a mama", "unknown"),
+    ("dame un abraso", "unknown"),
     ("cantame una cansión", "song_request"),
-    ("tengo ambre", "needs_basic"),
+    ("tengo ambre", "unknown"),
     ("jugemos veo veo", "play_veo_veo"),
-    ("estoy trsite", "emotion_sad"),
-    # should fall through to unknown / LLM
+    ("estoy trsite", "unknown"),
     ("el gato fue a la luna", "unknown"),
     ("ayer vimos un dinosaurio enorme", "unknown"),
     ("mi mochila es azul con estrellas", "unknown"),
@@ -147,7 +132,7 @@ def main() -> int:
     rules_path = Path(__file__).resolve().parent / "intent_rules.json"
     print("Cargando IntentDispatcher...")
     dispatcher = IntentDispatcher.from_file(rules_path)
-    backend = "sentence-transformers" if dispatcher._sentence_model is not None else "spaCy fallback"
+    backend = "keyword" if dispatcher._sentence_model is None else "sentence-transformers"
     print(f"Backend NLU: {backend}")
     print(f"MIN_CONFIDENCE={dispatcher.MIN_CONFIDENCE}  MARGIN={dispatcher.CONFIDENCE_MARGIN}")
     print(f"Casos: {len(CASES)}\n")

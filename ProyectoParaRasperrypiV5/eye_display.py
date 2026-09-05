@@ -13,6 +13,7 @@ Expresiones soportadas:
   - escuchando: brillo sutil pulsante
   - hablando  : parpadeo rítmico suave
   - dormido   : ojos casi cerrados (modo noche / apagado)
+  - pensando  : círculo de carga (LLM)
 
 
 La interfaz es minimalista y no sobreestimulante, siguiendo los
@@ -21,9 +22,10 @@ lineamientos del proyecto para niños con TEA.
 from __future__ import annotations
 
 import math
-import random
 import tkinter as tk
 from typing import Any
+
+from eye_render import EyeAnimator
 
 
 # ---------------------------------------------------------------------------
@@ -46,80 +48,87 @@ class EyeDisplay:
     parámetros que se interpolan suavemente entre expresiones.
     """
 
-    def __init__(self, canvas: tk.Canvas) -> None:
+    def __init__(self, canvas: tk.Canvas | None, animator: EyeAnimator | None = None) -> None:
         self.canvas = canvas
         self.width = 800
         self.height = 480
+        self._anim = animator or EyeAnimator()
+        self.lcd = None
+        self._lcd_loop_started = False
 
-        # Estado actual de la expresión (parámetros interpolados)
-        self._params: dict[str, float] = {
-            "eye_open": 1.0,      # 0.0 = cerrado, 1.0 = abierto completo
-            "eye_curve": 0.0,     # 0.0 = recto, 1.0 = curvado (sonrisa)
-            "brow_angle": 0.0,    # -1.0 = triste, 0.0 = neutral, 1.0 = enojado
-            "pupil_size": 1.0,    # 0.5 = chica, 1.0 = normal, 1.5 = grande
-            "eye_width_mult": 1.0,  # multiplicador de ancho
-        }
-        self._target_params: dict[str, float] = dict(self._params)
-        self._brightness: float = 1.0  # 0.0 a 1.0
-        self._current_expression: str = "neutral"
-        self._blink_phase: float = 0.0
-        self._is_blinking: bool = False
-        self._pulse_phase: float = 0.0
-        self._is_pulsing: bool = False  # Para "escuchando"
-        self._pictogram: str | None = None
+        # Espejo de estado para el dibujo en canvas (el animador es la fuente).
+        self._params = self._anim.params
+        self._target_params = self._anim.target_params
+        self._brightness = self._anim.brightness
+        self._current_expression = self._anim.expression
+        self._pulse_phase = self._anim.pulse_phase
+        self._is_pulsing = self._anim.is_pulsing
+        self._pictogram = self._anim.pictogram
 
-        # IDs de elementos del canvas para updates eficientes
         self._canvas_ids: dict[str, int] = {}
 
-        # Configurar canvas
-        self.canvas.configure(bg=_BG_COLOR, highlightthickness=0)
-        self.canvas.bind("<Configure>", self._on_resize)
-
-        # Iniciar loops de animación
-        self._animate()
-        self._schedule_blink()
+        if self.canvas is not None:
+            self.canvas.configure(bg=_BG_COLOR, highlightthickness=0)
+            self.canvas.bind("<Configure>", self._on_resize)
+            self._animate()
+        else:
+            self._start_lcd_thread_if_needed()
 
     # ------------------------------------------------------------------
     # API Pública
     # ------------------------------------------------------------------
 
     def set_expression(self, expression: str, transition_ms: int = 300) -> None:
-        """Transiciona suavemente a una nueva expresión.
-
-        Args:
-            expression: neutral, feliz, triste, sorprendido, enojado,
-                       escuchando, hablando, dormido.
-            transition_ms: Duración de la transición (no usado directamente,
-                          la interpolación es per-frame).
-        """
-        self._current_expression = expression
-        self._is_pulsing = expression in ("escuchando", "hablando")
-        if expression == "dormido":
-            self._is_blinking = False
-        target = self._expression_params(expression)
-        self._target_params.update(target)
+        """Transiciona suavemente a una nueva expresión."""
+        self._anim.set_expression(expression, transition_ms)
+        self._sync_from_animator()
 
     def set_brightness(self, level: float) -> None:
-        """Ajusta el brillo de los ojos (0.0 a 1.0).
-
-        Configuración sensorial para evitar hipersensibilidad visual.
-        """
-        self._brightness = max(0.0, min(1.0, level))
+        """Ajusta el brillo de los ojos (0.0 a 1.0)."""
+        self._anim.set_brightness(level)
+        self._sync_from_animator()
 
     def set_pictogram(self, name: str | None) -> None:
         """Muestra un pictograma simple bajo los ojos (rutina / abrazo)."""
-        self._pictogram = name
-        if name:
-            shown = name
-            self.canvas.after(8000, lambda: self._clear_pictogram_if(shown))
-
-    def _clear_pictogram_if(self, name: str) -> None:
-        if self._pictogram == name:
-            self._pictogram = None
+        self._anim.set_pictogram(name)
+        self._sync_from_animator()
 
     def get_expression(self) -> str:
         """Retorna la expresión actual."""
-        return self._current_expression
+        return self._anim.get_expression()
+
+    def attach_hardware_lcd(self) -> bool:
+        """Enciende la TFT ST7789 si está cableada. Devuelve True si hay LCD."""
+        if self.lcd is not None:
+            return True
+        try:
+            from lcd_panel import try_open_lcd
+
+            self.lcd = try_open_lcd()
+        except Exception:
+            self.lcd = None
+        if self.lcd is not None and self.canvas is None:
+            self._start_lcd_thread_if_needed()
+        return self.lcd is not None
+
+    def stop(self) -> None:
+        self._lcd_loop_started = False
+        lcd = self.lcd
+        self.lcd = None
+        if lcd is not None:
+            try:
+                lcd.close()
+            except Exception:
+                pass
+
+    def _sync_from_animator(self) -> None:
+        self._params = self._anim.params
+        self._target_params = self._anim.target_params
+        self._brightness = self._anim.brightness
+        self._current_expression = self._anim.expression
+        self._pulse_phase = self._anim.pulse_phase
+        self._is_pulsing = self._anim.is_pulsing
+        self._pictogram = self._anim.pictogram
 
     # ------------------------------------------------------------------
     # Parámetros de expresión
@@ -185,6 +194,13 @@ class EyeDisplay:
                 "pupil_size": 0.7,
                 "eye_width_mult": 1.0,
             },
+            "pensando": {
+                "eye_open": 1.0,
+                "eye_curve": 0.0,
+                "brow_angle": 0.0,
+                "pupil_size": 1.0,
+                "eye_width_mult": 1.0,
+            },
         }
         return expressions.get(expression, expressions["neutral"])
 
@@ -206,51 +222,40 @@ class EyeDisplay:
 
     def _animate(self) -> None:
         """Loop principal de animación (~30fps)."""
-        self._interpolate_params()
+        self._anim.tick()
+        self._sync_from_animator()
+        if self.canvas is not None:
+            self._draw_eyes()
+        self._blit_lcd()
+        if self.canvas is not None:
+            self.canvas.after(33, self._animate)
 
-        # Actualizar fase de pulso para "escuchando"
-        if self._is_pulsing:
-            self._pulse_phase += 0.08
-        else:
-            self._pulse_phase = 0.0
-
-        self._draw_eyes()
-        self.canvas.after(33, self._animate)  # ~30fps
-
-    def _schedule_blink(self) -> None:
-        """Programa un parpadeo natural aleatorio."""
-        if self._is_blinking or self._current_expression == "dormido":
+    def _start_lcd_thread_if_needed(self) -> None:
+        if self.canvas is not None or self.lcd is None or self._lcd_loop_started:
             return
-        # Parpadeo cada 3-6 segundos (rango natural)
-        delay_ms = random.randint(3000, 6000)
-        self.canvas.after(delay_ms, self._do_blink)
+        import threading
 
-    def _do_blink(self) -> None:
-        """Ejecuta un parpadeo suave."""
-        self._is_blinking = True
-        self._blink_close(step=0)
+        self._lcd_loop_started = True
+        threading.Thread(target=self._lcd_loop, name="LcdEyes", daemon=True).start()
 
-    def _blink_close(self, step: int) -> None:
-        """Cierra los ojos gradualmente."""
-        if step < 4:
-            self._params["eye_open"] = max(0.05, self._params["eye_open"] - 0.25)
-            self.canvas.after(25, lambda: self._blink_close(step + 1))
-        else:
-            self._blink_open(step=0)
+    def _lcd_loop(self) -> None:
+        import time
 
-    def _blink_open(self, step: int) -> None:
-        """Abre los ojos gradualmente."""
-        target_open = self._target_params.get("eye_open", 1.0)
-        if step < 4:
-            self._params["eye_open"] = min(
-                target_open,
-                self._params["eye_open"] + 0.25,
-            )
-            self.canvas.after(25, lambda: self._blink_open(step + 1))
-        else:
-            self._params["eye_open"] = target_open
-            self._is_blinking = False
-            self._schedule_blink()
+        while self._lcd_loop_started and self.lcd is not None:
+            self._anim.tick()
+            self._sync_from_animator()
+            self._blit_lcd()
+            time.sleep(0.033)
+
+    def _blit_lcd(self) -> None:
+        lcd = self.lcd
+        if lcd is None:
+            return
+        try:
+            frame = self._anim.render(lcd.display_width, lcd.display_height)
+            lcd.display(frame)
+        except Exception:
+            pass
 
     def _brightness_adjusted_color(self, hex_color: str) -> str:
         """Aplica el nivel de brillo a un color hex."""
@@ -389,7 +394,8 @@ class EyeDisplay:
                     outline="",
                 )
 
-        self._draw_pictogram(cx, cy, h)
+        if self.canvas is not None:
+            self._draw_pictogram(cx, cy, h)
 
     def _draw_pictogram(self, cx: float, cy: float, h: float) -> None:
         name = self._pictogram
@@ -413,3 +419,13 @@ class EyeDisplay:
             fill=color,
             font=("Segoe UI", 22, "bold"),
         )
+
+
+def create_eye_display(canvas: tk.Canvas | None = None) -> EyeDisplay:
+    """Crea ojos en canvas (Windows/HDMI) y, si hay hardware, en la LCD ST7789."""
+    display = EyeDisplay(canvas)
+    if display.attach_hardware_lcd():
+        from debug_logger import log_action
+
+        log_action("LCD", "ojos en pantalla ST7789")
+    return display

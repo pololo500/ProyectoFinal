@@ -1,6 +1,13 @@
 {
-  "hug_button_pin": null,
-  "servo_left_pin": null,
-  "servo_right_pin": null,
-  "_comment": "Pines BCM de la Raspberry Pi. Dejar null hasta que Teo indique el cableado del botón de panza y los servos. La lógica de abrazo ya corre en software (simulado)."
+  "hug_button_pin": 27,
+  "servo_left_pin": 12,
+  "servo_right_pin": 13,
+  "lcd_dc_pin": 24,
+  "lcd_rst_pin": 25,
+  "lcd_spi_port": 0,
+  "lcd_spi_cs": 0,
+  "lcd_width": 240,
+  "lcd_height": 320,
+  "lcd_rotation": 90,
+  "_comment": "BCM Raspberry Pi 5 (2 sep 2026). Pulsador GPIO27 pull-up interno. Servo1=GPIO12 PWM0, servo2=GPIO13 PWM1. LCD ST7789V SPI0 CE0, DC=GPIO24, RST=GPIO25, backlight a 3.3V. Si los brazos quedan cruzados, intercambiar servo_left_pin y servo_right_pin."
 }

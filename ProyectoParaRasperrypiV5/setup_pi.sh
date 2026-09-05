@@ -12,6 +12,10 @@ sudo apt update
 sudo apt install -y \
     python3-pip \
     python3-venv \
+    python3-dev \
+    python3-lgpio \
+    liblgpio-dev \
+    python3-spidev \
     build-essential \
     portaudio19-dev \
     libportaudio2 \
@@ -43,6 +47,17 @@ source venv/bin/activate
 echo "[4/5] Instalando paquetes de Python (requirements.txt y spaCy)..."
 uv pip install -r requirements.txt
 python -m spacy download es_core_news_md
+uv pip install vosk || echo "  Aviso: vosk no se instaló. En el venv: uv pip install vosk"
+
+# GPIO / SPI (Raspberry Pi 5: lgpio + spidev para servos, pulsador y LCD ST7789)
+echo "[4b/5] Habilitando SPI e instalando lgpio/spidev..."
+if command -v raspi-config >/dev/null; then
+    sudo raspi-config nonint do_spi 0 || true
+fi
+if command -v usermod >/dev/null; then
+    sudo usermod -aG spi,gpio "$USER" 2>/dev/null || true
+fi
+uv pip install lgpio spidev || echo "  Aviso: lgpio/spidev no se instalaron. En la Pi: sudo apt install python3-lgpio python3-spidev"
 
 # 5. llama-cpp-python se compila desde source en ARM64 (~5 min en RPi 5).
 #    Si la compilación falla, la app sigue funcionando sin el LLM de fallback.
@@ -56,6 +71,17 @@ echo ""
 echo "===================================================="
 echo " ¡Instalación completada con éxito!"
 echo ""
+if command -v getconf >/dev/null; then
+    PAGE_SIZE="$(getconf PAGE_SIZE 2>/dev/null || getconf PAGESIZE 2>/dev/null || echo "")"
+    if [ "$PAGE_SIZE" = "16384" ]; then
+        echo " AVISO: esta Pi usa páginas de 16K. faster-whisper pega Bus error."
+        echo " Antes de python app.py, pasá el kernel a 4K y reiniciá:"
+        echo "   sudo sed -i '1i kernel=kernel8.img' /boot/firmware/config.txt"
+        echo "   sudo reboot"
+        echo " Después: getconf PAGE_SIZE  →  debe ser 4096"
+        echo ""
+    fi
+fi
 echo " Para ejecutar la aplicación:"
 echo " 1. Activa el entorno: source venv/bin/activate"
 echo " 2. Ejecuta la app: python app.py"

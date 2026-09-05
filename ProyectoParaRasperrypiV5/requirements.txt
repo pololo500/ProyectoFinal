@@ -3,6 +3,7 @@ mediapipe
 sounddevice
 silero-vad
 faster-whisper
+vosk
 spacy
 sentence-transformers
 scrubadub

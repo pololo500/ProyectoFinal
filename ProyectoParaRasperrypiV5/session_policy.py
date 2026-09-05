@@ -120,6 +120,46 @@ def _normalize(text: str) -> str:
     return normalized.lower().strip()
 
 
+def _phrase_key(normalized: str) -> str:
+    """Frase entera sin puntuación, para saludos/despedidas exactos."""
+    cleaned = re.sub(r"[¿¡!?,.;:]+", " ", normalized)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+_GREETING_PHRASES = frozenset(
+    {
+        "hola",
+        "hola teo",
+        "holi",
+        "holi teo",
+        "holis",
+        "holis teo",
+        "hey",
+        "hey teo",
+        "que tal",
+        "que tal teo",
+        "buenos dias",
+        "buenos dias teo",
+        "buenas tardes",
+        "buenas tardes teo",
+    }
+)
+_FAREWELL_PHRASES = frozenset(
+    {
+        "chau",
+        "chau teo",
+        "adios",
+        "adios teo",
+        "nos vemos",
+        "nos vemos teo",
+        "me voy",
+        "me voy teo",
+        "hasta luego",
+        "hasta luego teo",
+    }
+)
+
+
 _BARGE_IN = re.compile(
     r"\b(basta|parar|paro|para|chau|silencio|mama|papa|mamá|papá)\b",
     re.IGNORECASE,
@@ -140,9 +180,62 @@ def mic_open_for_listen(speaker_playing: bool, now: float, echo_mute_until: floa
     return now >= echo_mute_until
 
 
+_THIN_KEEP = frozenset({"si", "no", "ok", "dale", "ya", "eh"})
+
+
+def utterance_too_thin(text: str) -> bool:
+    """Una sola palabra que no es sí/no no vale una pasada al LLM.
+
+    Vosk a menudo suelta 'hijo'/'es'; el 3B en la Pi se puede colgar y
+    el mic queda muerto minutos.
+    """
+    words = [w for w in (text or "").strip().split() if w]
+    if not words:
+        return True
+    if len(words) >= 2:
+        return False
+    folded = unicodedata.normalize("NFD", words[0].lower())
+    folded = "".join(c for c in folded if unicodedata.category(c) != "Mn")
+    return folded not in _THIN_KEEP
+
+
+def stt_looks_like_garbage(text: str) -> bool:
+    """Vosk a 8 s a veces suelta ensalada (west, miraflores, …). No va al LLM."""
+    words = [w for w in (text or "").strip().split() if w]
+    return len(words) >= 8
+
+
+_LLM_INTENTS = frozenset({"unknown", "question_curiosity", "help_request"})
+
+
+def should_allow_llm(
+    intent_name: str,
+    *,
+    game_active: bool = False,
+    story_active: bool = False,
+    yoga_active: bool = False,
+    gated: bool = False,
+    story_reflect: bool = False,
+    garbage_stt: bool = False,
+) -> bool:
+    """Unknown y curiosidad van al LLM. Vosk no bloquea: el modelo local sigue."""
+    if story_reflect:
+        return True
+    if intent_name not in _LLM_INTENTS:
+        return False
+    if game_active or story_active or yoga_active or gated or garbage_stt:
+        return False
+    return True
+
+
 def is_clear_keyword_intent(text: str) -> str | None:
     """Intents que no deben esperar embeddings ni un Whisper “perfecto”."""
     normalized = _normalize(text)
+    key = _phrase_key(normalized)
+    if key in _GREETING_PHRASES:
+        return "greeting"
+    if key in _FAREWELL_PHRASES:
+        return "farewell"
     if re.search(
         r"piedra.{0,40}papel|papel.{0,30}tijera|piedra\s*papel|juguem\w*.{0,25}tijera",
         normalized,
@@ -157,6 +250,9 @@ def is_clear_keyword_intent(text: str) -> str | None:
         return "story_request"
     if re.search(
         r"\b(tengo hambre|tengo sed|quiero agua|quiero comer)\b",
+        normalized,
+    ) and not re.search(
+        r"\bno\s+(tengo hambre|tengo sed|quiero agua|quiero comer)\b",
         normalized,
     ):
         return "needs_basic"

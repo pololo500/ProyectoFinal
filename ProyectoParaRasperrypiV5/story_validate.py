@@ -8,6 +8,7 @@ from dataclasses import dataclass
 MIN_WORDS = 80
 MIN_SENTENCES = 3
 MAX_DIGIT_RATIO = 0.18
+CHECKIN_AFTER_WORDS = 50
 
 _NARRATIVE_HINTS = (
     "habia una vez",
@@ -146,24 +147,34 @@ def PathStem(filename: str) -> str:
     return name.replace("_", " ").strip()
 
 
-def split_for_speech(text: str, max_chars: int = 420) -> list[str]:
-    paras = [p.strip() for p in re.split(r"\n\s*\n", text or "") if p.strip()]
-    if not paras:
-        paras = [text.strip()] if text.strip() else []
+def split_for_speech(
+    text: str,
+    max_words: int = CHECKIN_AFTER_WORDS,
+    max_chars: int | None = None,
+) -> list[str]:
+    """Parte el cuento para Piper: ~max_words y cierra en el siguiente .!?
+
+    ``max_chars`` queda por compatibilidad y se ignora.
+    """
+    del max_chars
+    compact = re.sub(r"\s+", " ", (text or "").strip())
+    if not compact:
+        return []
+    sentences = [p.strip() for p in re.split(r"(?<=[.!?])\s+", compact) if p.strip()]
     chunks: list[str] = []
-    for para in paras:
-        if len(para) <= max_chars:
-            chunks.append(para)
-            continue
-        sentences = re.split(r"(?<=[.!?])\s+", para)
-        buf: list[str] = []
-        for sentence in sentences:
-            trial = " ".join(buf + [sentence]).strip()
-            if buf and len(trial) > max_chars:
-                chunks.append(" ".join(buf))
-                buf = [sentence]
-            else:
-                buf.append(sentence)
-        if buf:
+    buf: list[str] = []
+    words = 0
+    for sentence in sentences:
+        buf.append(sentence)
+        words += _word_count(sentence)
+        if words >= max_words:
             chunks.append(" ".join(buf).strip())
+            buf = []
+            words = 0
+    if buf:
+        leftover = " ".join(buf).strip()
+        if chunks:
+            chunks[-1] = f"{chunks[-1]} {leftover}".strip()
+        else:
+            chunks.append(leftover)
     return [c for c in chunks if c]

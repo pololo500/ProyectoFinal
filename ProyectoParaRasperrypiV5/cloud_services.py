@@ -171,7 +171,7 @@ class CloudLLM:
 
     _SYSTEM_PROMPT = _TEO_SYSTEM_PROMPT
     _MODEL = "llama-3.3-70b-versatile"
-    _MAX_HISTORY = 10  # Últimos 10 turnos (pares); el recorte lo hace ConversationMemory
+    _MAX_HISTORY = 10  # Tope interno; el recorte real lo hace ConversationMemory (default 4)
 
     def __init__(self, api_key: str) -> None:
         self._api_key = api_key

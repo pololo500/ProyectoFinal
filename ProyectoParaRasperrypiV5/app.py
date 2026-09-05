@@ -58,7 +58,19 @@ except ImportError:  # Optional dependency for frame rendering in Tkinter.
     Image = None
     ImageTk = None
 
-from workers import AudioWorker, CameraWorker, IntentDispatcher, SpeechWorker, WorkerMessage, discover_cameras, discover_microphones, discover_output_devices
+from workers import (
+    AudioWorker,
+    CameraWorker,
+    IntentDispatcher,
+    SpeechWorker,
+    WorkerMessage,
+    discover_cameras,
+    discover_microphones,
+    discover_output_devices,
+    find_supported_input_config,
+    mic_block_to_stt,
+)
+from display_env import has_gui_display, pick_default_devices, try_attach_local_display
 
 # Cloud services (modo nube)
 try:
@@ -423,13 +435,19 @@ class EyeModeApp(tk.Tk):
 
         def _run() -> None:
             try:
-                import numpy as np
                 import sounddevice as sd
-                sr = 16000
-                recorded = sd.rec(sr * 3, samplerate=sr, channels=1, dtype="float32", device=mic_idx)
+                capture_sr, capture_dtype, capture_ch = find_supported_input_config(mic_idx)
+                recorded = sd.rec(
+                    capture_sr * 3,
+                    samplerate=capture_sr,
+                    channels=capture_ch,
+                    dtype=capture_dtype,
+                    device=mic_idx,
+                )
                 sd.wait()
+                audio = mic_block_to_stt(recorded, capture_sr, 16000)
                 self.after(0, lambda: self._setup_status_var.set("🔊 Reproduciendo..."))
-                sd.play(recorded[:, 0], samplerate=sr, device=out_idx)
+                sd.play(audio, samplerate=16000, device=out_idx)
                 sd.wait()
                 self.after(0, lambda: self._setup_status_var.set("✅ Prueba de micrófono completada"))
             except Exception as exc:
@@ -501,8 +519,8 @@ class EyeModeApp(tk.Tk):
         self.eye_canvas.pack(fill="both", expand=True)
 
         try:
-            from eye_display import EyeDisplay
-            self._eye_display = EyeDisplay(self.eye_canvas)
+            from eye_display import create_eye_display
+            self._eye_display = create_eye_display(self.eye_canvas)
         except ImportError:
             self.eye_canvas.create_text(
                 400, 240, text="👀", font=("Segoe UI Emoji", 120),
@@ -577,18 +595,13 @@ class EyeModeApp(tk.Tk):
         self.camera_worker.start()
         self.audio_worker.start()
         try:
-            from hardware import PhysicalCompanion, load_pins
+            from hardware import get_companion, perform_hug_ask
 
-            self._companion = PhysicalCompanion(load_pins())
+            self._companion = get_companion()
 
             def _on_belly() -> None:
-                if self._companion is not None:
-                    self._companion.hug()
-                if self.speech_worker:
-                    self.speech_worker.speak("¡Qué abrazo rico!")
-                if self._eye_display is not None:
-                    self.after(0, lambda: self._eye_display.set_pictogram("abrazo"))
-                    self.after(0, lambda: self._eye_display.set_expression("feliz"))
+                speak = self.speech_worker.speak if self.speech_worker else None
+                perform_hug_ask(self._companion, speak, self._eye_display)
 
             self._companion.start_button_watch(_on_belly)
         except Exception as exc:
@@ -597,7 +610,8 @@ class EyeModeApp(tk.Tk):
         print("[EyeMode] Workers iniciados", flush=True)
         log_action(
             "APP",
-            f"EyeMode workers iniciados (cam={cam_idx}, mic={mic_idx}, out={out_idx}, cloud={self._cloud_mode})",
+            f"EyeMode workers iniciados (cam={cam_idx}, mic={mic_idx}, out={out_idx}, "
+            f"cloud={self._cloud_mode})",
         )
 
     def _start_api_server(self) -> None:
@@ -848,6 +862,11 @@ class EyeModeApp(tk.Tk):
             except Exception:
                 pass
             self._companion = None
+        if getattr(self, "_eye_display", None) is not None and hasattr(self._eye_display, "stop"):
+            try:
+                self._eye_display.stop()
+            except Exception:
+                pass
 
     def on_close(self) -> None:
         if hasattr(self, 'api_server') and self.api_server:
@@ -881,6 +900,7 @@ class EdgeAiDesktopApp(tk.Tk):
         self.speech_worker: SpeechWorker | None = None
         self.api_server: object | None = None
         self._companion = None
+        self._eye_display = None
         self._playtime_limit_minutes: int = 0
         self._mic_test_stop = threading.Event()
         self._mic_test_thread: threading.Thread | None = None
@@ -1104,17 +1124,19 @@ class EdgeAiDesktopApp(tk.Tk):
                 import numpy as np
                 import sounddevice as sd
 
-                sample_rate = 16000
-                total_samples = sample_rate * record_seconds
+                capture_sr, capture_dtype, capture_ch = find_supported_input_config(
+                    mic_index
+                )
+                total_samples = capture_sr * record_seconds
                 self.after(0, lambda: self._append_log(
-                    f"Grabando {record_seconds}s desde micrófono..."
+                    f"Grabando {record_seconds}s desde micrófono ({capture_sr} Hz)..."
                 ))
 
                 recorded = sd.rec(
                     total_samples,
-                    samplerate=sample_rate,
-                    channels=1,
-                    dtype="float32",
+                    samplerate=capture_sr,
+                    channels=capture_ch,
+                    dtype=capture_dtype,
                     device=mic_index,
                 )
                 # Wait for recording, checking stop flag periodically
@@ -1128,12 +1150,12 @@ class EdgeAiDesktopApp(tk.Tk):
                     return
 
                 sd.wait()  # Ensure recording is complete
-                audio = recorded[:, 0]
+                audio = mic_block_to_stt(recorded, capture_sr, 16000)
 
                 self.after(0, lambda: self._append_log(
                     "Reproduciendo grabación por parlante..."
                 ))
-                sd.play(audio, samplerate=sample_rate, device=out_index)
+                sd.play(audio, samplerate=16000, device=out_index)
                 sd.wait()
 
                 self.after(0, lambda: self._append_log(
@@ -1227,6 +1249,12 @@ class EdgeAiDesktopApp(tk.Tk):
             message_queue=self.message_queue,
             message_semaphore=self.message_queue_semaphore,
         )
+        try:
+            from eye_display import create_eye_display
+
+            self._eye_display = create_eye_display(None)
+        except Exception:
+            self._eye_display = None
         self.audio_worker = AudioWorker(
             microphone_device_index=microphone_index,
             message_queue=self.message_queue,
@@ -1241,21 +1269,20 @@ class EdgeAiDesktopApp(tk.Tk):
             cloud_mode=self._cloud_mode,
             cloud_stt=cloud_stt,
             cloud_llm=cloud_llm,
+            eye_display=self._eye_display,
         )
 
         self.camera_worker.start()
         self.audio_worker.start()
         try:
-            from hardware import PhysicalCompanion, load_pins
+            from hardware import get_companion, perform_hug_ask
 
-            self._companion = PhysicalCompanion(load_pins())
+            self._companion = get_companion()
 
             def _on_belly() -> None:
-                if self._companion is not None:
-                    self._companion.hug()
-                if self.speech_worker:
-                    self.speech_worker.speak("¡Qué abrazo rico!")
-                self.after(0, lambda: self._append_log("Abrazo (botón de panza / simulado)"))
+                speak = self.speech_worker.speak if self.speech_worker else None
+                perform_hug_ask(self._companion, speak, self._eye_display)
+                self.after(0, lambda: self._append_log("Abrazo (pulsador: Teo pide un abrazo)"))
 
             self._companion.start_button_watch(_on_belly)
         except Exception as exc:
@@ -1353,6 +1380,11 @@ class EdgeAiDesktopApp(tk.Tk):
             except Exception:
                 pass
             self._companion = None
+        if getattr(self, "_eye_display", None) is not None and hasattr(self._eye_display, "stop"):
+            try:
+                self._eye_display.stop()
+            except Exception:
+                pass
 
         self.start_button.configure(state="normal")
         self.stop_button.configure(state="disabled")
@@ -1533,11 +1565,102 @@ class EdgeAiDesktopApp(tk.Tk):
         self.destroy()
 
 
+class HeadlessEyeApp:
+    """Arranque sin HDMI/SSH: ojos en la LCD ST7789, audio y pulsador."""
+
+    def __init__(self) -> None:
+        self.camera_options = discover_cameras()
+        self.microphone_options = discover_microphones()
+        self.output_device_options = discover_output_devices()
+        self.message_queue: queue.Queue[WorkerMessage] = queue.Queue(maxsize=512)
+        self.message_queue_semaphore = threading.BoundedSemaphore(512)
+        self.frame_queue_semaphore = threading.BoundedSemaphore(2)
+        self.frame_queue: queue.Queue[object] = queue.Queue(maxsize=2)
+        self.camera_worker: CameraWorker | None = None
+        self.audio_worker: AudioWorker | None = None
+        self.intent_dispatcher: IntentDispatcher | None = None
+        self.speech_worker: SpeechWorker | None = None
+        self.api_server: object | None = None
+        self.telemetry = _create_telemetry()
+        self.vocabulary_tracker = _create_vocabulary_tracker()
+        self.routine_scheduler = _create_routine_scheduler()
+        self._volume_limit: int = 100
+        self._brightness: float = 1.0
+        self._night_mode: bool = False
+        self._power_on: bool = True
+        self._playtime_limit_minutes: int = 0
+        self._last_devices: tuple[int, int, int | None] | None = None
+        self._companion = None
+        self._cloud_mode: bool = False
+        self._groq_api_key: str = os.environ.get("GROQ_API_KEY", "")
+        self.eye_canvas = None
+        self._eye_display = None
+        try:
+            from eye_display import create_eye_display
+
+            self._eye_display = create_eye_display(None)
+        except Exception as exc:
+            print(f"[Headless] Ojos LCD no disponibles: {exc}", flush=True)
+        cam_idx, mic_idx, out_idx = pick_default_devices(
+            self.camera_options,
+            self.microphone_options,
+            self.output_device_options,
+            skip_camera=True,
+        )
+        lcd_ok = getattr(self._eye_display, "lcd", None) is not None
+        print(
+            f"[Headless] cam={cam_idx} mic={mic_idx} out={out_idx} lcd={'sí' if lcd_ok else 'no'}",
+            flush=True,
+        )
+        self._last_devices = (cam_idx, mic_idx, out_idx)
+        self._start_workers(cam_idx, mic_idx, out_idx)
+        self._start_api_server()
+        self.after(30, self._poll_queues)
+        self.after(30000, self._check_routines)
+
+    def after(self, ms: int, func=None, *args):  # noqa: ANN001
+        if func is None:
+            return None
+
+        def _run() -> None:
+            try:
+                func(*args)
+            except Exception as exc:
+                print(f"[Headless] {exc}", flush=True)
+
+        timer = threading.Timer(max(0, int(ms)) / 1000.0, _run)
+        timer.daemon = True
+        timer.start()
+        return timer
+
+    def run(self) -> None:
+        print("[Headless] Teo en marcha (ojos en LCD). Ctrl+C para salir.", flush=True)
+        try:
+            threading.Event().wait()
+        except KeyboardInterrupt:
+            print("\n[Headless] Cerrando...", flush=True)
+        finally:
+            self.stop_workers()
+            if self.api_server is not None:
+                try:
+                    self.api_server.stop()
+                except Exception:
+                    pass
+
+    _start_workers = EyeModeApp._start_workers
+    _start_api_server = EyeModeApp._start_api_server
+    _apply_power = EyeModeApp._apply_power
+    _poll_queues = EyeModeApp._poll_queues
+    _handle_message = EyeModeApp._handle_message
+    _check_routines = EyeModeApp._check_routines
+    stop_workers = EyeModeApp.stop_workers
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Entrypoint
 # ═══════════════════════════════════════════════════════════════════════════
 
-def main() -> None:
+def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Sistema Edge AI Interactivo — PoC",
     )
@@ -1549,6 +1672,24 @@ def main() -> None:
              "(video, logs, selectores de hardware). Sin este flag, se "
              "inicia en modo ojos expresivos.",
     )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        default=False,
+        help="Sin ventana tkinter (SSH / peluche). Ojos en la LCD, "
+             "primer mic/cámara/parlante. Ctrl+C para salir.",
+    )
+    parser.add_argument(
+        "--gui",
+        action="store_true",
+        default=False,
+        help="Forzar ventana tkinter. Por SSH: usa DISPLAY=:0 si hay escritorio.",
+    )
+    return parser
+
+
+def main() -> None:
+    parser = build_arg_parser()
     args = parser.parse_args()
 
     logger = init_debug_logger(
@@ -1560,9 +1701,23 @@ def main() -> None:
 
     if args.debug:
         app = EdgeAiDesktopApp()
-    else:
-        app = EyeModeApp()
+        app.protocol("WM_DELETE_WINDOW", app.on_close)
+        app.mainloop()
+        return
 
+    ssh_without_display = not has_gui_display()
+    if args.gui:
+        try_attach_local_display()
+    if args.headless or (ssh_without_display and not args.gui):
+        print("[APP] Modo headless (sin $DISPLAY). Ojos en la LCD ST7789.", flush=True)
+        HeadlessEyeApp().run()
+        return
+    try:
+        app = EyeModeApp()
+    except tk.TclError as exc:
+        print(f"[APP] Sin ventana gráfica ({exc}). Paso a headless.", flush=True)
+        HeadlessEyeApp().run()
+        return
     app.protocol("WM_DELETE_WINDOW", app.on_close)
     app.mainloop()
 
