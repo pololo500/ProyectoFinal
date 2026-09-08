@@ -17,10 +17,10 @@ from whisper_process import (
 
 
 class TestWhisperDefaults(unittest.TestCase):
-    def test_aarch64_usa_float32(self) -> None:
+    def test_aarch64_usa_int8(self) -> None:
         with patch("whisper_process.platform.machine", return_value="aarch64"):
             with patch.dict("os.environ", {}, clear=True):
-                self.assertEqual(default_compute_type(), "float32")
+                self.assertEqual(default_compute_type(), "int8")
 
     def test_x86_usa_int8(self) -> None:
         with patch("whisper_process.platform.machine", return_value="x86_64"):
@@ -29,8 +29,8 @@ class TestWhisperDefaults(unittest.TestCase):
 
     def test_override_whisper_compute(self) -> None:
         with patch("whisper_process.platform.machine", return_value="aarch64"):
-            with patch.dict("os.environ", {"WHISPER_COMPUTE": "int8"}):
-                self.assertEqual(default_compute_type(), "int8")
+            with patch.dict("os.environ", {"WHISPER_COMPUTE": "float32"}):
+                self.assertEqual(default_compute_type(), "float32")
 
     def test_hilos_por_defecto_son_dos(self) -> None:
         with patch.dict("os.environ", {}, clear=True):
@@ -77,6 +77,11 @@ class TestWhisperFallback(unittest.TestCase):
 
         with patch("whisper_process.kernel_page_size", return_value=4096):
             self.assertTrue(ctranslate2_compatible())
+
+    def test_load_faster_whisper_existe(self) -> None:
+        from whisper_process import load_faster_whisper
+
+        self.assertTrue(callable(load_faster_whisper))
 
 
 class TestRemoteWhisper(unittest.TestCase):

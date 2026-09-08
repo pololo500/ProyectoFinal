@@ -19,11 +19,13 @@ Uso:
 """
 from __future__ import annotations
 
+import re
 import platform
 import struct
 import sys
 import threading
 import time
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 
@@ -281,3 +283,45 @@ def log_action(
     if logger is None:
         return
     logger.log_action(component, message, elapsed_ms)
+
+
+_PATH_UNSAFE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+_PUNCT = re.compile(r"[,.;:!?¡¿'\"()\[\]{}]+")
+
+
+def filename_from_transcript(text: str, max_len: int = 80) -> str:
+    """Stem de archivo a partir del texto de Whisper: 'Hola, soy carlos' → hola soy carlos."""
+    cleaned = unicodedata.normalize("NFC", text or "")
+    cleaned = _PUNCT.sub(" ", cleaned)
+    cleaned = _PATH_UNSAFE.sub("", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .").lower()
+    if not cleaned:
+        return "sin_texto"
+    if len(cleaned) > max_len:
+        cleaned = cleaned[:max_len].rstrip(" .")
+    return cleaned or "sin_texto"
+
+
+def save_named_transcript_wav(
+    audio: np.ndarray,
+    transcript: str,
+    *,
+    sample_rate: int = 16000,
+    audio_dir: Path | None = None,
+) -> Path | None:
+    """Guarda el clip 16 kHz en ``audios/{transcripcion}.wav``. No tira excepciones."""
+    try:
+        target = audio_dir or (Path(__file__).resolve().parent / "audios")
+        target.mkdir(parents=True, exist_ok=True)
+        stem = filename_from_transcript(transcript)
+        path = target / f"{stem}.wav"
+        suffix = 2
+        while path.exists() and suffix <= 999:
+            path = target / f"{stem}_{suffix}.wav"
+            suffix += 1
+        samples = np.asarray(audio, dtype=np.float32).reshape(-1)
+        DebugLogger._save_wav(path, samples, sample_rate)
+        log_action("STT", f"audio guardado: {path.name}")
+        return path
+    except Exception:
+        return None

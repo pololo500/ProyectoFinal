@@ -6,17 +6,17 @@ from typing import Any
 
 
 def default_max_turns() -> int:
-    """Default 4. Rollback: CONVO_MAX_TURNS=10."""
+    """Default 2 (4 mensajes), como la corrida rápida. Rollback: CONVO_MAX_TURNS=10."""
     try:
-        return max(1, int(os.environ.get("CONVO_MAX_TURNS") or "4"))
+        return max(1, int(os.environ.get("CONVO_MAX_TURNS") or "2"))
     except ValueError:
-        return 4
+        return 2
 
 
 class ConversationMemory:
     """Últimos N turnos (par nene + TEO) para el prompt del LLM."""
 
-    MAX_TURNS = 4
+    MAX_TURNS = 2
 
     def __init__(self, max_turns: int | None = None) -> None:
         self.max_turns = default_max_turns() if max_turns is None else max_turns

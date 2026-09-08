@@ -118,6 +118,13 @@ def _expression_params(expression: str) -> dict[str, float]:
             "pupil_size": 1.0,
             "eye_width_mult": 1.0,
         },
+        "zzz": {
+            "eye_open": 0.08,
+            "eye_curve": 0.0,
+            "brow_angle": 0.0,
+            "pupil_size": 0.7,
+            "eye_width_mult": 1.0,
+        },
     }
     return expressions.get(expression, expressions["neutral"])
 
@@ -147,8 +154,8 @@ class EyeAnimator:
     def set_expression(self, expression: str, transition_ms: int = 300) -> None:
         del transition_ms
         self.expression = expression
-        self.is_pulsing = expression in ("escuchando", "hablando", "pensando")
-        if expression == "dormido":
+        self.is_pulsing = expression in ("escuchando", "hablando", "pensando", "zzz")
+        if expression in ("dormido", "zzz"):
             self._blink_mode = "idle"
         self.target_params.update(_expression_params(expression))
 
@@ -182,7 +189,7 @@ class EyeAnimator:
         self._tick_blink(now)
 
     def _tick_blink(self, now: float) -> None:
-        if self.expression in ("dormido", "pensando"):
+        if self.expression in ("dormido", "pensando", "zzz"):
             return
         if self._blink_mode == "idle":
             if now >= self._next_blink_at:
@@ -211,6 +218,9 @@ class EyeAnimator:
         return image
 
     def _draw(self, draw: ImageDraw.ImageDraw, w: int, h: int) -> None:
+        if self.expression == "zzz":
+            self._draw_zzz(draw, w, h)
+            return
         if self.expression == "pensando":
             self._draw_spinner(draw, w, h)
             return
@@ -323,6 +333,16 @@ class EyeAnimator:
             y = cy + min(h * 0.38, 160)
             font = _pictogram_font(max(12, int(h * 0.08)))
             draw.text((cx, y), label, fill=color, font=font, anchor="mm")
+
+    def _draw_zzz(self, draw: ImageDraw.ImageDraw, w: int, h: int) -> None:
+        cx = w / 2
+        cy = h / 2
+        pulse = 1.0
+        if self.is_pulsing:
+            pulse = 0.82 + 0.18 * (0.5 + 0.5 * math.sin(self.pulse_phase))
+        color = _scale_rgb((176, 230, 235), self.brightness * pulse)
+        font = _pictogram_font(max(48, int(h * 0.36)))
+        draw.text((cx, cy), "zzz", fill=color, font=font, anchor="mm")
 
     def _draw_spinner(self, draw: ImageDraw.ImageDraw, w: int, h: int) -> None:
         cx = w / 2

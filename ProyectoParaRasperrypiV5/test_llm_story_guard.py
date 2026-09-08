@@ -5,7 +5,12 @@ import os
 import unittest
 from unittest.mock import patch
 
-from fallback_llm import _SYSTEM_PROMPT, drop_unsolicited_story_offer, selected_llm_spec
+from fallback_llm import (
+    _SYSTEM_PROMPT,
+    drop_prompt_leak,
+    drop_unsolicited_story_offer,
+    selected_llm_spec,
+)
 
 
 class TestDropUnsolicitedStory(unittest.TestCase):
@@ -78,6 +83,35 @@ class TestSystemPromptNoStoryTemplate(unittest.TestCase):
         folded = _SYSTEM_PROMPT.lower()
         self.assertIn("explicandole al padre", folded)
         self.assertIn("despide", folded)
+
+
+class TestPromptNoCannedEcho(unittest.TestCase):
+    """El 3B copia frases del system prompt (VEO VEO / Me llamo TEO / Neutral)."""
+
+    def test_prompt_no_deja_frases_para_copiar(self) -> None:
+        self.assertNotIn("Me llamo TEO", _SYSTEM_PROMPT)
+        self.assertNotIn("VEO VEO", _SYSTEM_PROMPT)
+        folded = _SYSTEM_PROMPT.lower()
+        self.assertNotIn("|neutral]", folded)
+        self.assertNotIn("feliz|triste", folded)
+
+    def test_alarma_no_es_veo_veo(self) -> None:
+        out = drop_prompt_leak("Tengo una alarma.", "VEO VEO.")
+        self.assertNotIn("veo", out.lower())
+        self.assertGreater(len(out.split()), 2)
+
+    def test_pantalon_no_es_me_llamo_teo(self) -> None:
+        out = drop_prompt_leak("Tengo un niña del pantalón.", "Me llamo TEO.")
+        self.assertNotIn("me llamo", out.lower())
+
+    def test_si_preguntan_el_nombre_se_deja(self) -> None:
+        out = drop_prompt_leak("¿Cómo te llamás?", "Me llamo TEO.")
+        self.assertIn("teo", out.lower())
+
+    def test_neutral_suelto_no_se_dice(self) -> None:
+        out = drop_prompt_leak("Se volvió imbécil. Qué bueno.", "Neutral.")
+        self.assertNotEqual(out.strip().lower().rstrip("."), "neutral")
+        self.assertGreater(len(out.split()), 2)
 
 
 class TestLlmProfile(unittest.TestCase):

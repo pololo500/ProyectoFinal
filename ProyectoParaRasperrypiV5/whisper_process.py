@@ -22,9 +22,6 @@ def default_compute_type() -> str:
     override = (os.environ.get("WHISPER_COMPUTE") or "").strip()
     if override:
         return override
-    machine = platform.machine().lower()
-    if machine in ("aarch64", "arm64"):
-        return "float32"
     return "int8"
 
 
@@ -85,9 +82,32 @@ def page_size_hint() -> str | None:
     if size is None or size <= 4096:
         return None
     return (
-        f"Kernel con páginas de {size} bytes. Whisper no puede cargar. "
-        "En la Pi: sudo sed -i '1i kernel=kernel8.img' /boot/firmware/config.txt "
-        "&& sudo reboot  (después getconf PAGE_SIZE debe ser 4096)."
+        f"Kernel con páginas de {size} bytes. "
+        "Si el hijo pega Bus error, cargo Whisper en este proceso."
+    )
+
+
+def load_faster_whisper(
+    model_size: str,
+    compute_type: str | None = None,
+    cpu_threads: int | None = None,
+    log: LogFn | None = None,
+) -> Any:
+    """Carga faster-whisper en este proceso (como el proyecto que sí transcribe)."""
+    from faster_whisper import WhisperModel
+
+    compute = compute_type or default_compute_type()
+    threads = cpu_threads if cpu_threads is not None else whisper_cpu_threads()
+    if log:
+        log(
+            f"Whisper en proceso: modelo={model_size} compute={compute} threads={threads}"
+        )
+    return WhisperModel(
+        model_size,
+        device="cpu",
+        compute_type=compute,
+        cpu_threads=threads,
+        num_workers=1,
     )
 
 

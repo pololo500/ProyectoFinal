@@ -40,6 +40,16 @@ class TestEyeAnimator(unittest.TestCase):
         ring = image.getpixel((cx + 50, cy))
         self.assertNotEqual(ring, bg)
 
+    def test_zzz_dibuja_texto_y_no_ojos(self) -> None:
+        animator = EyeAnimator()
+        animator.set_expression("zzz")
+        self.assertEqual(animator.get_expression(), "zzz")
+        image = animator.render(320, 240)
+        bg = (26, 26, 46)
+        # Donde iría el ojo izquierdo no debe haber esclera: solo el texto "zzz".
+        self.assertEqual(image.getpixel((112, 120)), bg)
+        self.assertNotEqual(image.getpixel((160, 120)), bg)
+
 
 class TestRgb565(unittest.TestCase):
     def test_rojo_puro_es_f800(self) -> None:

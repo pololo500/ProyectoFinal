@@ -12,7 +12,7 @@ sys.modules.setdefault("mediapipe", MagicMock())
 sys.modules.setdefault("sounddevice", MagicMock())
 
 from conversation_memory import ConversationMemory
-from fallback_llm import llm_n_ctx
+from fallback_llm import FallbackLLM, llm_n_ctx
 from workers import whisper_beam_size
 
 _WORKERS = Path(__file__).resolve().parent / "workers.py"
@@ -36,14 +36,14 @@ class TestWhisperBeam(unittest.TestCase):
 
 
 class TestLlmNCtx(unittest.TestCase):
-    def test_default_es_2048(self) -> None:
+    def test_default_es_1024(self) -> None:
         env = {k: v for k, v in os.environ.items() if k != "LLM_N_CTX"}
         with patch.dict(os.environ, env, clear=True):
-            self.assertEqual(llm_n_ctx(), 2048)
-
-    def test_env_permite_1024(self) -> None:
-        with patch.dict(os.environ, {"LLM_N_CTX": "1024"}):
             self.assertEqual(llm_n_ctx(), 1024)
+
+    def test_env_permite_2048(self) -> None:
+        with patch.dict(os.environ, {"LLM_N_CTX": "2048"}):
+            self.assertEqual(llm_n_ctx(), 2048)
 
     def test_llama_usa_el_helper(self) -> None:
         src = _FALLBACK.read_text(encoding="utf-8")
@@ -55,28 +55,119 @@ class TestLlmNCtx(unittest.TestCase):
         self.assertNotIn("and not vosk_stt", src)
         self.assertIn("should_allow_llm(", src)
 
+    def test_no_salta_whisper_por_paginas_16k(self) -> None:
+        src = _WORKERS.read_text(encoding="utf-8")
+        self.assertNotIn("CTranslate2 no es usable; paso a Vosk.", src)
+        self.assertIn("start_whisper_process(", src)
+        self.assertIn("load_faster_whisper(", src)
+
     def test_llm_se_carga_antes_de_escuchar(self) -> None:
         src = _WORKERS.read_text(encoding="utf-8")
         self.assertNotIn("cargando LLM de fallback en segundo plano", src)
         load_at = src.find("self.fallback_llm.load()")
-        listen_at = src.find("silero-vad: escuchando...")
+        listen_at = src.find('f"{vad_tag}: escuchando..."')
         self.assertGreater(load_at, 0)
         self.assertGreater(listen_at, load_at)
+        self.assertNotIn('"silero-vad: escuchando..."', src)
+        self.assertIn("vad_log_label(", src)
+
+    def test_warmup_llm_despues_de_load_antes_del_mic(self) -> None:
+        src = _WORKERS.read_text(encoding="utf-8")
+        load_at = src.find("self.fallback_llm.load()")
+        warm_at = src.find("self.fallback_llm.warmup(")
+        alsa_at = src.find("AlsaCapture(")
+        stream_at = src.find("sd.InputStream(")
+        listen_at = src.find('f"{vad_tag}: escuchando..."')
+        eyes_at = src.find('_set_eyes("escuchando")')
+        self.assertGreater(load_at, 0)
+        self.assertGreater(warm_at, load_at)
+        self.assertGreater(alsa_at, warm_at)
+        self.assertGreater(stream_at, warm_at)
+        self.assertGreater(listen_at, warm_at)
+        self.assertGreater(eyes_at, warm_at)
+        between = src[warm_at:alsa_at]
+        self.assertNotIn("speak_and_wait", between)
+        self.assertNotIn(".speak(", between)
+
+    def test_unknown_pregunta_al_llm_antes_de_cualquier_frase_de_rescate(self) -> None:
+        src = _WORKERS.read_text(encoding="utf-8")
+        gen_at = src.find("self.fallback_llm.generate(")
+        rescue_at = src.find("unknown_fallback")
+        self.assertGreater(gen_at, 0)
+        self.assertGreater(rescue_at, gen_at)
 
     def test_mientras_piensa_pone_pensando_en_pantalla(self) -> None:
         src = _WORKERS.read_text(encoding="utf-8")
         self.assertIn('set_expression("pensando")', src)
 
+    def test_zzz_en_lcd_durante_boot_y_warmup(self) -> None:
+        src = _WORKERS.read_text(encoding="utf-8")
+        run_at = src.find('log_action("AudioWorker", "tarea _run comenzada")')
+        zzz_at = src.find('_set_eyes("zzz")', run_at)
+        whisper_at = src.find("self._load_whisper_model()")
+        warm_at = src.find("self.fallback_llm.warmup(")
+        listen_eyes = src.find('_set_eyes("escuchando")')
+        self.assertGreater(run_at, 0)
+        self.assertGreater(zzz_at, run_at)
+        self.assertGreater(whisper_at, zzz_at)
+        self.assertGreater(warm_at, zzz_at)
+        self.assertGreater(listen_eyes, warm_at)
+        boot = src[zzz_at:listen_eyes]
+        self.assertNotIn('set_expression("pensando")', boot)
+
+
+class TestLlmWarmup(unittest.TestCase):
+    def test_warmup_llama_generate_con_history_vacio(self) -> None:
+        llm = FallbackLLM()
+        llm._loaded = True
+        llm._llm = object()
+        with patch.object(llm, "generate", return_value="basura") as gen:
+            llm.warmup()
+        gen.assert_called_once()
+        args, kwargs = gen.call_args
+        history = kwargs.get("history", args[2] if len(args) > 2 else None)
+        emotion = kwargs.get("emotion", args[1] if len(args) > 1 else None)
+        self.assertEqual(history, [])
+        self.assertIsNone(emotion)
+
+    def test_warmup_sin_modelo_no_llama_generate(self) -> None:
+        llm = FallbackLLM()
+        with patch.object(llm, "generate", return_value="x") as gen:
+            llm.warmup()
+        gen.assert_not_called()
+
+    def test_warmup_no_toca_el_historial(self) -> None:
+        llm = FallbackLLM()
+        llm._loaded = True
+        llm._llm = object()
+        llm._history = [{"role": "user", "content": "turno real"}]
+        with patch.object(llm, "generate", return_value="x"):
+            llm.warmup()
+        self.assertEqual(llm._history, [{"role": "user", "content": "turno real"}])
+
+
+class TestWhisperFastDefaults(unittest.TestCase):
+    def test_workers_pide_medium_por_defecto(self) -> None:
+        src = _WORKERS.read_text(encoding="utf-8")
+        self.assertTrue(
+            'or "medium"' in src,
+            "WHISPER_MODEL default tiene que ser medium",
+        )
+        self.assertFalse(
+            'or "small"' in src,
+            "el default de Whisper ya no es small (rollback: WHISPER_MODEL=small)",
+        )
+
 
 class TestConvoMaxTurns(unittest.TestCase):
-    def test_default_son_4_turnos(self) -> None:
+    def test_default_son_2_turnos(self) -> None:
         env = {k: v for k, v in os.environ.items() if k != "CONVO_MAX_TURNS"}
         with patch.dict(os.environ, env, clear=True):
             mem = ConversationMemory()
             for i in range(6):
                 mem.add_turn(f"u{i}", f"a{i}")
-            self.assertEqual(len(mem.messages()), 8)
-            self.assertEqual(mem.messages()[0]["content"], "u2")
+            self.assertEqual(len(mem.messages()), 4)
+            self.assertEqual(mem.messages()[0]["content"], "u4")
 
     def test_rollback_env_10(self) -> None:
         with patch.dict(os.environ, {"CONVO_MAX_TURNS": "10"}):

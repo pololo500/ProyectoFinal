@@ -5,11 +5,12 @@ Si un cambio fue un error de concepto, revertí **solo ese punto** (valores ante
 
 ## Hecho ahora
 
-### 1. Silencio más corto
-- `EmotionReactor.NORMAL_SILENCE`: **0.7 s** (antes **1.2**)
-- `EmotionReactor.EXTENDED_SILENCE`: **1.6 s** (antes **3.0**) — triste/enojado
-- **Síntoma si está mal:** corta “quiero… música” a mitad.
-- **Revertir:** 1.2 y 3.0.
+### 1. Silencio (frases cortadas)
+- `EmotionReactor.NORMAL_SILENCE`: **1.2 s** (el **0.7** del 24/08 cortaba “quiero… música”)
+- `EmotionReactor.EXTENDED_SILENCE`: **3.0 s** (triste/enojado; casi no aplica con emoción apagada)
+- Log: `energy-vad:` en Pi (Silero no corre en aarch64).
+- **Síntoma si 1.2 está mal:** el peluche tarda de más en “cerrar” el turno.
+- **Revertir (latencia):** 0.7 y 1.6.
 
 ### 5. Hilos de Whisper
 - `WhisperModel(..., cpu_threads=2)` (antes **4**)
@@ -33,9 +34,43 @@ Si un cambio fue un error de concepto, revertí **solo ese punto** (valores ante
 - **Revertir emoción:** `self.infer_emotion = True`, `frame_rate = 3`, 640×480.
 
 ### 10. Tope de escucha
-- `AudioWorker.MAX_LISTEN_SECONDS`: **8.0** (antes **15.0**)
-- **Síntoma si está mal:** corta un cuento largo.
-- **Revertir:** 15.0.
+- `AudioWorker.MAX_LISTEN_SECONDS`: **8.0** (el **15.0** dejaba turnos largos)
+- **Síntoma si 8 está mal:** corta cuentos o frases largas a mitad.
+- **Revertir (cuentos):** 15.0.
+
+### 11. Cola USB y downsample (2026-09-08)
+- Cola de captura `AUDIO_QUEUE_MAXSIZE = 128` (antes 32). `drop_hits` no loguea en el callback.
+- Si hay drops con voz activa, el hangover de silencio se pone en 0 (hueco ≠ silencio).
+- 48 kHz → 16 kHz: promedio de 3 samples (anti-alias). No resamplear en el callback.
+- **Síntoma si la cola 128 está mal:** más RAM (~0.8 MB). Irrelevante.
+- **Revertir:** maxsize 32, `except Full: pass`, `arr[::3]`.
+
+### 12. arecord persistente (2026-09-08)
+
+- Linux: ya no se abre `sd.InputStream` por cada frase. Un `arecord` a `hw:CARD=…,DEV=0` (no `plughw`, no WAV, no 16 kHz en hw) queda vivo todo el `AudioWorker`.
+- Lectura: 1920 bytes (960 frames @ 48 kHz = 20 ms). VAD suma la duración real del bloque (no 0.128 s fijos). Pre-roll ~1 s = 50 bloques; circular ~6 s = 300 bloques.
+- Mute durante Whisper/LLM/TTS: se sigue leyendo el pipe (si no, SIGPIPE). No se encola al VAD. Tras el segmento se drena la cola.
+- Watchdog: EOF o proceso muerto → restart. Stderr cuenta `overrun` / `busy`. Sin `--fatal-errors`, sin `-q`.
+- `pipesize` 1 MiB, fallback 64 KiB. Usuario `teo` en grupo audio. **Sin sudo.**
+- Override: `ALSA_CAPTURE_DEVICE=hw:CARD=Device,DEV=0`.
+- Pedido ALSA: `--period-time=20000 --buffer-time=500000`; el log muestra lo negociado.
+- **Síntoma si hw: está busy:** arecord stderr `Device or resource busy`. **No asumir PipeWire.** Primero: `lsof /dev/snd/pcmC*D0c` (y `fuser` si hace falta). Si el proceso es `pipewire` / `wireplumber` / `pipewire-pulse`, mask **manual** (no desde `app.py`):
+
+      systemctl --user status pipewire wireplumber pipewire-pulse
+      # solo si lsof confirmó que son ellos quienes tienen el PCM de captura:
+      systemctl --user mask --now pipewire.socket pipewire.service wireplumber.service pipewire-pulse.service
+
+  Rollback: `systemctl --user unmask …` y volver a arrancar. El parlante puede ser otra tarjeta; no maskear a ciegas.
+- **No v1:** soxr, `nice -10`, pyalsaaudio, udev, `--fatal-errors`.
+- **No usar como fix:** tuning USB OTG del kernel, variable PulseAudio plug-hw, forzar 16 kHz en `hw:`.
+- Playback sigue en `sounddevice` OutputStream.
+- **Revertir:** volver a `with sd.InputStream` por utterance en `workers.py` y borrar `alsa_capture.py`.
+
+### 13. Warmup LLM (2026-09-08)
+- Tras `load()` y **antes** de `arecord` / `InputStream`, `FallbackLLM.warmup()`: un `generate("ok", history=[])` cuya respuesta **no** va a Piper ni a `conversation_memory`.
+- El primer decode de llama-cpp tarda 2–3×; así el primer turno del nene no paga ese costo.
+- Ojos en `"zzz"` durante carga y warmup; `"escuchando"` después.
+- **Revertir:** sacar `warmup()` en `workers.py` / `fallback_llm.py`.
 
 ## No implementado (acordado)
 

@@ -14,6 +14,7 @@ Expresiones soportadas:
   - hablando  : parpadeo rítmico suave
   - dormido   : ojos casi cerrados (modo noche / apagado)
   - pensando  : círculo de carga (LLM)
+  - zzz       : texto zzz (arranque / warmup, sin voz)
 
 
 La interfaz es minimalista y no sobreestimulante, siguiendo los
@@ -201,6 +202,13 @@ class EyeDisplay:
                 "pupil_size": 1.0,
                 "eye_width_mult": 1.0,
             },
+            "zzz": {
+                "eye_open": 0.08,
+                "eye_curve": 0.0,
+                "brow_angle": 0.0,
+                "pupil_size": 0.7,
+                "eye_width_mult": 1.0,
+            },
         }
         return expressions.get(expression, expressions["neutral"])
 
@@ -273,6 +281,20 @@ class EyeDisplay:
     def _draw_eyes(self) -> None:
         """Dibuja ambos ojos en el canvas."""
         self.canvas.delete("all")
+
+        if self._current_expression == "zzz":
+            w = self.width
+            h = self.height
+            color = self._brightness_adjusted_color(_HIGHLIGHT_COLOR)
+            size = max(48, int(h * 0.22))
+            self.canvas.create_text(
+                w / 2,
+                h / 2,
+                text="zzz",
+                fill=color,
+                font=("Segoe UI", size, "bold"),
+            )
+            return
 
         w = self.width
         h = self.height
@@ -428,4 +450,5 @@ def create_eye_display(canvas: tk.Canvas | None = None) -> EyeDisplay:
         from debug_logger import log_action
 
         log_action("LCD", "ojos en pantalla ST7789")
+    display.set_expression("zzz")
     return display

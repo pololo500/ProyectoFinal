@@ -143,7 +143,13 @@ class SharedGpio:
                     last = exc
             raise RuntimeError(str(last) if last else "lgpio sin chip")
         except Exception:
-            import RPi.GPIO as GPIO  # type: ignore
+            try:
+                import RPi.GPIO as GPIO  # type: ignore
+            except ImportError as rpi_exc:
+                raise RuntimeError(
+                    "GPIO: falta lgpio en el venv (Pi 5). "
+                    "En el venv: pip install lgpio spidev"
+                ) from rpi_exc
 
             GPIO.setwarnings(False)
             GPIO.setmode(GPIO.BCM)

@@ -40,8 +40,21 @@ class TestFindSupportedOutputConfig(unittest.TestCase):
         self.assertEqual(dtype, "int16")
         self.assertEqual(channels, 2)
 
+    def test_linux_usa_48k_int16_estereo_sin_probe(self) -> None:
+        mock_check = MagicMock(side_effect=AssertionError("no probe"))
+        with patch("workers.sys.platform", "linux"), patch(
+            "workers.sd.check_output_settings", mock_check
+        ):
+            sr, dtype, channels = self.worker._find_supported_output_config(22050, 1)
+        self.assertEqual(sr, 48000)
+        self.assertEqual(dtype, "int16")
+        self.assertEqual(channels, 2)
+        mock_check.assert_not_called()
+
     def test_windows_mantiene_float32_mono_si_el_dispositivo_lo_acepta(self) -> None:
-        with patch("workers.sd.check_output_settings", return_value=None):
+        with patch("workers.sys.platform", "win32"), patch(
+            "workers.sd.check_output_settings", return_value=None
+        ):
             sr, dtype, channels = self.worker._find_supported_output_config(22050, 1)
         self.assertEqual(sr, 22050)
         self.assertEqual(dtype, "float32")

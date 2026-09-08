@@ -172,5 +172,7 @@ def try_open_lcd(pins: HardwarePins | None = None) -> St7789Panel | None:
     try:
         return St7789Panel(pins)
     except Exception as exc:
-        log_action("LCD", f"ST7789 no disponible: {exc}")
+        msg = f"ST7789 no disponible: {exc}"
+        log_action("LCD", msg)
+        print(f"[LCD] {msg}", flush=True)
         return None

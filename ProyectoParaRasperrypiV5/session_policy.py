@@ -218,12 +218,16 @@ def should_allow_llm(
     story_reflect: bool = False,
     garbage_stt: bool = False,
 ) -> bool:
-    """Unknown y curiosidad van al LLM. Vosk no bloquea: el modelo local sigue."""
+    """Unknown siempre va al LLM. Un intent matcheado nunca.
+
+    ``garbage_stt`` se ignora: Whisper largo no es motivo para hablar enlatado.
+    """
+    del garbage_stt
     if story_reflect:
         return True
     if intent_name not in _LLM_INTENTS:
         return False
-    if game_active or story_active or yoga_active or gated or garbage_stt:
+    if game_active or story_active or yoga_active or gated:
         return False
     return True
 

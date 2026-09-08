@@ -207,10 +207,23 @@ class TestShouldAllowLlm(unittest.TestCase):
 
         self.assertFalse(should_allow_llm("needs_basic"))
 
-    def test_basura_stt_no_va_al_llm(self) -> None:
+    def test_keyword_matcheado_no_pregunta_al_llm(self) -> None:
         from session_policy import should_allow_llm
 
-        self.assertFalse(should_allow_llm("unknown", garbage_stt=True))
+        for name in (
+            "greeting",
+            "farewell",
+            "play_veo_veo",
+            "identity_name",
+            "call_parent",
+            "song_request",
+        ):
+            self.assertFalse(should_allow_llm(name), name)
+
+    def test_unknown_aunque_el_stt_sea_largo_va_al_llm(self) -> None:
+        from session_policy import should_allow_llm
+
+        self.assertTrue(should_allow_llm("unknown", garbage_stt=True))
 
     def test_cuento_reflect_si(self) -> None:
         from session_policy import should_allow_llm
@@ -248,6 +261,17 @@ class TestTelemetryRange(unittest.TestCase):
             self.assertEqual(len(summary["daily"]), 2)
             self.assertEqual(summary["daily"][0]["interactions"], 3)
             self.assertEqual(summary["daily"][1]["interactions"], 5)
+
+
+class TestAgentsMdRuteo(unittest.TestCase):
+    def test_regla_unknown_siempre_llm_y_match_es_intent(self) -> None:
+        md = (Path(__file__).resolve().parent / "Agents.md").read_text(encoding="utf-8")
+        folded = md.lower()
+        self.assertIn("sin match", folded)
+        self.assertIn("siempre", folded)
+        self.assertIn("preguntar al llm", folded)
+        self.assertIn("solo si hay match", folded)
+        self.assertIn("respuesta enlatada", folded)
 
 
 if __name__ == "__main__":

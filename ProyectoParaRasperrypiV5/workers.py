@@ -51,7 +51,7 @@ try:
 except ImportError:
     spacy = None  # type: ignore[assignment]
 
-from debug_logger import get_debug_logger, log_action
+from debug_logger import get_debug_logger, log_action, save_named_transcript_wav
 from stt_correct import polish_stt_text, spanish_vocab_checker
 
 APP_DIR = Path(__file__).resolve().parent
@@ -486,9 +486,9 @@ class EmotionReactor:
     EXTENDED_SILENCE_EMOTIONS: frozenset[str] = frozenset({"triste", "enojado"})
 
     # Umbrales de silencio (LATENCIA: ver docs/LATENCIA_AUDIO_CAMARA.md punto 1)
-    # Antes: 1.2s / 3.0s. Revertir esos valores si corta frases a mitad.
-    NORMAL_SILENCE: float = 0.7
-    EXTENDED_SILENCE: float = 1.6
+    # 0.7s / 1.6s cortaba frases a mitad. Rollback de latencia: 0.7 / 1.6.
+    NORMAL_SILENCE: float = 1.2
+    EXTENDED_SILENCE: float = 3.0
 
     # Respuestas de crisis (fallback si no hay intención matcheada)
     _CRISIS_RESPONSES: dict[str, str] = {
@@ -971,6 +971,98 @@ def whisper_beam_size() -> int:
 
 
 STT_SAMPLE_RATE = 16000
+# USB de esta Pi: ALSA rechaza 16 kHz (PaErrorCode -9997) y abre a 48 kHz.
+PI_MIC_CAPTURE_RATE = 48000
+# ~16 s de bloques de 128 ms. 32 se llenaba y el VAD tomaba huecos por silencio.
+AUDIO_QUEUE_MAXSIZE = 128
+
+
+def vad_log_label(mode: str) -> str:
+    """Prefijo de log: en aarch64 el VAD real es energía, no Silero."""
+    return "silero-vad" if mode == "silero" else "energy-vad"
+
+
+def enqueue_mic_block(
+    audio_queue: queue.Queue,
+    audio_block: np.ndarray,
+    drop_hits: list[int],
+) -> None:
+    """Callback-safe: copy ya hecho; sin I/O. Cola llena = drop, no xrun."""
+    try:
+        audio_queue.put_nowait(audio_block)
+    except queue.Full:
+        drop_hits[0] += 1
+
+
+def apply_capture_drops(
+    speech_active: bool,
+    drop_hits: int,
+    drops_seen: int,
+    silence_seconds: float,
+) -> tuple[float, int]:
+    """Huecos de cola no cuentan como silencio (dispara el hangover)."""
+    if drop_hits <= drops_seen:
+        return silence_seconds, drops_seen
+    if speech_active:
+        silence_seconds = 0.0
+    return silence_seconds, drop_hits
+
+
+def pi_mic_capture_rate() -> int:
+    """En la Pi el mic actual es 48 kHz. En Windows la PoC sigue a 16 kHz."""
+    if sys.platform.startswith("linux"):
+        return PI_MIC_CAPTURE_RATE
+    return STT_SAMPLE_RATE
+
+
+def downsample_capture_to_stt(
+    block: np.ndarray,
+    capture_sr: int,
+    target_sr: int = STT_SAMPLE_RATE,
+) -> np.ndarray:
+    """48 kHz → 16 kHz con promedio de 3 samples (anti-alias barato). Fuera del callback."""
+    arr = np.asarray(block, dtype=np.float32).reshape(-1)
+    if capture_sr == target_sr or arr.size == 0:
+        return arr
+    if capture_sr == 48000 and target_sr == 16000:
+        n = (arr.size // 3) * 3
+        if n == 0:
+            return arr[:0].copy()
+        return arr[:n].reshape(-1, 3).mean(axis=1).astype(np.float32)
+    return SpeechWorker._resample_audio(arr, capture_sr, target_sr)
+
+
+def pcm_s16le_to_float32(block: np.ndarray) -> np.ndarray:
+    arr = np.asarray(block).reshape(-1)
+    if arr.dtype != np.int16:
+        arr = arr.astype(np.int16, copy=False)
+    return arr.astype(np.float32) * (1.0 / 32768.0)
+
+
+def stt_block_duration_seconds(
+    n_samples: int,
+    sample_rate: int = STT_SAMPLE_RATE,
+) -> float:
+    if sample_rate <= 0 or n_samples <= 0:
+        return 0.0
+    return float(n_samples) / float(sample_rate)
+
+
+def capture_hop_seconds(platform_name: str | None = None) -> float:
+    name = sys.platform if platform_name is None else platform_name
+    if str(name).startswith("linux"):
+        return 960.0 / 48000.0
+    return 0.128
+
+
+def vad_pre_roll_blocks(hop_seconds: float, pre_roll_seconds: float = 1.0) -> int:
+    hop = max(float(hop_seconds), 1e-6)
+    return max(1, int(round(pre_roll_seconds / hop)))
+
+
+def vad_circular_maxlen(hop_seconds: float, window_seconds: float = 6.0) -> int:
+    hop = max(float(hop_seconds), 1e-6)
+    return max(8, int(round(window_seconds / hop)))
 
 
 def find_supported_input_config(
@@ -1027,7 +1119,7 @@ def mic_block_to_stt(
 
 class AudioWorker:
     # Tope duro de captura: silencio (VAD) o este máximo, lo que ocurra primero.
-    # LATENCIA punto 10: antes 15.0s. Revertir si corta monólogos del nene.
+    # LATENCIA punto 10: 8.0. Rollback (cuentos largos): 15.0.
     MAX_LISTEN_SECONDS: float = 8.0
 
     def __init__(
@@ -1058,6 +1150,8 @@ class AudioWorker:
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._echo_mute_until = 0.0
+        self._alsa_capture: Any = None
+        self._input_stream: Any = None
 
         # New subsystems for pillar coverage
         self.telemetry = telemetry
@@ -1074,6 +1168,7 @@ class AudioWorker:
 
         # Eye display reference for action tags (#LLM-SKILLS)
         self.eye_display = eye_display
+        self._set_eyes("zzz")
 
         # Robot state for notifications (#LLM-SKILLS)
         try:
@@ -1127,10 +1222,35 @@ class AudioWorker:
     def stop(self) -> None:
         log_action("AudioWorker", "deteniendo...")
         self._stop_event.set()
+        cap = self._alsa_capture
+        if cap is not None:
+            try:
+                cap.stop()
+            except Exception:
+                pass
+        stream = self._input_stream
+        if stream is not None:
+            try:
+                stream.stop()
+            except Exception:
+                pass
+            try:
+                stream.close()
+            except Exception:
+                pass
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=2)
         self._flush_vocab_parent_alert(force_session=True)
         log_action("AudioWorker", "detenido")
+
+    def _set_eyes(self, expression: str) -> None:
+        display = self.eye_display
+        if display is None or not hasattr(display, "set_expression"):
+            return
+        try:
+            display.set_expression(expression)
+        except Exception:
+            pass
 
     def _thinking_eyes(self, on: bool) -> None:
         display = self.eye_display
@@ -1295,23 +1415,25 @@ class AudioWorker:
         return bool(payload.get("story_chunk") or payload.get("response"))
 
     def _run(self) -> None:
-        sample_rate = 16000
-        block_duration_seconds = 0.128
+        stt_rate = STT_SAMPLE_RATE
+        capture_sr = pi_mic_capture_rate()
+        hop_seconds = capture_hop_seconds()
         log_action("AudioWorker", "tarea _run comenzada")
-        block_size = int(sample_rate * block_duration_seconds)
+        self._set_eyes("zzz")
+        block_size = int(round(capture_sr * hop_seconds))
         # Base silence threshold for toddlers (2-4 years): they produce
         # shorter utterances with longer pauses between words.
         # This is dynamically adjusted by EmotionReactor based on detected emotion.
         silence_threshold_seconds = self.emotion_reactor.NORMAL_SILENCE
         max_listen_seconds = self.MAX_LISTEN_SECONDS
-        circular_maxlen = max(8, int(round(6.0 / block_duration_seconds)))
+        circular_maxlen = vad_circular_maxlen(hop_seconds)
         circular_buffer: deque[np.ndarray] = deque(maxlen=circular_maxlen)
-        pre_roll_blocks = max(1, int(round(1.0 / block_duration_seconds)))
+        pre_roll_blocks = vad_pre_roll_blocks(hop_seconds)
         current_segment: list[np.ndarray] = []
         silence_seconds = 0.0
         listen_seconds = 0.0
         speech_active = False
-        audio_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=32)
+        audio_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=AUDIO_QUEUE_MAXSIZE)
 
         # Wait for camera models to finish loading before loading Whisper
         # to avoid CPU contention from concurrent heavy model initialization.
@@ -1338,7 +1460,7 @@ class AudioWorker:
                 self.message_queue, self.message_semaphore, "log",
                 "AudioWorker: modo NUBE activo — omitiendo carga de Whisper local",
             )
-        vad = self._load_vad(sample_rate)
+        vad = self._load_vad(stt_rate)
 
         # LLM al inicio, una vez, antes de abrir el mic. Si carga en segundo
         # plano el primer unknown sale enlatado.
@@ -1347,11 +1469,6 @@ class AudioWorker:
                 self.message_queue, self.message_semaphore, "log",
                 "AudioWorker: cargando LLM de fallback...",
             )
-            if self.eye_display is not None and hasattr(self.eye_display, "set_expression"):
-                try:
-                    self.eye_display.set_expression("pensando")
-                except Exception:
-                    pass
             try:
                 self.fallback_llm.load()
                 _queue_message_with_semaphore(
@@ -1363,30 +1480,32 @@ class AudioWorker:
                     self.message_queue, self.message_semaphore, "log",
                     f"AudioWorker: LLM de fallback no disponible: {exc}",
                 )
-            if self.eye_display is not None and hasattr(self.eye_display, "set_expression"):
-                try:
-                    self.eye_display.set_expression("escuchando")
-                except Exception:
-                    pass
+            try:
+                if self.fallback_llm.is_available:
+                    _queue_message_with_semaphore(
+                        self.message_queue, self.message_semaphore, "log",
+                        "AudioWorker: calentando LLM (sin voz)...",
+                    )
+                    self.fallback_llm.warmup()
+                    _queue_message_with_semaphore(
+                        self.message_queue, self.message_semaphore, "log",
+                        "AudioWorker: LLM caliente",
+                    )
+            except Exception as exc:
+                _queue_message_with_semaphore(
+                    self.message_queue, self.message_semaphore, "log",
+                    f"AudioWorker: warmup LLM omitido: {exc}",
+                )
+
+        self._set_eyes("escuchando")
 
         _dlog = get_debug_logger()
         if _dlog:
             llm_status = "disponible" if (self.fallback_llm and self.fallback_llm.is_available) else "no disponible"
             _dlog.log_output("AUDIO_INIT", f"AudioWorker modelos cargados (Whisper + VAD + LLM={llm_status})")
 
-        def callback(indata, frames, time_info, status) -> None:  # noqa: ANN001
-            if status:
-                _queue_message_with_semaphore(self.message_queue, self.message_semaphore, "log", f"Audio callback: {status}")
-            from session_policy import mic_open_for_listen
-
-            speaker_on = self.speech_worker is not None and self.speech_worker.is_busy()
-            if not mic_open_for_listen(speaker_on, time.monotonic(), self._echo_mute_until):
-                return
-            try:
-                audio_block = mic_block_to_stt(indata, capture_sr, sample_rate)
-                audio_queue.put_nowait(audio_block)
-            except queue.Full:
-                pass
+        overflow_hits = [0]
+        drop_hits = [0]
 
         if self.microphone_device_index == -1:
             _queue_message_with_semaphore(
@@ -1407,22 +1526,27 @@ class AudioWorker:
             return
 
         try:
-            def listen_loop(mic_label: str) -> None:
+            def listen_until_cut() -> np.ndarray | None:
                 nonlocal speech_active, silence_seconds, listen_seconds, current_segment
-                _queue_message_with_semaphore(
-                    self.message_queue,
-                    self.message_semaphore,
-                    "status",
-                    {"mic": mic_label, "volume": 0},
-                )
-                _queue_message_with_semaphore(
-                    self.message_queue, self.message_semaphore, "log", "silero-vad: escuchando..."
-                )
+                drops_seen = 0
+                vad_tag = vad_log_label(getattr(vad, "_mode", "energy"))
                 while not self._stop_event.is_set():
                     try:
                         audio_block = audio_queue.get(timeout=0.5)
                     except queue.Empty:
+                        silence_seconds, drops_seen = apply_capture_drops(
+                            speech_active, drop_hits[0], drops_seen, silence_seconds
+                        )
                         continue
+
+                    if np.issubdtype(audio_block.dtype, np.integer):
+                        audio_block = pcm_s16le_to_float32(audio_block)
+                    audio_block = downsample_capture_to_stt(
+                        audio_block, capture_sr, stt_rate
+                    )
+                    duration = stt_block_duration_seconds(
+                        int(audio_block.size), stt_rate
+                    )
 
                     circular_buffer.append(audio_block)
 
@@ -1472,17 +1596,21 @@ class AudioWorker:
                                 self.message_queue,
                                 self.message_semaphore,
                                 "log",
-                                f"silero-vad: escuchando... (umbral silencio: {silence_threshold_seconds:.1f}s, máx {max_listen_seconds:.0f}s)",
+                                f"{vad_tag}: escuchando... (umbral silencio: {silence_threshold_seconds:.1f}s, máx {max_listen_seconds:.0f}s)",
                             )
                         else:
                             current_segment.append(audio_block)
                         silence_seconds = 0.0
                     elif speech_active:
                         current_segment.append(audio_block)
-                        silence_seconds += block_duration_seconds
+                        silence_seconds += duration
+
+                    silence_seconds, drops_seen = apply_capture_drops(
+                        speech_active, drop_hits[0], drops_seen, silence_seconds
+                    )
 
                     if speech_active:
-                        listen_seconds += block_duration_seconds
+                        listen_seconds += duration
                         silenced = silence_seconds >= silence_threshold_seconds
                         timed_out = listen_seconds >= max_listen_seconds
                         if silenced or timed_out:
@@ -1491,17 +1619,18 @@ class AudioWorker:
                                 if silenced
                                 else f"tiempo máximo ({max_listen_seconds:.0f}s)"
                             )
+                            segment_audio = np.concatenate(current_segment, axis=0) if current_segment else np.array([], dtype=np.float32)
+                            seg_s = len(segment_audio) / 16000.0
                             _queue_message_with_semaphore(
                                 self.message_queue,
                                 self.message_semaphore,
                                 "log",
-                                f"silero-vad: {reason}, cortando audio",
+                                f"{vad_tag}: {reason}, cortando audio ({seg_s:.1f}s)",
                             )
                             log_action(
                                 "AudioWorker",
-                                f"corte de escucha: {reason} (capturado {listen_seconds:.1f}s)",
+                                f"corte de escucha: {reason} (capturado {listen_seconds:.1f}s, wav {seg_s:.1f}s)",
                             )
-                            segment_audio = np.concatenate(current_segment, axis=0) if current_segment else np.array([], dtype=np.float32)
                             speech_active = False
                             silence_seconds = 0.0
                             listen_seconds = 0.0
@@ -1509,32 +1638,193 @@ class AudioWorker:
                             circular_buffer.clear()
                             if hasattr(vad, "reset"):
                                 vad.reset()
-                            self._handle_segment(segment_audio, whisper_model, audio_queue)
+                            return segment_audio
+                return None
 
-            capture_sr, capture_dtype, capture_ch = find_supported_input_config(
-                self.microphone_device_index,
-                preferred_sr=sample_rate,
-            )
-            capture_block = max(1, int(capture_sr * block_duration_seconds))
-            if (capture_sr, capture_dtype, capture_ch) != (sample_rate, "float32", 1):
+            echo_until = [self._echo_mute_until]
+
+            def _speaker_busy() -> bool:
+                return self.speech_worker is not None and self.speech_worker.is_busy()
+
+            def _sync_echo_until() -> None:
+                echo_until[0] = self._echo_mute_until
+
+            use_alsa = sys.platform.startswith("linux")
+            capture = None
+            input_stream = None
+            if capture_sr != stt_rate:
                 _queue_message_with_semaphore(
                     self.message_queue,
                     self.message_semaphore,
                     "log",
-                    (
-                        f"AudioWorker: mic USB {capture_sr} Hz "
-                        f"{capture_ch}ch {capture_dtype} → STT {sample_rate} Hz"
-                    ),
+                    f"AudioWorker: mic {capture_sr} Hz → STT {stt_rate} Hz (fuera del callback)",
                 )
-            with sd.InputStream(
-                device=self.microphone_device_index,
-                channels=capture_ch,
-                samplerate=capture_sr,
-                blocksize=capture_block,
-                dtype=capture_dtype,
-                callback=callback,
-            ):
-                listen_loop(f"{self.microphone_device_index} activo")
+            mic_label = f"{self.microphone_device_index} activo"
+
+            if use_alsa:
+                from alsa_capture import (
+                    AlsaCapture,
+                    ENV_ALSA_CAPTURE_DEVICE,
+                    read_arecord_list,
+                    resolve_alsa_capture_device,
+                )
+
+                sd_name = ""
+                try:
+                    info = sd.query_devices(self.microphone_device_index)
+                    sd_name = str(info.get("name") or "")
+                except Exception:
+                    sd_name = ""
+                device = resolve_alsa_capture_device(
+                    env=os.environ,
+                    arecord_l=read_arecord_list(),
+                    sounddevice_name=sd_name,
+                )
+                _queue_message_with_semaphore(
+                    self.message_queue,
+                    self.message_semaphore,
+                    "log",
+                    f"AudioWorker: arecord {device} 48k S16_LE (env {ENV_ALSA_CAPTURE_DEVICE} override si está)",
+                )
+                capture = AlsaCapture(
+                    device=device,
+                    audio_queue=audio_queue,
+                    drop_hits=drop_hits,
+                    stop_event=self._stop_event,
+                    enqueue=enqueue_mic_block,
+                    speaker_busy=_speaker_busy,
+                    echo_until=echo_until,
+                )
+                self._alsa_capture = capture
+                capture.start()
+                if capture.pipe_size:
+                    _queue_message_with_semaphore(
+                        self.message_queue,
+                        self.message_semaphore,
+                        "log",
+                        f"AudioWorker: pipe_size={capture.pipe_size}",
+                    )
+                if capture.negotiated:
+                    _queue_message_with_semaphore(
+                        self.message_queue,
+                        self.message_semaphore,
+                        "log",
+                        f"AudioWorker: ALSA negociado {capture.negotiated}",
+                    )
+            else:
+
+                def callback(indata, frames, time_info, status) -> None:  # noqa: ANN001
+                    if status:
+                        overflow_hits[0] += 1
+                    if capture_muted[0] or _speaker_busy() or time.monotonic() < echo_until[0]:
+                        return
+                    audio_block = indata[:, 0].copy() if indata.ndim > 1 else indata.copy()
+                    enqueue_mic_block(audio_queue, audio_block, drop_hits)
+
+                capture_muted = [False]
+                input_stream = sd.InputStream(
+                    device=self.microphone_device_index,
+                    channels=1,
+                    samplerate=capture_sr,
+                    blocksize=block_size,
+                    dtype="float32",
+                    callback=callback,
+                )
+                self._input_stream = input_stream
+                input_stream.start()
+
+            try:
+                while not self._stop_event.is_set():
+                    _queue_message_with_semaphore(
+                        self.message_queue,
+                        self.message_semaphore,
+                        "status",
+                        {"mic": mic_label, "volume": 0},
+                    )
+                    vad_tag = vad_log_label(getattr(vad, "_mode", "energy"))
+                    _queue_message_with_semaphore(
+                        self.message_queue,
+                        self.message_semaphore,
+                        "log",
+                        f"{vad_tag}: escuchando...",
+                    )
+                    overflow_hits[0] = 0
+                    drop_hits[0] = 0
+                    overrun_before = capture.overrun_hits if capture is not None else 0
+                    restart_before = capture.restarts if capture is not None else 0
+                    busy_before = capture.busy_hits if capture is not None else 0
+                    if capture is not None:
+                        capture.set_muted(False)
+                    else:
+                        capture_muted[0] = False
+                    _sync_echo_until()
+                    segment = listen_until_cut()
+                    if capture is not None:
+                        n_xrun = capture.overrun_hits - overrun_before
+                        n_drop = drop_hits[0]
+                        n_restart = capture.restarts - restart_before
+                        n_busy = capture.busy_hits - busy_before
+                    else:
+                        n_xrun = overflow_hits[0]
+                        n_drop = drop_hits[0]
+                        n_restart = 0
+                        n_busy = 0
+                    overflow_hits[0] = 0
+                    drop_hits[0] = 0
+                    if n_xrun:
+                        _queue_message_with_semaphore(
+                            self.message_queue,
+                            self.message_semaphore,
+                            "log",
+                            f"AudioWorker: {n_xrun} overruns/xruns ALSA (captura sigue viva)",
+                        )
+                        log_action("AudioWorker", f"{n_xrun} overruns/xruns ALSA")
+                    if n_drop:
+                        _queue_message_with_semaphore(
+                            self.message_queue,
+                            self.message_semaphore,
+                            "log",
+                            f"AudioWorker: {n_drop} bloques descartados (cola llena)",
+                        )
+                        log_action("AudioWorker", f"{n_drop} bloques descartados (cola llena)")
+                    if n_restart:
+                        _queue_message_with_semaphore(
+                            self.message_queue,
+                            self.message_semaphore,
+                            "log",
+                            f"AudioWorker: arecord reiniciado {n_restart} veces",
+                        )
+                    if n_busy:
+                        _queue_message_with_semaphore(
+                            self.message_queue,
+                            self.message_semaphore,
+                            "log",
+                            "AudioWorker: hw: busy (ver LATENCIA PipeWire; lsof /dev/snd/pcmC*D0c)",
+                        )
+                    if capture is not None:
+                        capture.set_muted(True)
+                    else:
+                        capture_muted[0] = True
+                    self._drain_audio_queue(audio_queue)
+                    if self._stop_event.is_set():
+                        break
+                    if segment is not None and segment.size:
+                        self._handle_segment(segment, whisper_model, audio_queue)
+                    _sync_echo_until()
+            finally:
+                if capture is not None:
+                    capture.stop()
+                    self._alsa_capture = None
+                if input_stream is not None:
+                    try:
+                        input_stream.stop()
+                    except Exception:
+                        pass
+                    try:
+                        input_stream.close()
+                    except Exception:
+                        pass
+                    self._input_stream = None
 
         except Exception as exc:
             log_action("AudioWorker", f"ERROR: {exc}")
@@ -1589,6 +1879,7 @@ class AudioWorker:
                 if _dlog:
                     _dlog.log_input("TRANSCRIPTION", f"Audio ({segment_duration_s:.1f}s) [CLOUD]")
                 raw_text = self.cloud_stt.transcribe(audio_segment)
+                save_named_transcript_wav(audio_segment, raw_text, sample_rate=16000)
             else:
                 if _dlog:
                     _dlog.log_input("TRANSCRIPTION", f"Audio ({segment_duration_s:.1f}s) [LOCAL]")
@@ -1936,6 +2227,7 @@ class AudioWorker:
                     self._thinking_eyes(False)
 
             if intent_name == "unknown" and not str(intent_payload.get("response", "")).strip():
+                # Último recurso si el LLM no contestó. No es un intent matcheado.
                 intent_payload["response"] = self.intent_dispatcher._pick_response(
                     "unknown_fallback",
                     [
@@ -2264,7 +2556,7 @@ class AudioWorker:
     # Argentine expressions to condition the decoder for rioplatense accent.
     _WHISPER_INITIAL_PROMPT: str = (
         "Hola. ¿Cómo estás? Quiero jugar a piedra, papel o tijera. "
-        "Sí, dale. No quiero. Juguemos. Contame un cuento. ¿Qué es eso?"
+        "Sí, dale. No quiero. Juguemos. Contame un cuento."
     )
 
     def _load_whisper_model(self):
@@ -2282,18 +2574,16 @@ class AudioWorker:
         try:
             from vosk_stt import start_vosk
             from whisper_process import (
-                ctranslate2_compatible,
                 default_compute_type,
+                load_faster_whisper,
                 page_size_hint,
                 start_whisper_process,
                 whisper_model_candidates,
             )
 
-            if not ctranslate2_compatible():
-                hint = page_size_hint() or "Kernel con páginas > 4K"
+            hint = page_size_hint()
+            if hint:
                 _log(hint)
-                _log("CTranslate2 no es usable; paso a Vosk.")
-                return start_vosk(log=_log)
 
             compute = default_compute_type()
             model = None
@@ -2317,7 +2607,17 @@ class AudioWorker:
                 last_bus = True
             if model is None:
                 if last_bus:
-                    _log("CTranslate2 pegó Bus error; uso Vosk para transcribir.")
+                    _log("El hijo no cargó; pruebo Whisper en este proceso.")
+                try:
+                    model = load_faster_whisper(
+                        preferred,
+                        compute_type=compute,
+                        log=_log,
+                    )
+                except Exception as exc:
+                    _log(f"Whisper en proceso falló: {exc}")
+                    model = None
+            if model is None:
                 model = start_vosk(log=_log)
             if _dlog:
                 _dlog.log_output(
@@ -2675,6 +2975,7 @@ class AudioWorker:
 
         raw_rms = float(np.sqrt(np.mean(audio_segment ** 2)))
         if raw_rms < 0.0005:
+            save_named_transcript_wav(audio_segment, "", sample_rate=16000)
             return empty
 
         raw_audio_copy = audio_segment.copy() if _dlog else None
@@ -2706,6 +3007,7 @@ class AudioWorker:
                 no_speech_probs.append(float(nsp))
         transcript = " ".join(part for part in text_parts if part).strip()
         transcript = self._filter_hallucinations(transcript)
+        save_named_transcript_wav(audio_segment, transcript, sample_rate=16000)
 
         avg_logprob = float(np.mean(logprobs)) if logprobs else None
         no_speech_prob = float(np.mean(no_speech_probs)) if no_speech_probs else None
@@ -2954,10 +3256,12 @@ class SpeechWorker:
     ) -> tuple[int, str, int]:
         """Return (samplerate, dtype, channels) that the output device accepts.
 
-        Raspberry Pi ALSA often rejects float32 and mono (PaErrorCode -9994)
-        and only accepts int16 stereo at 48000/44100.  Probe dtype and channel
-        count as well as rate; never fall back to an untested float32 config.
+        Raspberry Pi 5 con el parlante actual: ALSA pide int16 estéreo a 48 kHz.
+        En Linux no se negocia otro formato. En Windows se prueba el dispositivo.
         """
+        if sys.platform.startswith("linux"):
+            return 48000, "int16", 2
+
         rates: list[int] = []
         for sr in (sample_rate, 48000, 44100, 22050, 16000):
             if sr not in rates:

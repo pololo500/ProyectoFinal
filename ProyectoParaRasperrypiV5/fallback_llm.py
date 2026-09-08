@@ -1,7 +1,8 @@
 """fallback_llm.py — LLM local de fallback para intents no reconocidos.
 
-Cuando el IntentDispatcher retorna ``unknown``, este módulo genera una
-respuesta usando un GGUF local vía ``llama-cpp-python``.
+Cuando el IntentDispatcher retorna ``unknown``, este módulo **siempre**
+genera la respuesta. Las frases enlatadas de ``intent_rules.json`` solo
+se usan si hubo match de keyword.
 
 Por defecto: Llama 3.2 3B Instruct Q4_K_M.
 Opcional: ``LLM_PROFILE=1b`` (prueba descartada: calidad muy baja) o ``LLM_PROFILE=8b``.
@@ -15,6 +16,7 @@ import os
 import re
 import threading
 import time
+import unicodedata
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -54,11 +56,11 @@ def selected_llm_spec() -> tuple[str, str]:
 
 
 def llm_n_ctx() -> int:
-    """Default 2048. Rollback: LLM_N_CTX=1024 (el prompt largo no entra)."""
+    """Default 1024, como la corrida rápida. Rollback: LLM_N_CTX=2048."""
     try:
-        return max(512, int(os.environ.get("LLM_N_CTX") or "2048"))
+        return max(512, int(os.environ.get("LLM_N_CTX") or "1024"))
     except ValueError:
-        return 2048
+        return 1024
 
 
 def llm_n_threads() -> int:
@@ -86,11 +88,11 @@ def llm_generate_timeout_s() -> float:
 _SYSTEM_PROMPT = (
     "Tu nombre es TEO. Sos un peluche que habla con nenes de 3 a 7 años. "
     "Primera persona; vos, mirá, dale. Nunca tercera persona ni 'el nene', 'el usuario' o 'el LLM'. "
-    "Si preguntan cómo te llamás: Me llamo TEO. Máximo 25 palabras. "
-    "Si no se entiende, pedí que repita. No inventes países ni datos. Si no sabés, decí no sé. "
+    "Contestá lo que dijo el nene en 1 o 2 oraciones, máximo 25 palabras. "
+    "Si no se entiende, preguntá con alegría. No inventes países ni datos. Si no sabés, decí no sé. "
     "Cuentas simples: da el resultado. Sin emojis, comillas ni asteriscos. "
-    "NO ofrezcas cuentos ni historias. NO juegues veo veo ni Piedra Papel o Tijera: hay skill. "
-    "Si pide un juego, ofrecé SOLO veo veo o piedra papel o tijera. "
+    "NO ofrezcas cuentos ni historias. "
+    "No arranques un juego. Si pide un juego, ofrecé veo veo o Piedra Papel o Tijera. "
     "Tags AL FINAL, nunca se dicen. No inventes tags. "
     "[INTENTS_OFF] si preguntás y esperás respuesta. "
     "[INTENTS_ON] obligatorio cuando dejás de preguntar. "
@@ -98,7 +100,7 @@ _SYSTEM_PROMPT = (
     "[PLAY_MUSIC] solo si pide canción, música o bailar. [STOP_MUSIC] para parar. "
     "[NOTIFY_PARENT:razón explicandole al padre] SOLO si pide a mamá/papá, miedo, crisis o duele de verdad. "
     "NO uses [NOTIFY_PARENT] por una palabra suelta, un color, un juego, una verdura, un bicho o charla de jardín. "
-    "[EXPRESSION:feliz|triste|sorprendido|enojado|neutral] "
+    "Cara: [EXPRESSION:feliz] [EXPRESSION:triste] [EXPRESSION:sorprendido] [EXPRESSION:enojado]. "
     "[CELEBRATE:qué hizo] breve, no vacío. "
     "[CALM_MODE] si tiene sueño, está cansado o si el nene se despide.\n"
 )
@@ -122,6 +124,33 @@ _STORY_OFFER = re.compile(
     r")"
 )
 _NEUTRAL_AFTER_STRIP = "¡Qué bueno! Contame más."
+_FOLLOW_AFTER_LEAK = "Contame más, ¿qué pasó?"
+_NAME_QUESTION = re.compile(
+    r"c[oó]mo te llam|qui[eé]n sos|\btu nombre\b",
+    re.IGNORECASE,
+)
+_LEAK_REPLIES = frozenset({
+    "veo veo",
+    "veoveo",
+    "me llamo teo",
+    "neutral",
+    "feliz",
+    "triste",
+    "enojado",
+    "sorprendido",
+    "intents_on",
+    "intents_off",
+    "intents on",
+    "intents off",
+    "play_music",
+    "calm_mode",
+})
+
+
+def _fold_es(text: str) -> str:
+    folded = unicodedata.normalize("NFD", text or "")
+    folded = "".join(c for c in folded if unicodedata.category(c) != "Mn")
+    return re.sub(r"\s+", " ", folded.lower()).strip()
 
 
 def drop_unsolicited_story_offer(user_text: str, reply: str) -> str:
@@ -139,6 +168,20 @@ def drop_unsolicited_story_offer(user_text: str, reply: str) -> str:
     kept = [part for part in parts if part and not _STORY_OFFER.search(part)]
     cleaned = " ".join(kept).strip()
     return cleaned or _NEUTRAL_AFTER_STRIP
+
+
+def drop_prompt_leak(user_text: str, reply: str) -> str:
+    """El 3B a veces copia plantillas del system prompt en vez de contestar."""
+    raw = (reply or "").strip()
+    if not raw:
+        return reply
+    folded = _fold_es(raw).rstrip(".!…").strip()
+    compact = folded.replace(" ", "")
+    if folded not in _LEAK_REPLIES and compact not in _LEAK_REPLIES:
+        return reply
+    if folded == "me llamo teo" and _NAME_QUESTION.search(user_text or ""):
+        return reply
+    return _FOLLOW_AFTER_LEAK
 
 
 class FallbackLLM:
@@ -312,6 +355,25 @@ class FallbackLLM:
             )
         return response_text
 
+    def warmup(self) -> None:
+        """Primer generate descartado: llama-cpp tarda 2–3× en el primer decode."""
+        if not self.is_available:
+            return
+        _dlog = get_debug_logger()
+        _t0 = time.monotonic()
+        try:
+            reply = self.generate("ok", None, history=[])
+        except Exception as exc:
+            if _dlog:
+                _dlog.log_output("LLM_WARMUP", f"ERROR: {exc}")
+            return
+        if _dlog:
+            _dlog.log_output(
+                "LLM_WARMUP",
+                f"descartado ({len(reply or '')} chars)",
+                elapsed_ms=(time.monotonic() - _t0) * 1000,
+            )
+
     def complete_sync(
         self,
         text: str,
@@ -346,7 +408,7 @@ class FallbackLLM:
             .get("content", "")
             .strip()
         )
-        return drop_unsolicited_story_offer(text, self._clean_response(raw_text))
+        return drop_prompt_leak(text, drop_unsolicited_story_offer(text, self._clean_response(raw_text)))
 
     # ------------------------------------------------------------------
     # Limpieza y post-procesamiento de la respuesta
