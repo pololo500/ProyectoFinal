@@ -8,7 +8,7 @@ from dataclasses import dataclass
 MIN_WORDS = 80
 MIN_SENTENCES = 3
 MAX_DIGIT_RATIO = 0.18
-CHECKIN_AFTER_WORDS = 50
+CHECKIN_AFTER_WORDS = 100
 
 _NARRATIVE_HINTS = (
     "habia una vez",
@@ -147,6 +147,22 @@ def PathStem(filename: str) -> str:
     return name.replace("_", " ").strip()
 
 
+def split_into_sentences(text: str) -> list[str]:
+    compact = re.sub(r"\s+", " ", (text or "").strip())
+    if not compact:
+        return []
+    return [p.strip() for p in re.split(r"(?<=[.!?])\s+", compact) if p.strip()]
+
+
+def sentence_prefetch_plan(sentences: list[str]) -> list[tuple[str, str | None]]:
+    """Cada paso: oración a reproducir y la siguiente a sintetizar en paralelo."""
+    plan: list[tuple[str, str | None]] = []
+    for i, sentence in enumerate(sentences):
+        nxt = sentences[i + 1] if i + 1 < len(sentences) else None
+        plan.append((sentence, nxt))
+    return plan
+
+
 def split_for_speech(
     text: str,
     max_words: int = CHECKIN_AFTER_WORDS,
@@ -157,10 +173,9 @@ def split_for_speech(
     ``max_chars`` queda por compatibilidad y se ignora.
     """
     del max_chars
-    compact = re.sub(r"\s+", " ", (text or "").strip())
-    if not compact:
+    sentences = split_into_sentences(text)
+    if not sentences:
         return []
-    sentences = [p.strip() for p in re.split(r"(?<=[.!?])\s+", compact) if p.strip()]
     chunks: list[str] = []
     buf: list[str] = []
     words = 0

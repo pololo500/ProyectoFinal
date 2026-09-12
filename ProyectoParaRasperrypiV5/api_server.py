@@ -174,8 +174,8 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Robot-Token, X-Filename")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Robot-Token, X-Filename, X-Story-Title")
         self.end_headers()
 
     def _send_json(self, data: Any, status: int = 200) -> None:
@@ -266,6 +266,8 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
             self._handle_get_music()
         elif path == "/api/stories":
             self._handle_get_stories()
+        elif path.startswith("/api/stories/"):
+            self._handle_get_story(path.split("/api/stories/", 1)[1])
         elif path == "/api/notifications":
             self._handle_get_notifications()
         else:
@@ -420,6 +422,29 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
         lib = StoryLibrary(STORIES_DIR)
         stories = [rec.to_dict() for rec in lib.list_stories()]
         self._send_json({"stories": stories})
+
+    def _handle_get_story(self, story_id: str) -> None:
+        import urllib.parse
+
+        from story_library import StoryLibrary
+
+        try:
+            safe_id = urllib.parse.unquote(story_id)
+        except Exception:
+            safe_id = story_id
+        lib = StoryLibrary(STORIES_DIR)
+        rec = lib.get(safe_id)
+        text = lib.load_text(safe_id)
+        if rec is None or text is None:
+            self._send_error_json(404, "Cuento no encontrado")
+            return
+        self._send_json({
+            "id": rec.id,
+            "title": rec.title,
+            "word_count": rec.word_count,
+            "created_at": rec.created_at,
+            "text": text,
+        })
 
     def _handle_get_notifications(self) -> None:
         """Devuelve y vacía las notificaciones pendientes.
@@ -610,8 +635,16 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
             filename = urllib.parse.unquote(raw_header)
         except Exception:
             filename = raw_header
+        raw_title = self.headers.get("X-Story-Title")
+        story_title = None
+        if raw_title is not None:
+            try:
+                story_title = urllib.parse.unquote(raw_title)
+            except Exception:
+                story_title = raw_title
+            story_title = story_title.strip() or None
         raw_data = self._read_body()
-        result = ingest_pdf(raw_data, filename, stories_dir=STORIES_DIR)
+        result = ingest_pdf(raw_data, filename, stories_dir=STORIES_DIR, title=story_title)
         self._send_json(result)
 
     def _handle_post_stories_play(self) -> None:
@@ -636,6 +669,61 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
             self._send_json({"status": "ok", "message": "Cuento detenido"})
         else:
             self._send_error_json(503, "Lector de cuentos no disponible")
+
+    # ------------------------------------------------------------------
+    # PUT endpoints
+    # ------------------------------------------------------------------
+
+    def do_PUT(self) -> None:
+        path = urlparse(self.path).path.rstrip("/")
+        if not self._authorized(path, mutating=True):
+            return
+
+        if path.startswith("/api/stories/"):
+            story_id = path.split("/api/stories/", 1)[1]
+            self._handle_put_story(story_id)
+        else:
+            self._send_error_json(404, "Endpoint no encontrado")
+
+    def _handle_put_story(self, story_id: str) -> None:
+        import urllib.parse
+
+        from story_library import StoryLibrary
+
+        body = self._parse_json_body()
+        if body is None:
+            self._send_error_json(400, "JSON inválido")
+            return
+        if "title" not in body and "text" not in body:
+            self._send_error_json(400, "Falta título o texto")
+            return
+
+        title: str | None = None
+        text: str | None = None
+        if "title" in body:
+            if not isinstance(body["title"], str):
+                self._send_error_json(400, "JSON inválido")
+                return
+            title = body["title"].strip()
+            if not title:
+                self._send_error_json(400, "Título vacío")
+                return
+            title = title[:80]
+        if "text" in body:
+            if not isinstance(body["text"], str):
+                self._send_error_json(400, "JSON inválido")
+                return
+            text = body["text"]
+
+        try:
+            safe_id = urllib.parse.unquote(story_id)
+        except Exception:
+            safe_id = story_id
+        result = StoryLibrary(STORIES_DIR).update_story(safe_id, title=title, text=text)
+        if result is None:
+            self._send_error_json(404, "Cuento no encontrado")
+            return
+        self._send_json(result)
 
     # ------------------------------------------------------------------
     # DELETE endpoints

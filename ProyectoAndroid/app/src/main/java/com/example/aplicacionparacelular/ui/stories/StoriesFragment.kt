@@ -18,12 +18,16 @@ import com.example.aplicacionparacelular.databinding.FragmentStoriesBinding
 import com.example.aplicacionparacelular.network.RobotApiClient
 import com.google.android.material.button.MaterialButton
 import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.textfield.TextInputEditText
 
 class StoriesFragment : Fragment() {
 
     private var _binding: FragmentStoriesBinding? = null
     private val binding get() = _binding!!
     private lateinit var viewModel: StoriesViewModel
+    private var editDialog: AlertDialog? = null
+    private var editDialogView: View? = null
+    private var ignoreEditorDismiss = false
 
     private val pdfPicker = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -35,7 +39,7 @@ class StoriesFragment : Fragment() {
         try {
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
                 ?: return@registerForActivityResult
-            viewModel.uploadPdf(filename, bytes)
+            promptStoryTitleThenUpload(filename, bytes)
         } catch (exc: Exception) {
             Snackbar.make(binding.root, "No pude leer el PDF: ${exc.message}", Snackbar.LENGTH_SHORT).show()
         }
@@ -90,8 +94,18 @@ class StoriesFragment : Fragment() {
         viewModel.currentlyPlaying.observe(viewLifecycleOwner) { rebuildSongs() }
         viewModel.statusMessage.observe(viewLifecycleOwner) { msg ->
             if (!msg.isNullOrBlank()) {
-                Snackbar.make(binding.root, msg, Snackbar.LENGTH_LONG).show()
+                showStoriesSnackbar(msg)
             }
+        }
+        viewModel.storyToEdit.observe(viewLifecycleOwner) { detail ->
+            if (detail == null) {
+                dismissEditor()
+            } else {
+                showStoryEditor(detail)
+            }
+        }
+        viewModel.saveInProgress.observe(viewLifecycleOwner) { saving ->
+            editDialog?.getButton(AlertDialog.BUTTON_POSITIVE)?.isEnabled = saving != true
         }
         if (RobotApiClient.isConfigured()) {
             viewModel.loadStories()
@@ -104,6 +118,87 @@ class StoriesFragment : Fragment() {
         if (RobotApiClient.isConfigured()) {
             viewModel.loadSongs()
         }
+    }
+
+    private fun promptStoryTitleThenUpload(filename: String, bytes: ByteArray) {
+        val dialogView = layoutInflater.inflate(R.layout.dialog_story_name, null)
+        val input = dialogView.findViewById<TextInputEditText>(R.id.edit_story_name)
+        val stem = StoryJson.pdfStem(filename)
+        input.setText(stem)
+        input.setSelection(input.text?.length ?: 0)
+        AlertDialog.Builder(requireContext())
+            .setTitle(R.string.stories_name_title)
+            .setView(dialogView)
+            .setPositiveButton(R.string.stories_name_accept) { _, _ ->
+                val title = input.text?.toString()?.trim().orEmpty()
+                viewModel.uploadPdf(filename, bytes, title.ifBlank { null })
+            }
+            .setNegativeButton(R.string.btn_cancel, null)
+            .show()
+    }
+
+    private fun showStoryEditor(detail: StoryDetail) {
+        if (editDialog?.isShowing == true) {
+            val titleInput = editDialogView?.findViewById<TextInputEditText>(R.id.edit_story_title)
+            val textInput = editDialogView?.findViewById<TextInputEditText>(R.id.edit_story_text)
+            titleInput?.setText(detail.title)
+            textInput?.setText(detail.text)
+            return
+        }
+        val dialogView = layoutInflater.inflate(R.layout.dialog_story_edit, null)
+        val titleInput = dialogView.findViewById<TextInputEditText>(R.id.edit_story_title)
+        val textInput = dialogView.findViewById<TextInputEditText>(R.id.edit_story_text)
+        titleInput.setText(detail.title)
+        textInput.setText(detail.text)
+        textInput.movementMethod = android.text.method.ScrollingMovementMethod.getInstance()
+        textInput.setOnTouchListener { v, _ ->
+            v.parent?.requestDisallowInterceptTouchEvent(true)
+            false
+        }
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.stories_edit_title)
+            .setView(dialogView)
+            .setPositiveButton(R.string.btn_save, null)
+            .setNegativeButton(R.string.btn_cancel) { _, _ ->
+                viewModel.clearStoryToEdit()
+            }
+            .create()
+        dialog.setOnDismissListener {
+            editDialog = null
+            editDialogView = null
+            if (!ignoreEditorDismiss) {
+                viewModel.clearStoryToEdit()
+            }
+            ignoreEditorDismiss = false
+        }
+        dialog.setOnShowListener {
+            val metrics = resources.displayMetrics
+            dialog.window?.setLayout(
+                (metrics.widthPixels * 0.94f).toInt(),
+                (metrics.heightPixels * 0.85f).toInt(),
+            )
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val title = titleInput.text?.toString().orEmpty()
+                val text = textInput.text?.toString().orEmpty()
+                viewModel.saveStory(detail.id, title, text)
+            }
+        }
+        editDialogView = dialogView
+        editDialog = dialog
+        dialog.show()
+    }
+
+    private fun dismissEditor() {
+        val dialog = editDialog ?: return
+        ignoreEditorDismiss = true
+        dialog.dismiss()
+    }
+
+    private fun showStoriesSnackbar(msg: String) {
+        val host = editDialogView?.takeIf { editDialog?.isShowing == true }
+            ?: _binding?.root
+            ?: return
+        Snackbar.make(host, msg, Snackbar.LENGTH_LONG).show()
     }
 
     private fun rebuildStories(stories: List<StoryItem>) {
@@ -122,6 +217,17 @@ class StoriesFragment : Fragment() {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = android.view.Gravity.CENTER_VERTICAL
                 setPadding(0, 8, 0, 8)
+                isClickable = true
+                isFocusable = true
+                val typed = android.util.TypedValue()
+                requireContext().theme.resolveAttribute(
+                    android.R.attr.selectableItemBackground,
+                    typed,
+                    true,
+                )
+                setBackgroundResource(typed.resourceId)
+                minimumHeight = 48
+                setOnClickListener { viewModel.loadStory(story.id) }
             }
             val label = TextView(requireContext()).apply {
                 text = "${story.title}  (${story.wordCount} palabras)"
@@ -255,6 +361,10 @@ class StoriesFragment : Fragment() {
     }
 
     override fun onDestroyView() {
+        ignoreEditorDismiss = true
+        editDialog?.dismiss()
+        editDialog = null
+        editDialogView = null
         super.onDestroyView()
         _binding = null
     }

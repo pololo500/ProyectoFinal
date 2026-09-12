@@ -26,6 +26,12 @@ class StoriesViewModel : ViewModel() {
     private val _statusMessage = MutableLiveData<String?>()
     val statusMessage: LiveData<String?> = _statusMessage
 
+    private val _storyToEdit = MutableLiveData<StoryDetail?>()
+    val storyToEdit: LiveData<StoryDetail?> = _storyToEdit
+
+    private val _saveInProgress = MutableLiveData(false)
+    val saveInProgress: LiveData<Boolean> = _saveInProgress
+
     fun loadStories() {
         RobotConnectionManager.fetchStories { result ->
             when (result) {
@@ -53,15 +59,16 @@ class StoriesViewModel : ViewModel() {
         }
     }
 
-    fun uploadPdf(filename: String, data: ByteArray) {
+    fun uploadPdf(filename: String, data: ByteArray, title: String? = null) {
         _statusMessage.value = "Subiendo PDF..."
-        RobotConnectionManager.uploadStory(filename, data) { result ->
+        val headerTitle = title?.trim()?.ifBlank { null }?.take(StoryJson.TITLE_MAX_LEN)
+        RobotConnectionManager.uploadStory(filename, data, headerTitle) { result ->
             when (result) {
                 is ApiResult.Success -> {
                     val status = result.data.optString("status")
                     if (status == "ready") {
-                        val title = result.data.optString("title", filename)
-                        _statusMessage.value = "Cuento listo: $title"
+                        val readyTitle = result.data.optString("title", filename)
+                        _statusMessage.value = "Cuento listo: $readyTitle"
                         loadStories()
                     } else {
                         val reason = result.data.optString("reason", "No se pudo publicar")
@@ -73,6 +80,51 @@ class StoriesViewModel : ViewModel() {
                 }
             }
         }
+    }
+
+    fun loadStory(id: String) {
+        _statusMessage.value = "Cargando cuento..."
+        RobotConnectionManager.fetchStory(id) { result ->
+            when (result) {
+                is ApiResult.Success -> {
+                    _storyToEdit.value = StoryJson.parseDetail(result.data)
+                }
+                is ApiResult.Error -> {
+                    _statusMessage.value = "Error: ${result.message}"
+                }
+            }
+        }
+    }
+
+    fun saveStory(id: String, title: String, text: String) {
+        val trimmedTitle = title.trim().take(StoryJson.TITLE_MAX_LEN)
+        if (trimmedTitle.isEmpty()) {
+            _statusMessage.value = "El nombre no puede estar vacío"
+            return
+        }
+        _saveInProgress.value = true
+        RobotConnectionManager.updateStory(id, trimmedTitle, text) { result ->
+            _saveInProgress.value = false
+            when (result) {
+                is ApiResult.Success -> {
+                    val update = StoryJson.parseUpdateStatus(result.data)
+                    if (update.status == "rejected") {
+                        _statusMessage.value = update.reason ?: "No se pudo guardar"
+                    } else {
+                        _statusMessage.value = "Cuento actualizado"
+                        _storyToEdit.value = null
+                        loadStories()
+                    }
+                }
+                is ApiResult.Error -> {
+                    _statusMessage.value = "Error: ${result.message}"
+                }
+            }
+        }
+    }
+
+    fun clearStoryToEdit() {
+        _storyToEdit.value = null
     }
 
     fun deleteStory(id: String) {

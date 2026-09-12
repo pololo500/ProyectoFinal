@@ -1210,6 +1210,9 @@ class AudioWorker:
         self.conversation_memory = ConversationMemory()
         self._story_generation = 0
         self._story_lock = threading.Lock()
+        self._story_speak_lock = threading.Lock()
+        self._stt_in_flight = False
+        self._story_pipeline_active = False
 
         from parent_alerts import VocabularyParentAlerter
         self._vocab_alerter = VocabularyParentAlerter()
@@ -1319,10 +1322,14 @@ class AudioWorker:
             time.sleep(seconds)
             if gen != self._story_generation:
                 return
+            if self._stt_in_flight or self._story_pipeline_active:
+                return
             if self.story_engine is None or not self.story_engine.is_waiting_for_child:
                 return
             with self._story_lock:
                 if gen != self._story_generation:
+                    return
+                if self._stt_in_flight or self._story_pipeline_active:
                     return
                 if not self.story_engine.is_waiting_for_child:
                     return
@@ -1330,6 +1337,12 @@ class AudioWorker:
             self._speak_story_payload(payload, generation=gen)
 
         threading.Thread(target=_wait, name="StoryCheckin", daemon=True).start()
+
+    def _sync_story_guard(self) -> None:
+        if self.speech_worker is None:
+            return
+        active = bool(self.story_engine is not None and self.story_engine.is_active)
+        self.speech_worker.set_story_guard(active or self._story_pipeline_active)
 
     def _speak_story_payload(self, payload: dict[str, Any], generation: int | None) -> None:
         if generation is None:
@@ -1341,31 +1354,32 @@ class AudioWorker:
         def _still() -> bool:
             return generation == self._story_generation
 
-        intro = self._strip_unspeakable(str(payload.get("response") or ""))
-        if payload.get("intent_name") == "story_reflect_answer" and not intro:
-            intro = self.STORY_REFLECT_COMMENT_FALLBACK
-        if intro and _still():
-            self.speech_worker.speak_and_wait(intro, timeout=60.0)
-        chunk = self._strip_unspeakable(str(payload.get("story_chunk") or ""))
-        if chunk and _still():
-            self.speech_worker.speak_and_wait(chunk, timeout=180.0)
+        with self._story_speak_lock:
+            self._story_pipeline_active = True
+            self.speech_worker.set_story_guard(True)
+            try:
+                intro = self._strip_unspeakable(str(payload.get("response") or ""))
+                if payload.get("intent_name") == "story_reflect_answer" and not intro:
+                    intro = self.STORY_REFLECT_COMMENT_FALLBACK
+                if intro and _still():
+                    self.speech_worker.speak_and_wait(intro, timeout=60.0, story=True)
+                chunk = self._strip_unspeakable(str(payload.get("story_chunk") or ""))
+                if chunk and _still():
+                    self.speech_worker.speak_sentences_and_wait(chunk, timeout=180.0, story=True)
 
-        if payload.get("story_need_reflection") and _still():
-            question = self._story_reflection_question(payload)
-            if question:
-                self.speech_worker.speak_and_wait(question, timeout=60.0)
-            if _still():
-                self._arm_story_timer()
-        elif payload.get("story_checkin") and _still():
-            checkin = self._strip_unspeakable(str(payload.get("story_checkin")))
-            if checkin:
-                self.speech_worker.speak_and_wait(checkin, timeout=30.0)
-            if _still():
-                self._arm_story_timer()
-        else:
-            closing = self._strip_unspeakable(str(payload.get("story_closing") or ""))
-            if closing and _still() and closing != intro:
-                self.speech_worker.speak_and_wait(closing, timeout=60.0)
+                if payload.get("story_checkin") and _still():
+                    checkin = self._strip_unspeakable(str(payload.get("story_checkin")))
+                    if checkin:
+                        self.speech_worker.speak_and_wait(checkin, timeout=30.0, story=True)
+                    if _still():
+                        self._arm_story_timer()
+                else:
+                    closing = self._strip_unspeakable(str(payload.get("story_closing") or ""))
+                    if closing and _still() and closing != intro:
+                        self.speech_worker.speak_and_wait(closing, timeout=60.0, story=True)
+            finally:
+                self._story_pipeline_active = False
+                self._sync_story_guard()
 
         self._publish_story_status()
 
@@ -1393,6 +1407,10 @@ class AudioWorker:
         self._invalidate_story_timer()
         if self.story_engine is not None:
             self.story_engine.cancel()
+        self._story_pipeline_active = False
+        if self.speech_worker is not None:
+            self.speech_worker.interrupt_playback()
+        self._sync_story_guard()
         self._publish_story_status()
 
     def play_story_from_api(self, story_id: str | None) -> bool:
@@ -1568,7 +1586,10 @@ class AudioWorker:
 
                     from session_policy import mic_open_for_listen
 
-                    speaker_on = self.speech_worker is not None and self.speech_worker.is_busy()
+                    speaker_on = (
+                        (self.speech_worker is not None and self.speech_worker.is_busy())
+                        or self._story_pipeline_active
+                    )
                     if not mic_open_for_listen(speaker_on, time.monotonic(), self._echo_mute_until):
                         if speech_active:
                             speech_active = False
@@ -1644,7 +1665,10 @@ class AudioWorker:
             echo_until = [self._echo_mute_until]
 
             def _speaker_busy() -> bool:
-                return self.speech_worker is not None and self.speech_worker.is_busy()
+                return (
+                    (self.speech_worker is not None and self.speech_worker.is_busy())
+                    or self._story_pipeline_active
+                )
 
             def _sync_echo_until() -> None:
                 echo_until[0] = self._echo_mute_until
@@ -1859,9 +1883,20 @@ class AudioWorker:
         limit = int(getattr(state, "playtime_limit_minutes", 0) or 0)
         self.playtime_guard.limit_minutes = limit
 
+    def _waiting_story_child(self) -> bool:
+        return bool(self.story_engine is not None and self.story_engine.is_waiting_for_child)
+
+    def _rearm_story_if_waiting(self) -> None:
+        if self._waiting_story_child():
+            self._arm_story_timer()
+
     def _handle_segment(self, audio_segment: np.ndarray, whisper_model: Any, audio_queue: queue.Queue) -> None:
         if audio_segment.size == 0:
             return
+
+        self._stt_in_flight = True
+        if self._waiting_story_child():
+            self._invalidate_story_timer()
 
         _dlog = get_debug_logger()
         segment_start = time.monotonic()
@@ -1921,6 +1956,33 @@ class AudioWorker:
                 log_action("STT", f'"{raw_text}"')
 
             elapsed_stt_ms = (time.monotonic() - _t_transcribe) * 1000
+            from story_engine import should_drop_turn_while_story_speaks
+
+            if self._story_pipeline_active and should_drop_turn_while_story_speaks(
+                True, raw_text
+            ):
+                _queue_message_with_semaphore(
+                    self.message_queue,
+                    self.message_semaphore,
+                    "log",
+                    f'[STT] Descartado (cuento en curso): "{raw_text}"',
+                )
+                return
+            if self._story_pipeline_active and raw_text.strip():
+                _queue_message_with_semaphore(
+                    self.message_queue,
+                    self.message_semaphore,
+                    "log",
+                    f'[STT] Stop del cuento: "{raw_text}"',
+                )
+                self._invalidate_story_timer()
+                if self.speech_worker is not None:
+                    self.speech_worker.interrupt_playback()
+
+            story_busy = bool(
+                self._story_pipeline_active
+                or (self.story_engine is not None and self.story_engine.is_active)
+            )
             if low_confidence:
                 _queue_message_with_semaphore(
                     self.message_queue,
@@ -1930,10 +1992,13 @@ class AudioWorker:
                     f"{f' avg_logprob={avg_logprob:.3f}' if avg_logprob is not None else ''}"
                     f' text="{raw_text}"',
                 )
-                if segment_duration_s > 1.5 and self.speech_worker is not None:
+                if not story_busy and segment_duration_s > 1.5 and self.speech_worker is not None:
                     self.speech_worker.speak_and_wait("No te escuché bien, ¿me lo decís de nuevo?")
                     self._silence_mic_after_speaker(audio_queue)
-                return
+                    return
+                if not raw_text.strip():
+                    self._rearm_story_if_waiting()
+                    return
             if raw_text.strip():
                 _queue_message_with_semaphore(
                     self.message_queue,
@@ -1953,22 +2018,7 @@ class AudioWorker:
                         elapsed_ms=elapsed_stt_ms,
                     ),
                 )
-                return
-
-            from session_policy import is_clear_keyword_intent, utterance_too_thin
-
-            if utterance_too_thin(raw_text) and not is_clear_keyword_intent(raw_text):
-                _queue_message_with_semaphore(
-                    self.message_queue,
-                    self.message_semaphore,
-                    "log",
-                    f'[STT] Muy corto para una respuesta: "{raw_text}"',
-                )
-                if segment_duration_s > 0.8 and self.speech_worker is not None:
-                    self.speech_worker.speak_and_wait(
-                        "No te escuché bien, ¿me lo decís de nuevo?",
-                    )
-                    self._silence_mic_after_speaker(audio_queue)
+                self._rearm_story_if_waiting()
                 return
 
             # 2. Sanitize (PII removal)
@@ -2350,10 +2400,16 @@ class AudioWorker:
                 elif response_text:
                     if _dlog:
                         _dlog.log_input("TTS", f"text=\"{response_text}\"")
-                    self.speech_worker.speak_and_wait(response_text, timeout=60.0)
+                    story_turn = bool(
+                        self.story_engine is not None and self.story_engine.is_active
+                    )
+                    self.speech_worker.speak_and_wait(
+                        response_text, timeout=60.0, story=story_turn
+                    )
                 self._silence_mic_after_speaker(audio_queue)
                 if _dlog:
                     _dlog.log_output("TTS", "Reproducción completada", elapsed_ms=(time.monotonic() - _t_tts) * 1000)
+            self._sync_story_guard()
 
             self._remember_turn(sanitized_text, intent_payload, response_text)
 
@@ -2370,6 +2426,7 @@ class AudioWorker:
         except Exception as exc:
             _queue_message_with_semaphore(self.message_queue, self.message_semaphore, "log", f"Error en transcripción o NLU: {exc}")
         finally:
+            self._stt_in_flight = False
             # Flush stale audio accumulated during processing + playback
             while True:
                 try:
@@ -3102,6 +3159,8 @@ class SpeechWorker:
     # Más alto = más lento. 1.20 = ritmo actual (pausado, menos “orden”).
     # Si sigue sonando apurada: probar 1.30 (cambio más marcado; puede arrastrar).
     PIPER_LENGTH_SCALE = 1.20
+    # Cuento: un poco más lento que el diálogo. Más alto = más lento.
+    PIPER_STORY_LENGTH_SCALE = 1.35
     PIPER_NOISE_SCALE = 0.667
     # Más alto = duraciones de sílaba menos rígidas (menos cadencia de mandato).
     PIPER_NOISE_W_SCALE = 0.98
@@ -3114,7 +3173,7 @@ class SpeechWorker:
         cloud_mode: bool = False,
         cloud_tts: Any = None,
     ) -> None:
-        self._queue: queue.Queue[str] = queue.Queue(maxsize=32)
+        self._queue: queue.Queue[str | list[str]] = queue.Queue(maxsize=32)
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._is_windows = sys.platform.startswith("win")
@@ -3124,6 +3183,7 @@ class SpeechWorker:
         self._piper_voice: Any = None
         self._idle_event = threading.Event()
         self._idle_event.set()  # Not speaking initially
+        self._story_guard = False
 
         # Music playback state
         self._music_stop_event = threading.Event()
@@ -3165,6 +3225,24 @@ class SpeechWorker:
     def set_night_mode(self, enabled: bool) -> None:
         self._night_mode = bool(enabled)
 
+    def set_story_guard(self, enabled: bool) -> None:
+        """Durante el cuento se tira TTS que no sea del propio cuento."""
+        was = self._story_guard
+        self._story_guard = bool(enabled)
+        if enabled and not was:
+            try:
+                while True:
+                    self._queue.get_nowait()
+            except queue.Empty:
+                pass
+            log_action("SpeechWorker", "guarda de cuento: cola extra vaciada")
+
+    def _reject_non_story_tts(self, story: bool) -> bool:
+        if self._story_guard and not story:
+            self._log("TTS descartado (cuento en curso)")
+            return True
+        return False
+
     def interrupt_playback(self) -> None:
         """Corta TTS en curso (barge-in) sin matar el worker."""
         self._playback_generation += 1
@@ -3182,17 +3260,32 @@ class SpeechWorker:
         return re.sub(r"\s{2,}", " ", cleaned).strip()
 
     @staticmethod
+    def _soften_caps_for_tts(text: str) -> str:
+        """Piper deletrea MAYÚSCULAS y lee Í como «i acentuada»."""
+        parts: list[str] = []
+        for token in text.split(" "):
+            letters = [c for c in token if c.isalpha()]
+            if len(letters) >= 2 and all(c.isupper() for c in letters):
+                parts.append("".join(c.lower() if c.isalpha() else c for c in token))
+            else:
+                parts.append(token)
+        return " ".join(parts)
+
+    @staticmethod
     def _prepare_tts_text(text: str) -> str:
         cleaned = re.sub(r"\s{2,}", " ", text).strip()
         if not cleaned:
             return ""
+        cleaned = SpeechWorker._soften_caps_for_tts(cleaned)
         if cleaned[-1] not in ".!?…":
             cleaned += "."
         return cleaned
 
-    def speak(self, text: str) -> None:
+    def speak(self, text: str, *, story: bool = False) -> None:
         speech_text = self._prepare_tts_text(self._strip_tts_markup((text or "").strip()))
         if not speech_text:
+            return
+        if self._reject_non_story_tts(story):
             return
         self._idle_event.clear()
         try:
@@ -3205,14 +3298,41 @@ class SpeechWorker:
     def set_output_device(self, output_device_index: int | None) -> None:
         self._output_device_index = output_device_index
 
-    def speak_and_wait(self, text: str, timeout: float = 30.0) -> None:
+    def speak_and_wait(self, text: str, timeout: float = 30.0, *, story: bool = False) -> None:
         """Queue text for speaking and block until playback finishes."""
         speech_text = self._prepare_tts_text(self._strip_tts_markup((text or "").strip()))
         if not speech_text:
             return
+        if self._reject_non_story_tts(story):
+            return
         self._idle_event.clear()
         try:
             self._queue.put_nowait(speech_text)
+        except queue.Full:
+            self._idle_event.set()
+            return
+        self._idle_event.wait(timeout=timeout)
+
+    def speak_sentences_and_wait(
+        self, text: str, timeout: float = 180.0, *, story: bool = False
+    ) -> None:
+        """Sintetiza el cuento por oración; Piper arma la siguiente mientras suena la actual."""
+        from story_validate import split_into_sentences
+
+        speech_text = self._prepare_tts_text(self._strip_tts_markup((text or "").strip()))
+        if not speech_text:
+            return
+        if self._reject_non_story_tts(story):
+            return
+        sentences = split_into_sentences(speech_text)
+        if not sentences:
+            return
+        if len(sentences) == 1:
+            self.speak_and_wait(sentences[0], timeout=timeout, story=story)
+            return
+        self._idle_event.clear()
+        try:
+            self._queue.put_nowait(sentences)
         except queue.Full:
             self._idle_event.set()
             return
@@ -3461,31 +3581,20 @@ class SpeechWorker:
 
         while not self._stop_event.is_set():
             try:
-                text = self._queue.get(timeout=0.25)
+                item = self._queue.get(timeout=0.25)
             except queue.Empty:
                 self._idle_event.set()
                 continue
 
-            if self._stop_event.is_set() or not text:
+            if self._stop_event.is_set() or not item:
                 self._idle_event.set()
                 continue
 
             try:
-                self._log(f"Sintetizando: {text}")
-                _dlog = get_debug_logger()
-                _t_synth = time.monotonic()
-                if _dlog:
-                    _dlog.log_input("TTS_SYNTH", f"engine={'gTTS' if self._cloud_mode else ('piper' if self._piper_voice else ('sapi' if self._is_windows else 'espeak'))}, text=\"{text}\"")
-                if self._cloud_mode and self._cloud_tts is not None:
-                    self._speak_cloud(text)
-                elif self._piper_voice is not None:
-                    self._speak_piper(text)
-                elif self._is_windows:
-                    self._speak_windows(text)
+                if isinstance(item, list):
+                    self._speak_sentence_pipeline(item)
                 else:
-                    self._speak_linux(text)
-                if _dlog:
-                    _dlog.log_output("TTS_SYNTH", "Síntesis + reproducción completada", elapsed_ms=(time.monotonic() - _t_synth) * 1000)
+                    self._speak_queued_text(item)
                 self._log("Reproducción completada")
             except Exception as exc:
                 self._log(f"Error TTS: {exc}")
@@ -3536,15 +3645,96 @@ class SpeechWorker:
 
         return model_file
 
-    def _speak_piper(self, text: str) -> None:
-        """Synthesize speech with piper neural TTS v1.4+ -> direct float32 -> sounddevice."""
+    def _speak_queued_text(self, text: str) -> None:
+        self._log(f"Sintetizando: {text}")
+        _dlog = get_debug_logger()
+        _t_synth = time.monotonic()
+        if _dlog:
+            _dlog.log_input(
+                "TTS_SYNTH",
+                f"engine={'gTTS' if self._cloud_mode else ('piper' if self._piper_voice else ('sapi' if self._is_windows else 'espeak'))}, text=\"{text}\"",
+            )
+        if self._cloud_mode and self._cloud_tts is not None:
+            self._speak_cloud(text)
+        elif self._piper_voice is not None:
+            self._speak_piper(text)
+        elif self._is_windows:
+            self._speak_windows(text)
+        else:
+            self._speak_linux(text)
+        if _dlog:
+            _dlog.log_output(
+                "TTS_SYNTH",
+                "Síntesis + reproducción completada",
+                elapsed_ms=(time.monotonic() - _t_synth) * 1000,
+            )
+
+    def _speak_sentence_pipeline(self, sentences: list[str]) -> None:
+        """Reproduce oración N y sintetiza N+1 en paralelo (solo Piper)."""
+        cleaned = [s.strip() for s in sentences if (s or "").strip()]
+        if not cleaned:
+            return
+        if self._cloud_mode and self._cloud_tts is not None:
+            for text in cleaned:
+                if self._stop_event.is_set():
+                    return
+                self._speak_queued_text(text)
+            return
+        if self._piper_voice is None:
+            for text in cleaned:
+                if self._stop_event.is_set():
+                    return
+                self._speak_queued_text(text)
+            return
+
+        self._log(f"Piper por oración ({len(cleaned)})")
+        story_scale = SpeechWorker.PIPER_STORY_LENGTH_SCALE
+        current = self._synthesize_piper_pcm(cleaned[0], length_scale=story_scale)
+        if current is None:
+            return
+        for i in range(len(cleaned)):
+            if self._stop_event.is_set():
+                return
+            audio_array, sample_rate = current
+            play_error: list[BaseException] = []
+
+            def _play(
+                _audio: np.ndarray = audio_array,
+                _sr: int = sample_rate,
+            ) -> None:
+                try:
+                    self._play_wav_via_output_stream(_audio, _sr)
+                except BaseException as exc:
+                    play_error.append(exc)
+
+            player = threading.Thread(target=_play, name="TtsSentencePlay", daemon=True)
+            player.start()
+            nxt: tuple[np.ndarray, int] | None = None
+            if i + 1 < len(cleaned) and not self._stop_event.is_set():
+                nxt = self._synthesize_piper_pcm(
+                    cleaned[i + 1], length_scale=story_scale
+                )
+            player.join()
+            if play_error:
+                raise play_error[0]
+            if nxt is None:
+                return
+            current = nxt
+
+    def _synthesize_piper_pcm(
+        self, text: str, length_scale: float | None = None
+    ) -> tuple[np.ndarray, int] | None:
+        """Sintetiza una oración con Piper y devuelve PCM float32 + sample rate."""
         audio_chunks: list[np.ndarray] = []
         sample_rate: int = 22050  # default; updated from first chunk
+        scale = (
+            SpeechWorker.PIPER_LENGTH_SCALE if length_scale is None else length_scale
+        )
 
         try:
             from piper.config import SynthesisConfig
             syn_config = SynthesisConfig(
-                length_scale=SpeechWorker.PIPER_LENGTH_SCALE,
+                length_scale=scale,
                 noise_scale=SpeechWorker.PIPER_NOISE_SCALE,
                 noise_w_scale=SpeechWorker.PIPER_NOISE_W_SCALE,
             )
@@ -3558,10 +3748,16 @@ class SpeechWorker:
 
         if not audio_chunks:
             self._log("Piper no generó audio para el texto dado")
-            return
+            return None
 
-        audio_array = np.concatenate(audio_chunks).astype(np.float32)
-        # audio_float_array is already in [-1.0, 1.0] range
+        return np.concatenate(audio_chunks).astype(np.float32), sample_rate
+
+    def _speak_piper(self, text: str) -> None:
+        """Synthesize speech with piper neural TTS v1.4+ -> direct float32 -> sounddevice."""
+        synthesized = self._synthesize_piper_pcm(text)
+        if synthesized is None:
+            return
+        audio_array, sample_rate = synthesized
         self._play_wav_via_output_stream(audio_array, sample_rate)
 
     # ------------------------------------------------------------------

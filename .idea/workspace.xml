@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="NONE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="c94434bf-a8f8-4583-8c3c-4b232a3ee65f" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/ProyectoAndroid/app/build.gradle.kts" beforeDir="false" afterPath="$PROJECT_DIR$/ProyectoAndroid/app/build.gradle.kts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ProyectoAndroid/app/src/main/java/com/example/aplicacionparacelular/network/RobotApiClient.kt" beforeDir="false" afterPath="$PROJECT_DIR$/ProyectoAndroid/app/src/main/java/com/example/aplicacionparacelular/network/RobotApiClient.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ProyectoAndroid/app/src/main/java/com/example/aplicacionparacelular/network/RobotConnectionManager.kt" beforeDir="false" afterPath="$PROJECT_DIR$/ProyectoAndroid/app/src/main/java/com/example/aplicacionparacelular/network/RobotConnectionManager.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ProyectoAndroid/app/src/main/java/com/example/aplicacionparacelular/ui/stories/StoriesFragment.kt" beforeDir="false" afterPath="$PROJECT_DIR$/ProyectoAndroid/app/src/main/java/com/example/aplicacionparacelular/ui/stories/StoriesFragment.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ProyectoAndroid/app/src/main/java/com/example/aplicacionparacelular/ui/stories/StoriesViewModel.kt" beforeDir="false" afterPath="$PROJECT_DIR$/ProyectoAndroid/app/src/main/java/com/example/aplicacionparacelular/ui/stories/StoriesViewModel.kt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ProyectoAndroid/app/src/main/res/values/strings.xml" beforeDir="false" afterPath="$PROJECT_DIR$/ProyectoAndroid/app/src/main/res/values/strings.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ProyectoAndroid/gradle/libs.versions.toml" beforeDir="false" afterPath="$PROJECT_DIR$/ProyectoAndroid/gradle/libs.versions.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ProyectoParaRasperrypiV5/api_server.py" beforeDir="false" afterPath="$PROJECT_DIR$/ProyectoParaRasperrypiV5/api_server.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ProyectoParaRasperrypiV5/story_library.py" beforeDir="false" afterPath="$PROJECT_DIR$/ProyectoParaRasperrypiV5/story_library.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ProyectoParaRasperrypiV5/test_stories.py" beforeDir="false" afterPath="$PROJECT_DIR$/ProyectoParaRasperrypiV5/test_stories.py" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ClangdSettings">
+    <option name="formatViaClangd" value="false" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectColorInfo"><![CDATA[{
+  "associatedIndex": 8,
+  "fromUser": false
+}]]></component>
+  <component name="ProjectId" id="3J477OggsvHNZVSOyyk82ns3Jjo" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.cidr.known.project.marker": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.readMode.enableVisualFormatting": "true",
+    "cf.first.check.clang-format": "false",
+    "cidr.known.project.marker": "true",
+    "git-widget-placeholder": "ImplementacionfallidadePantalla",
+    "last_opened_file_path": "C:/Users/polol/Documents/GitHub/ProyectoFinal"
+  }
+}]]></component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="c94434bf-a8f8-4583-8c3c-4b232a3ee65f" name="Changes" comment="" />
+      <created>1788908318765</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1788908318765</updated>
+    </task>
+    <servers />
+  </component>
+</project>

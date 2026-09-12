@@ -180,25 +180,6 @@ def mic_open_for_listen(speaker_playing: bool, now: float, echo_mute_until: floa
     return now >= echo_mute_until
 
 
-_THIN_KEEP = frozenset({"si", "no", "ok", "dale", "ya", "eh"})
-
-
-def utterance_too_thin(text: str) -> bool:
-    """Una sola palabra que no es sí/no no vale una pasada al LLM.
-
-    Vosk a menudo suelta 'hijo'/'es'; el 3B en la Pi se puede colgar y
-    el mic queda muerto minutos.
-    """
-    words = [w for w in (text or "").strip().split() if w]
-    if not words:
-        return True
-    if len(words) >= 2:
-        return False
-    folded = unicodedata.normalize("NFD", words[0].lower())
-    folded = "".join(c for c in folded if unicodedata.category(c) != "Mn")
-    return folded not in _THIN_KEEP
-
-
 def stt_looks_like_garbage(text: str) -> bool:
     """Vosk a 8 s a veces suelta ensalada (west, miraflores, …). No va al LLM."""
     words = [w for w in (text or "").strip().split() if w]
