@@ -25,7 +25,14 @@ def _wants_exit(text: str) -> bool:
     if any(p in folded for p in phrases):
         return True
     words = set(re.findall(r"\w+", folded))
-    return bool(words & {"basta", "salir", "parar", "chau", "despues", "después"})
+    return bool(words & {"basta", "salir", "parar", "paramos", "chau", "despues", "después"})
+
+
+def should_drop_turn_while_story_speaks(pipeline_active: bool, text: str) -> bool:
+    """Durante la lectura, se ignora todo menos un stop del cuento."""
+    if not pipeline_active:
+        return False
+    return not _wants_exit(text)
 
 
 def _wants_accept(text: str) -> bool:
@@ -277,9 +284,8 @@ class StoryEngine:
         payload["story_id"] = self._reading_id
         payload["story_title"] = self._reading_title
         if last:
-            payload["story_need_reflection"] = True
-            payload["story_digest"] = self._digest
-            self._state = "reflecting"
+            payload["story_closing"] = CLOSING_PROMPT
+            self._state = "awaiting_more"
         else:
             payload["story_checkin"] = CHECKIN_PROMPT
             self._state = "checking_in"

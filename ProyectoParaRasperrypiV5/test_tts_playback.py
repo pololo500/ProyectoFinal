@@ -128,5 +128,79 @@ class TestPlayRetriesInt16(unittest.TestCase):
         self.assertEqual(last["channels"], 2)
 
 
+class TestStorySentencePipeline(unittest.TestCase):
+    def test_workers_pipeline_el_chunk_del_cuento(self) -> None:
+        from pathlib import Path
+
+        src = Path(__file__).resolve().parent.joinpath("workers.py").read_text(
+            encoding="utf-8"
+        )
+        pipeline_at = src.find("speak_sentences_and_wait")
+        self.assertGreater(pipeline_at, 0)
+        speak_chunk = src.find("speak_sentences_and_wait(chunk")
+        self.assertGreater(speak_chunk, 0)
+
+    def test_piper_sintetiza_la_siguiente_mientras_suena_la_actual(self) -> None:
+        import threading
+        import time
+
+        worker = SpeechWorker(output_device_index=0)
+        worker._piper_voice = object()
+        order: list[str] = []
+        play_started = threading.Event()
+        play_release = threading.Event()
+
+        def synth(text: str, length_scale: float | None = None):
+            order.append(f"synth:{text}")
+            return (np.zeros(8, dtype=np.float32), 22050)
+
+        def play(_audio, _sr):
+            order.append("play-start")
+            play_started.set()
+            play_release.wait(timeout=1.0)
+            order.append("play-end")
+
+        with patch.object(worker, "_synthesize_piper_pcm", side_effect=synth), patch.object(
+            worker, "_play_wav_via_output_stream", side_effect=play
+        ):
+            def _run() -> None:
+                worker._speak_sentence_pipeline(["Uno.", "Dos.", "Tres."])
+
+            t = threading.Thread(target=_run)
+            t.start()
+            self.assertTrue(play_started.wait(timeout=1.0))
+            deadline = time.monotonic() + 1.0
+            while "synth:Dos." not in order and time.monotonic() < deadline:
+                time.sleep(0.01)
+            self.assertIn("synth:Dos.", order)
+            play_release.set()
+            t.join(timeout=2.0)
+        self.assertFalse(t.is_alive())
+        self.assertEqual(order[0], "synth:Uno.")
+        self.assertIn("synth:Dos.", order)
+        self.assertLess(order.index("synth:Dos."), order.index("play-end"))
+
+
+class TestStoryTtsGuard(unittest.TestCase):
+    def test_cola_extra_se_tira_durante_el_cuento(self) -> None:
+        worker = SpeechWorker(output_device_index=0)
+        worker.set_story_guard(True)
+        worker.speak_and_wait("No te escuché bien, ¿me lo decís de nuevo?")
+        self.assertTrue(worker._queue.empty())
+
+    def test_tts_del_cuento_si_entra(self) -> None:
+        worker = SpeechWorker(output_device_index=0)
+        worker.set_story_guard(True)
+        worker.speak_and_wait("¿Seguimos?", timeout=0.01, story=True)
+        self.assertFalse(worker._queue.empty())
+        self.assertEqual(worker._queue.get_nowait(), "¿Seguimos?")
+
+    def test_speak_suelto_tambien_se_tira(self) -> None:
+        worker = SpeechWorker(output_device_index=0)
+        worker.set_story_guard(True)
+        worker.speak("¿Cuál animal tiene más trocitos?")
+        self.assertTrue(worker._queue.empty())
+
+
 if __name__ == "__main__":
     unittest.main()

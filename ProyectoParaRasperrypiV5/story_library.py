@@ -125,6 +125,57 @@ class StoryLibrary:
             meta.unlink()
         return existed
 
+    def update_story(
+        self,
+        story_id: str,
+        title: str | None = None,
+        text: str | None = None,
+    ) -> dict[str, Any] | None:
+        rec = self.get(story_id)
+        if rec is None:
+            return None
+        current_text = self.load_text(story_id)
+        if current_text is None:
+            return None
+
+        new_title = rec.title
+        if title is not None:
+            stripped = title.strip()
+            if stripped:
+                new_title = stripped[:80]
+
+        new_text = current_text
+        if text is not None:
+            check = validate_children_story(text)
+            if not check.ok:
+                return {"status": "rejected", "reason": check.reason}
+            new_text = text
+
+        words = rec.word_count
+        if text is not None:
+            words = len(re.findall(r"[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}", new_text))
+
+        safe = Path(story_id).name
+        tmp_txt = self.root / f".{safe}.txt.tmp"
+        tmp_json = self.root / f".{safe}.json.tmp"
+        tmp_txt.write_text(new_text, encoding="utf-8")
+        payload = {
+            "id": rec.id,
+            "title": new_title,
+            "status": "ready",
+            "word_count": words,
+            "created_at": rec.created_at,
+        }
+        tmp_json.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp_txt.replace(self.root / f"{safe}.txt")
+        tmp_json.replace(self.root / f"{safe}.json")
+        return {
+            "status": "ok",
+            "id": rec.id,
+            "title": new_title,
+            "word_count": words,
+        }
+
 
 def extract_pdf_text(pdf_bytes: bytes) -> tuple[str, int, str | None]:
     """Devuelve (texto, páginas, error)."""
@@ -151,7 +202,12 @@ def extract_pdf_text(pdf_bytes: bytes) -> tuple[str, int, str | None]:
     return text, n_pages, None
 
 
-def ingest_pdf(pdf_bytes: bytes, filename: str, stories_dir: Path | None = None) -> dict[str, Any]:
+def ingest_pdf(
+    pdf_bytes: bytes,
+    filename: str,
+    stories_dir: Path | None = None,
+    title: str | None = None,
+) -> dict[str, Any]:
     lib = StoryLibrary(stories_dir)
     name = Path(filename).name
     if not name.lower().endswith(".pdf"):
@@ -165,7 +221,11 @@ def ingest_pdf(pdf_bytes: bytes, filename: str, stories_dir: Path | None = None)
     if err:
         return {"status": "rejected", "reason": err}
 
-    title = title_from_filename_and_text(name, text)
+    chosen = (title or "").strip()
+    if chosen:
+        title = chosen[:80]
+    else:
+        title = title_from_filename_and_text(name, text)
     check = validate_children_story(text)
     if not check.ok:
         return {"status": "rejected", "reason": check.reason}

@@ -141,6 +141,12 @@
     <string name="stories_upload">Subir PDF</string>
     <string name="stories_empty">Todavía no hay cuentos</string>
     <string name="stories_delete_confirm">¿Borrar este cuento del peluche?</string>
+    <string name="stories_name_title">Nombre del cuento</string>
+    <string name="stories_name_hint">Nombre del cuento</string>
+    <string name="stories_name_accept">Aceptar</string>
+    <string name="stories_edit_title">Editar cuento</string>
+    <string name="stories_text_hint">Texto del cuento</string>
+    <string name="stories_title_required">El nombre no puede estar vacío</string>
     <string name="files_songs_title">Canciones</string>
     <string name="files_songs_section">Lo que TEO puede poner</string>
     <string name="files_songs_empty">Todavía no hay canciones</string>

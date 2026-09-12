@@ -29,6 +29,18 @@ class TestPrepareTtsText(unittest.TestCase):
         self.assertEqual(SpeechWorker._prepare_tts_text(""), "")
         self.assertEqual(SpeechWorker._prepare_tts_text("   "), "")
 
+    def test_mayusculas_no_deletrea_dia(self) -> None:
+        out = SpeechWorker._prepare_tts_text("Dale, te leo EL PRIMER DÍA DE CLASES")
+        self.assertNotIn("DÍA", out)
+        self.assertIn("día", out)
+        self.assertIn("el primer día de clases", out)
+
+    def test_no_baja_una_frase_normal(self) -> None:
+        self.assertEqual(
+            SpeechWorker._prepare_tts_text("Había una vez un sapo."),
+            "Había una vez un sapo.",
+        )
+
     def test_speak_encola_texto_preparado(self) -> None:
         worker = SpeechWorker()
         worker.speak("hola")
@@ -48,8 +60,28 @@ class TestPiperVoiceConfig(unittest.TestCase):
 
     def test_parametros_de_sintesis(self) -> None:
         self.assertAlmostEqual(SpeechWorker.PIPER_LENGTH_SCALE, 1.20)
+        self.assertGreater(SpeechWorker.PIPER_STORY_LENGTH_SCALE, SpeechWorker.PIPER_LENGTH_SCALE)
+        self.assertAlmostEqual(SpeechWorker.PIPER_STORY_LENGTH_SCALE, 1.35)
         self.assertAlmostEqual(SpeechWorker.PIPER_NOISE_SCALE, 0.667)
         self.assertAlmostEqual(SpeechWorker.PIPER_NOISE_W_SCALE, 0.98)
+
+    def test_pipeline_del_cuento_usa_ritmo_lento(self) -> None:
+        import numpy as np
+
+        worker = SpeechWorker(output_device_index=0)
+        worker._piper_voice = object()
+        scales: list[float | None] = []
+
+        def synth(text: str, length_scale: float | None = None):
+            scales.append(length_scale)
+            return (np.zeros(8, dtype=np.float32), 22050)
+
+        with patch.object(worker, "_synthesize_piper_pcm", side_effect=synth), patch.object(
+            worker, "_play_wav_via_output_stream"
+        ):
+            worker._speak_sentence_pipeline(["Uno.", "Dos."])
+        self.assertTrue(scales)
+        self.assertTrue(all(s == SpeechWorker.PIPER_STORY_LENGTH_SCALE for s in scales))
 
     def test_ensure_piper_model_descarga_daniela_si_falta(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

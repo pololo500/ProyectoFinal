@@ -170,20 +170,18 @@ class TestGreetingFarewellExact(unittest.TestCase):
         self.assertIsNone(is_clear_keyword_intent("hey hola"))
 
 
-class TestUtteranceTooThin(unittest.TestCase):
-    def test_palabra_suelta_no_va_al_llm(self) -> None:
-        from session_policy import utterance_too_thin
+class TestSingleWordTranscripts(unittest.TestCase):
+    def test_session_policy_ya_no_filtra_palabras_cortas(self) -> None:
+        import session_policy
 
-        self.assertTrue(utterance_too_thin("es"))
-        self.assertTrue(utterance_too_thin("hijo"))
-        self.assertTrue(utterance_too_thin("hola"))
+        self.assertFalse(hasattr(session_policy, "utterance_too_thin"))
 
-    def test_si_no_y_frases_no_son_thin(self) -> None:
-        from session_policy import utterance_too_thin
-
-        self.assertFalse(utterance_too_thin("quiero jugar"))
-        self.assertFalse(utterance_too_thin("sí"))
-        self.assertFalse(utterance_too_thin("no"))
+    def test_workers_deja_pasar_una_palabra(self) -> None:
+        src = Path(__file__).resolve().parent.joinpath("workers.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("Muy corto para una respuesta", src)
+        self.assertNotIn("utterance_too_thin(raw_text)", src)
 
     def test_ensalada_larga_es_basura(self) -> None:
         from session_policy import stt_looks_like_garbage

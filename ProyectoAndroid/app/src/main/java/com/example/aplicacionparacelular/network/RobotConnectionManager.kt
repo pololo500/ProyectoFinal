@@ -315,8 +315,26 @@ object RobotConnectionManager {
         executeAsync({ RobotApiClient.getStories() }, onResult)
     }
 
-    fun uploadStory(filename: String, data: ByteArray, onResult: (ApiResult<JSONObject>) -> Unit) {
-        executeAsync({ RobotApiClient.uploadStory(filename, data) }, onResult)
+    fun uploadStory(
+        filename: String,
+        data: ByteArray,
+        title: String? = null,
+        onResult: (ApiResult<JSONObject>) -> Unit,
+    ) {
+        executeAsync({ RobotApiClient.uploadStory(filename, data, title) }, onResult)
+    }
+
+    fun fetchStory(storyId: String, onResult: (ApiResult<JSONObject>) -> Unit) {
+        executeAsync({ RobotApiClient.getStory(storyId) }, onResult)
+    }
+
+    fun updateStory(
+        storyId: String,
+        title: String? = null,
+        text: String? = null,
+        onResult: (ApiResult<JSONObject>) -> Unit,
+    ) {
+        executeAsync({ RobotApiClient.updateStory(storyId, title, text) }, onResult)
     }
 
     fun deleteStory(storyId: String, onResult: (ApiResult<JSONObject>) -> Unit) {

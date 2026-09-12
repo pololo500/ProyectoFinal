@@ -1,0 +1,40 @@
+{
+  "runId": "ds-micompanero-2026-09-11",
+  "fileKey": "UpAEnzYkytIWDZaohoZPZC",
+  "fileUrl": "https://www.figma.com/design/UpAEnzYkytIWDZaohoZPZC",
+  "planKey": "team::1478739462282166392",
+  "notes": "Starter: 3 pages, 1 variable mode, MCP rate limit hit before Config/dialogs/Dark.",
+  "pages": {
+    "Foundations": "0:1",
+    "Components": "1:4",
+    "Screens": "1:5"
+  },
+  "screensLight": {
+    "Inicio": "8:2",
+    "Como estuvo": "9:28",
+    "Rutinas": "9:121",
+    "Rutinas vacia": "9:157",
+    "Archivos": "10:97",
+    "Archivos vacio": "10:146",
+    "Agenda": "10:184"
+  },
+  "missing": [
+    "Light / Configuracion",
+    "Light dialogs nombre + editar",
+    "All Dark screens",
+    "Button label TEXT property on Button component",
+    "Donut 4-arc",
+    "Archivos subtitle wrap"
+  ],
+  "components": {
+    "Button": "6:37",
+    "Card": "6:44",
+    "ChipStatus": "6:49",
+    "StatusBar": "7:2",
+    "AppBar": "7:15",
+    "BottomNav": "7:101",
+    "FAB": "7:102"
+  },
+  "phase": "blocked-mcp-rate-limit",
+  "blockedAt": "2026-09-11T19:10:00Z"
+}

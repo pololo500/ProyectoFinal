@@ -108,6 +108,12 @@ object RobotApiClient {
     /** Obtiene la lista de cuentos publicados. */
     fun getStories(): ApiResult<JSONObject> = doGet("/api/stories")
 
+    /** Obtiene un cuento (metadatos + texto extraído). */
+    fun getStory(storyId: String): ApiResult<JSONObject> {
+        val encoded = java.net.URLEncoder.encode(storyId, "UTF-8")
+        return doGet("/api/stories/$encoded")
+    }
+
     // ------------------------------------------------------------------
     // POST endpoints
     // ------------------------------------------------------------------
@@ -186,8 +192,8 @@ object RobotApiClient {
         }
     }
 
-    /** Sube un PDF de cuento al robot. */
-    fun uploadStory(filename: String, data: ByteArray): ApiResult<JSONObject> {
+    /** Sube un PDF de cuento al robot. Header X-Story-Title solo si el título no está vacío. */
+    fun uploadStory(filename: String, data: ByteArray, title: String? = null): ApiResult<JSONObject> {
         if (!isConfigured()) return ApiResult.Error("Robot no configurado")
         return try {
             val encodedFilename = java.net.URLEncoder.encode(filename, "UTF-8")
@@ -200,6 +206,10 @@ object RobotApiClient {
                 setRequestProperty("Content-Type", "application/octet-stream")
                 setRequestProperty("Content-Length", data.size.toString())
                 setRequestProperty("X-Filename", encodedFilename)
+                val trimmedTitle = title?.trim()
+                if (!trimmedTitle.isNullOrBlank()) {
+                    setRequestProperty("X-Story-Title", UrlEncoding.headerValue(trimmedTitle))
+                }
                 applyAuth()
                 doOutput = true
             }
@@ -208,6 +218,15 @@ object RobotApiClient {
         } catch (e: Exception) {
             ApiResult.Error(e.message ?: "Error de conexión")
         }
+    }
+
+    /** Actualiza título y/o texto de un cuento. */
+    fun updateStory(storyId: String, title: String? = null, text: String? = null): ApiResult<JSONObject> {
+        val encoded = java.net.URLEncoder.encode(storyId, "UTF-8")
+        val body = JSONObject()
+        if (title != null) body.put("title", title)
+        if (text != null) body.put("text", text)
+        return doPut("/api/stories/$encoded", body)
     }
 
     // ------------------------------------------------------------------
@@ -256,6 +275,26 @@ object RobotApiClient {
             val url = URL("$baseUrl$path")
             val conn = (url.openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
+                connectTimeout = CONNECT_TIMEOUT
+                readTimeout = READ_TIMEOUT
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                applyAuth()
+                doOutput = true
+            }
+            val bodyBytes = body.toString().toByteArray(Charsets.UTF_8)
+            conn.outputStream.use { it.write(bodyBytes) }
+            readResponse(conn)
+        } catch (e: Exception) {
+            ApiResult.Error(e.message ?: "Error de conexión")
+        }
+    }
+
+    private fun doPut(path: String, body: JSONObject): ApiResult<JSONObject> {
+        if (!isConfigured()) return ApiResult.Error("Robot no configurado")
+        return try {
+            val url = URL("$baseUrl$path")
+            val conn = (url.openConnection() as HttpURLConnection).apply {
+                requestMethod = "PUT"
                 connectTimeout = CONNECT_TIMEOUT
                 readTimeout = READ_TIMEOUT
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
