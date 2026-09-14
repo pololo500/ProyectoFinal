@@ -86,13 +86,21 @@ class PlaytimeGuard:
     today: date = field(default_factory=date.today)
     _seconds: float = 0.0
 
-    def add_seconds(self, duration_s: float) -> None:
+    def _rollover(self) -> None:
         if date.today() != self.today:
             self.today = date.today()
             self._seconds = 0.0
+
+    def add_seconds(self, duration_s: float) -> None:
+        self._rollover()
         self._seconds += max(0.0, float(duration_s))
 
+    def reset_today(self) -> None:
+        self._rollover()
+        self._seconds = 0.0
+
     def is_over_limit(self) -> bool:
+        self._rollover()
         if self.limit_minutes <= 0:
             return False
         return self._seconds >= self.limit_minutes * 60.0
@@ -186,7 +194,9 @@ def stt_looks_like_garbage(text: str) -> bool:
     return len(words) >= 8
 
 
-_LLM_INTENTS = frozenset({"unknown", "question_curiosity", "help_request"})
+_LLM_INTENTS = frozenset(
+    {"unknown", "question_curiosity", "help_request", "story_request", "song_request"}
+)
 
 
 def should_allow_llm(

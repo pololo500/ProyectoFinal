@@ -144,6 +144,12 @@ object RobotApiClient {
         return doPost("/api/power", body)
     }
 
+    /** Habilita o no el botón de panza para despertar a Teo. */
+    fun postBellyWake(enabled: Boolean): ApiResult<JSONObject> {
+        val body = JSONObject().apply { put("belly_wake_enabled", enabled) }
+        return doPost("/api/config", body)
+    }
+
     /** Actualiza las rutinas en el robot. */
     fun postRoutines(routinesJson: JSONObject): ApiResult<JSONObject> =
         doPost("/api/routines", routinesJson)

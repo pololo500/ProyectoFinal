@@ -2,8 +2,14 @@
 from __future__ import annotations
 
 import json
+import sys
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock
+
+sys.modules.setdefault("cv2", MagicMock())
+sys.modules.setdefault("mediapipe", MagicMock())
+sys.modules.setdefault("sounddevice", MagicMock())
 
 from session_policy import (
     MUTE_FAILSAFE_TURNS,
@@ -144,6 +150,42 @@ class TestActionTagRegex(unittest.TestCase):
         actions, clean = worker._parse_action_tags(raw)
         self.assertEqual(actions, [])
         self.assertEqual(clean, "")
+
+    def test_go_to_sleep_se_parsea_y_no_se_dice(self) -> None:
+        from workers import AudioWorker
+
+        worker = AudioWorker.__new__(AudioWorker)
+        raw = "Bueno, me voy a dormir. [GO_TO_SLEEP]"
+        actions, clean = worker._parse_action_tags(raw)
+        self.assertEqual([a["action"] for a in actions], ["GO_TO_SLEEP"])
+        self.assertIn("dormir", clean.lower())
+        self.assertNotIn("[", clean)
+        self.assertNotIn("GO_TO_SLEEP", clean)
+
+    def test_go_to_sleep_marca_el_payload_para_despues_del_tts(self) -> None:
+        from workers import AudioWorker
+
+        worker = AudioWorker.__new__(AudioWorker)
+        worker.intent_mute = IntentMute(log_fn=lambda *_a, **_k: None)
+        worker.speech_worker = None
+        worker.eye_display = None
+        worker._robot_state = None
+        payload: dict = {}
+        actions, _clean = worker._parse_action_tags("Chau. [GO_TO_SLEEP]")
+        worker._execute_actions(actions, payload, user_text="apagate")
+        self.assertTrue(payload.get("child_go_to_sleep"))
+
+    def test_list_stories_y_play_story_se_parsean(self) -> None:
+        from workers import AudioWorker
+
+        worker = AudioWorker.__new__(AudioWorker)
+        actions, clean = worker._parse_action_tags("[LIST_STORIES]")
+        self.assertEqual([a["action"] for a in actions], ["LIST_STORIES"])
+        self.assertEqual(clean, "")
+        actions, clean = worker._parse_action_tags("Dale. [PLAY_STORY:El sapo valiente]")
+        self.assertEqual(actions[0]["action"], "PLAY_STORY")
+        self.assertEqual(actions[0]["param"], "El sapo valiente")
+        self.assertEqual(clean, "Dale.")
 
 
 if __name__ == "__main__":

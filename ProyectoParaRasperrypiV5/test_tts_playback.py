@@ -4,8 +4,13 @@ Reproduce PaErrorCode -9994: ALSA rechaza float32/mono y exige int16/estéreo.
 """
 from __future__ import annotations
 
+import sys
 import unittest
 from unittest.mock import MagicMock, patch
+
+sys.modules.setdefault("cv2", MagicMock())
+sys.modules.setdefault("mediapipe", MagicMock())
+sys.modules.setdefault("sounddevice", MagicMock())
 
 import numpy as np
 
@@ -263,6 +268,39 @@ class TestStorySentencePipeline(unittest.TestCase):
         self.assertEqual(order[0], "synth:Uno.")
         self.assertIn("synth:Dos.", order)
         self.assertLess(order.index("synth:Dos."), order.index("play-end"))
+
+    def test_interrupt_aborta_las_oraciones_que_quedaban(self) -> None:
+        import threading
+        import time
+
+        worker = SpeechWorker(output_device_index=0)
+        worker._piper_voice = object()
+        played: list[str] = []
+        play_started = threading.Event()
+        play_release = threading.Event()
+
+        def synth(text: str, length_scale: float | None = None):
+            return (np.zeros(8, dtype=np.float32), 22050)
+
+        def play(_audio, _sr):
+            played.append("tick")
+            play_started.set()
+            play_release.wait(timeout=1.0)
+
+        with patch.object(worker, "_synthesize_piper_pcm", side_effect=synth), patch.object(
+            worker, "_play_wav_via_output_stream", side_effect=play
+        ):
+            def _run() -> None:
+                worker._speak_sentence_pipeline(["Uno.", "Dos.", "Tres."])
+
+            t = threading.Thread(target=_run)
+            t.start()
+            self.assertTrue(play_started.wait(timeout=1.0))
+            worker.interrupt_playback()
+            play_release.set()
+            t.join(timeout=2.0)
+        self.assertFalse(t.is_alive())
+        self.assertEqual(played, ["tick"])
 
 
 class TestStoryTtsGuard(unittest.TestCase):

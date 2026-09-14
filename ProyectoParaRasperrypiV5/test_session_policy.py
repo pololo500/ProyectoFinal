@@ -84,6 +84,18 @@ class TestPlaytimeGuard(unittest.TestCase):
         self.assertTrue(guard.allows_intent("call_parent"))
         self.assertFalse(guard.allows_intent("play_veo_veo"))
 
+    def test_reset_today_vuelve_a_cero(self) -> None:
+        guard = PlaytimeGuard(limit_minutes=1)
+        guard.add_seconds(120)
+        self.assertTrue(guard.is_over_limit())
+        guard.reset_today()
+        self.assertFalse(guard.is_over_limit())
+
+    def test_is_over_limit_resetea_al_cambiar_el_dia_sin_hablar(self) -> None:
+        guard = PlaytimeGuard(limit_minutes=1, today=date.today() - timedelta(days=1))
+        guard._seconds = 9999
+        self.assertFalse(guard.is_over_limit())
+
 
 class TestPrivacyExtra(unittest.TestCase):
     def test_saca_texto_del_nene(self) -> None:
@@ -214,9 +226,14 @@ class TestShouldAllowLlm(unittest.TestCase):
             "play_veo_veo",
             "identity_name",
             "call_parent",
-            "song_request",
         ):
             self.assertFalse(should_allow_llm(name), name)
+
+    def test_cuento_y_musica_van_al_llm(self) -> None:
+        from session_policy import should_allow_llm
+
+        self.assertTrue(should_allow_llm("story_request"))
+        self.assertTrue(should_allow_llm("song_request"))
 
     def test_unknown_aunque_el_stt_sea_largo_va_al_llm(self) -> None:
         from session_policy import should_allow_llm

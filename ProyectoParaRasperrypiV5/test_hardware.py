@@ -134,6 +134,20 @@ class TestHugAsk(unittest.TestCase):
         eyes.set_pictogram.assert_called_once_with("abrazo")
         eyes.set_expression.assert_called_once_with("feliz")
 
+    def test_segundo_abrazo_se_ignora_si_el_primero_sigue(self) -> None:
+        companion = PhysicalCompanion(HardwarePins())
+        self.assertTrue(companion.try_begin_hug())
+        spoken: list[str] = []
+        eyes = MagicMock()
+        perform_hug_ask(companion, spoken.append, eyes)
+        self.assertEqual(spoken, [])
+        self.assertEqual(companion.hug_count, 0)
+        eyes.set_pictogram.assert_not_called()
+        companion.end_hug()
+        perform_hug_ask(companion, spoken.append, eyes)
+        self.assertEqual(spoken, [HUG_ASK_PHRASE])
+        self.assertEqual(companion.hug_count, 1)
+
 
 class TestPictograms(unittest.TestCase):
     def test_higiene_manos(self) -> None:

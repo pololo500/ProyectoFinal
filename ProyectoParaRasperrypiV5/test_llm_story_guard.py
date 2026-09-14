@@ -47,10 +47,9 @@ class TestSystemPromptNoStoryTemplate(unittest.TestCase):
 
     def test_prohibits_offering_stories(self) -> None:
         folded = _SYSTEM_PROMPT.lower()
-        self.assertTrue(
-            "no ofrezcas" in folded or "nunca ofrezcas" in folded,
-            _SYSTEM_PROMPT,
-        )
+        self.assertIn("no ofrezcas cuento", folded)
+        self.assertIn("[list_stories]", folded)
+        self.assertIn("[play_story:", folded)
 
     def test_prompt_entra_en_n_ctx_1024(self) -> None:
         self.assertLessEqual(len(_SYSTEM_PROMPT), 1800)
@@ -101,6 +100,12 @@ class TestSystemPromptNoStoryTemplate(unittest.TestCase):
         folded = _SYSTEM_PROMPT.lower()
         self.assertIn("explicandole al padre", folded)
         self.assertIn("despide", folded)
+
+    def test_prompt_duerme_con_go_to_sleep(self) -> None:
+        self.assertIn("[GO_TO_SLEEP]", _SYSTEM_PROMPT)
+        folded = _SYSTEM_PROMPT.lower()
+        self.assertIn("apagarte", folded)
+        self.assertIn("quiere jugar", folded)
 
 
 class TestPromptNoCannedEcho(unittest.TestCase):

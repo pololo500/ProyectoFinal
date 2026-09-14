@@ -20,7 +20,7 @@ import xml.sax.saxutils as saxutils
 from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
@@ -744,6 +744,13 @@ class CameraWorker:
                     continue
                 last_frame_ts = now_ts
 
+                try:
+                    from api_server import robot_state as _rs
+                    if hasattr(_rs, "activity_allowed") and not _rs.activity_allowed():
+                        continue
+                except Exception:
+                    pass
+
                 if not self.infer_emotion:
                     self._push_frame(frame)
                 elif face_mesh_enabled and face_mesh is not None and mp_drawing is not None and mp_face_mesh is not None:
@@ -1225,8 +1232,11 @@ class AudioWorker:
             self.companion = None
 
         from session_policy import IntentMute, PlaytimeGuard
-        self.playtime_guard = PlaytimeGuard(limit_minutes=0)
         self.intent_mute = IntentMute()
+        if self._robot_state is not None and getattr(self._robot_state, "playtime_guard", None) is not None:
+            self.playtime_guard = self._robot_state.playtime_guard
+        else:
+            self.playtime_guard = PlaytimeGuard(limit_minutes=0)
 
         from conversation_memory import ConversationMemory
         self.conversation_memory = ConversationMemory()
@@ -1276,6 +1286,18 @@ class AudioWorker:
             display.set_expression(expression)
         except Exception:
             pass
+
+    def _is_awake(self) -> bool:
+        state = self._robot_state
+        if state is None:
+            return True
+        checker = getattr(state, "activity_allowed", None)
+        if callable(checker):
+            try:
+                return bool(checker())
+            except Exception:
+                return True
+        return True
 
     def _thinking_eyes(self, on: bool) -> None:
         display = self.eye_display
@@ -1544,7 +1566,13 @@ class AudioWorker:
                     f"AudioWorker: warmup LLM omitido: {exc}",
                 )
 
-        self._set_eyes("escuchando")
+        woke = False
+        if self._robot_state is not None and hasattr(self._robot_state, "notify_models_ready"):
+            try:
+                woke = bool(self._robot_state.notify_models_ready())
+            except Exception:
+                woke = False
+        self._set_eyes("neutral" if woke else "dormido")
 
         _dlog = get_debug_logger()
         pc = getattr(self, "pc_client", None)
@@ -1804,6 +1832,14 @@ class AudioWorker:
 
             try:
                 while not self._stop_event.is_set():
+                    if not self._is_awake():
+                        self._drain_audio_queue(audio_queue)
+                        if capture is not None:
+                            capture.set_muted(True)
+                        else:
+                            capture_muted[0] = True
+                        time.sleep(0.2)
+                        continue
                     _queue_message_with_semaphore(
                         self.message_queue,
                         self.message_semaphore,
@@ -2056,6 +2092,40 @@ class AudioWorker:
         if local is not None and getattr(local, "is_available", False):
             return local.generate(user_text, emotion, history=history) or ""
         return ""
+
+    def _maybe_catalog_followup(
+        self,
+        reply: str,
+        child_text: str,
+        emotion: dict[str, Any] | None,
+        history: list[dict[str, str]],
+        pc_ready: bool,
+    ) -> str | None:
+        """[LIST_STORIES]/[LIST_MUSIC] no se hablan: se consulta el disco y se vuelve a preguntar al LLM."""
+        actions, _clean = self._parse_action_tags(reply or "")
+        from media_catalog import (
+            catalog_followup_prompt,
+            list_song_names,
+            list_story_titles,
+        )
+        from story_library import StoryLibrary
+
+        follow = catalog_followup_prompt(
+            actions,
+            stories=list_story_titles(StoryLibrary()),
+            songs=list_song_names(Path(__file__).resolve().parent / "music"),
+            child_text=child_text,
+        )
+        if not follow:
+            return None
+        _queue_message_with_semaphore(
+            self.message_queue,
+            self.message_semaphore,
+            "log",
+            "[CATALOG] skill silenciosa; no se habla el LIST_*",
+        )
+        second = self._remote_or_local_llm(follow, emotion, history, pc_ready)
+        return second or ""
 
     def _handle_segment(self, audio_segment: np.ndarray, whisper_model: Any, audio_queue: queue.Queue) -> None:
         if audio_segment.size == 0:
@@ -2324,7 +2394,7 @@ class AudioWorker:
                     intent_payload = self.game_engine.process_or_passthrough(sanitized_text, intent_payload)
                 if self.yoga_engine is not None:
                     intent_payload = self.yoga_engine.process_or_passthrough(sanitized_text, intent_payload)
-                if self.story_engine is not None:
+                if self.story_engine is not None and self.story_engine.is_active:
                     if self.story_engine.is_waiting_for_child:
                         self._invalidate_story_timer()
                     intent_payload = self.story_engine.process_or_passthrough(sanitized_text, intent_payload)
@@ -2478,6 +2548,20 @@ class AudioWorker:
                 if will_llm:
                     self._thinking_eyes(False)
 
+            if will_llm:
+                catalog_reply = self._maybe_catalog_followup(
+                    str(intent_payload.get("response", "")),
+                    sanitized_text,
+                    emotion_context,
+                    llm_history,
+                    pc_maybe,
+                )
+                if catalog_reply is not None:
+                    intent_payload["response"] = catalog_reply
+                    if intent_name in {"unknown", "story_request", "song_request"}:
+                        intent_payload["intent_name"] = "llm_fallback"
+                        intent_payload["pilar"] = "general"
+
             if intent_name == "unknown" and not str(intent_payload.get("response", "")).strip():
                 # Último recurso si el LLM no contestó. No es un intent matcheado.
                 intent_payload["response"] = self.intent_dispatcher._pick_response(
@@ -2490,23 +2574,6 @@ class AudioWorker:
                     ],
                 )
                 intent_payload["pilar"] = "general"
-
-            # 8.6 Music playback for song_request
-            if intent_name == "song_request":
-                music_dir = Path(__file__).resolve().parent / "music"
-                music_files = []
-                if music_dir.exists():
-                    allowed_ext = {".mp3", ".wav", ".ogg", ".m4a", ".flac"}
-                    music_files = [f for f in sorted(music_dir.iterdir()) if f.suffix.lower() in allowed_ext]
-
-                if music_files:
-                    import random
-                    chosen_song = random.choice(music_files)
-                    song_title = chosen_song.stem.replace("_", " ")
-                    intent_payload["response"] = f"¡Me encanta cantar! Vamos a escuchar {song_title}."
-                    intent_payload["play_music_file"] = str(chosen_song)
-                else:
-                    intent_payload["response"] = "Todavía no tenés canciones guardadas. ¡Pedile a mamá o papá que te suban una desde el celular!"
 
             # 8.7 Parse and execute LLM action tags (#LLM-SKILLS)
             response_text_raw = str(intent_payload.get("response", ""))
@@ -2542,6 +2609,18 @@ class AudioWorker:
             # 11. Telemetry logging (#EPIC-004)
             duration_s = time.monotonic() - segment_start
             self.playtime_guard.add_seconds(duration_s)
+            if (
+                self._is_awake()
+                and self.playtime_guard.limit_minutes > 0
+                and self.playtime_guard.is_over_limit()
+            ):
+                if intent_name != "playtime_rest" and self.speech_worker is not None:
+                    from session_policy import PLAYTIME_DECLINE_PHRASE
+
+                    self.speech_worker.speak_and_wait(PLAYTIME_DECLINE_PHRASE, timeout=30.0)
+                if self._robot_state is not None:
+                    self._robot_state.go_to_sleep("playtime")
+                self._set_eyes("dormido")
             if self.telemetry is not None:
                 try:
                     self.telemetry.log_interaction(
@@ -2622,6 +2701,22 @@ class AudioWorker:
                 self.speech_worker.play_audio_file(music_to_play)
                 self._silence_mic_after_speaker(audio_queue)
 
+            story_to_play = intent_payload.get("play_story_id")
+            if story_to_play:
+                self.play_story_from_api(str(story_to_play))
+
+            if intent_payload.get("child_go_to_sleep"):
+                _queue_message_with_semaphore(
+                    self.message_queue,
+                    self.message_semaphore,
+                    "log",
+                    f'[SLEEP] GO_TO_SLEEP text="{sanitized_text}"',
+                )
+                if self._robot_state is not None:
+                    self._robot_state.go_to_sleep("child")
+                self._set_eyes("dormido")
+                self._silence_mic_after_speaker(audio_queue)
+
             if _dlog:
                 _dlog.log_output("SEGMENT", "Pipeline completo", elapsed_ms=(time.monotonic() - segment_start) * 1000)
 
@@ -2665,7 +2760,7 @@ class AudioWorker:
     # [NOTIFY_PARENT:razón del aviso], etc.
     _ACTION_TAG_RE = re.compile(
         r"\["
-        r"(PLAY_MUSIC|STOP_MUSIC|NOTIFY_PARENT|EXPRESSION|CELEBRATE|CALM_MODE|INTENTS_OFF|INTENTS_ON)"
+        r"(PLAY_MUSIC|STOP_MUSIC|NOTIFY_PARENT|EXPRESSION|CELEBRATE|CALM_MODE|INTENTS_OFF|INTENTS_ON|GO_TO_SLEEP|LIST_STORIES|LIST_MUSIC|PLAY_STORY)"
         r"(?::([^\]]*))?"
         r"\]",
         re.IGNORECASE,
@@ -2738,25 +2833,32 @@ class AudioWorker:
 
             try:
                 if action == "PLAY_MUSIC":
-                    intent_name_now = str(intent_payload.get("intent_name", ""))
-                    if intent_name_now != "song_request" and not self._user_asked_for_music(user_text):
-                        if _dlog:
-                            _dlog.log_output(
-                                "ACTION",
-                                "PLAY_MUSIC ignorado: el nene no pidió música",
-                            )
-                        continue
-                    # Reproducir una canción al azar de music/
+                    from media_catalog import choose_song
+
                     music_dir = Path(__file__).resolve().parent / "music"
-                    if music_dir.exists():
-                        import random
-                        allowed_ext = {".mp3", ".wav", ".ogg", ".m4a", ".flac"}
-                        music_files = [f for f in sorted(music_dir.iterdir()) if f.suffix.lower() in allowed_ext]
-                        if music_files:
-                            chosen = random.choice(music_files)
-                            intent_payload["play_music_file"] = str(chosen)
-                            if _dlog:
-                                _dlog.log_output("ACTION", f"PLAY_MUSIC -> {chosen.name}")
+                    chosen = choose_song(music_dir, param)
+                    if chosen is not None:
+                        intent_payload["play_music_file"] = str(chosen)
+                        if _dlog:
+                            _dlog.log_output("ACTION", f"PLAY_MUSIC -> {chosen.name}")
+                    elif param and _dlog:
+                        _dlog.log_output("ACTION", f"PLAY_MUSIC sin match: {param!r}")
+
+                elif action == "PLAY_STORY":
+                    from media_catalog import resolve_story
+                    from story_library import StoryLibrary
+
+                    rec = resolve_story(StoryLibrary(), param)
+                    if rec is not None:
+                        intent_payload["play_story_id"] = rec.id
+                        if _dlog:
+                            _dlog.log_output("ACTION", f"PLAY_STORY -> {rec.title}")
+                    elif _dlog:
+                        _dlog.log_output("ACTION", f"PLAY_STORY sin match: {param!r}")
+
+                elif action in {"LIST_STORIES", "LIST_MUSIC"}:
+                    if _dlog:
+                        _dlog.log_output("ACTION", f"{action} (catálogo, no se habla)")
 
                 elif action == "STOP_MUSIC":
                     if self.speech_worker is not None:
@@ -2811,6 +2913,11 @@ class AudioWorker:
                         self.eye_display.set_expression("neutral")
                     if _dlog:
                         _dlog.log_output("ACTION", "CALM_MODE ejecutado")
+
+                elif action == "GO_TO_SLEEP":
+                    intent_payload["child_go_to_sleep"] = True
+                    if _dlog:
+                        _dlog.log_output("ACTION", "GO_TO_SLEEP diferido a después del TTS")
 
             except Exception as exc:
                 if _dlog:
@@ -3408,6 +3515,9 @@ class SpeechWorker:
         self._volume_limit = 100
         self._night_mode = False
         self._playback_generation = 0
+        self._power_gate: Callable[[], bool] | None = None
+        self._pipeline_active = False
+        self._hug_tts_held = False
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -3428,13 +3538,30 @@ class SpeechWorker:
         log_action("SpeechWorker", "detenido")
 
     def is_busy(self) -> bool:
-        return not self._idle_event.is_set() or self._is_playing_music
+        return (
+            not self._idle_event.is_set()
+            or self._is_playing_music
+            or self._pipeline_active
+        )
 
     def set_volume_limit(self, value: int) -> None:
         self._volume_limit = max(0, min(100, int(value)))
 
     def set_night_mode(self, enabled: bool) -> None:
         self._night_mode = bool(enabled)
+
+    def set_power_gate(self, gate: Callable[[], bool] | None) -> None:
+        self._power_gate = gate
+
+    def _speech_allowed(self, allow_when_asleep: bool) -> bool:
+        if allow_when_asleep:
+            return True
+        if self._power_gate is None:
+            return True
+        try:
+            return bool(self._power_gate())
+        except Exception:
+            return True
 
     def set_story_guard(self, enabled: bool) -> None:
         """Durante el cuento se tira TTS que no sea del propio cuento."""
@@ -3462,6 +3589,7 @@ class SpeechWorker:
                 self._queue.get_nowait()
         except queue.Empty:
             pass
+        self._hug_tts_held = False
         self._idle_event.set()
 
     @staticmethod
@@ -3490,25 +3618,43 @@ class SpeechWorker:
             cleaned += "."
         return cleaned
 
-    def speak(self, text: str, *, story: bool = False) -> None:
+    @staticmethod
+    def _is_hug_tts(text: str) -> bool:
+        from session_policy import _normalize, _phrase_key
+
+        return _phrase_key(_normalize(text)).startswith("quiero un abrazo")
+
+    def speak(self, text: str, *, story: bool = False, allow_when_asleep: bool = False) -> bool:
+        if not self._speech_allowed(allow_when_asleep):
+            return False
         speech_text = self._prepare_tts_text(self._strip_tts_markup((text or "").strip()))
         if not speech_text:
-            return
+            return False
         if self._reject_non_story_tts(story):
-            return
+            return False
+        if self._is_hug_tts(speech_text) and self._hug_tts_held:
+            return False
+        if self._is_hug_tts(speech_text):
+            self._hug_tts_held = True
         self._idle_event.clear()
         try:
             self._queue.put_nowait(speech_text)
             log_action("SpeechWorker", f"enqueued TTS ({len(speech_text)} chars)")
         except queue.Full:
+            if self._is_hug_tts(speech_text):
+                self._hug_tts_held = False
             self._idle_event.set()
             log_action("SpeechWorker", "cola TTS llena, se descarta frase")
+            return False
+        return True
 
     def set_output_device(self, output_device_index: int | None) -> None:
         self._output_device_index = output_device_index
 
-    def speak_and_wait(self, text: str, timeout: float = 30.0, *, story: bool = False) -> None:
+    def speak_and_wait(self, text: str, timeout: float = 30.0, *, story: bool = False, allow_when_asleep: bool = False) -> None:
         """Queue text for speaking and block until playback finishes."""
+        if not self._speech_allowed(allow_when_asleep):
+            return
         speech_text = self._prepare_tts_text(self._strip_tts_markup((text or "").strip()))
         if not speech_text:
             return
@@ -3909,6 +4055,14 @@ class SpeechWorker:
         return model_file
 
     def _speak_queued_text(self, text: str) -> None:
+        hug_turn = self._is_hug_tts(text)
+        try:
+            self._speak_queued_text_body(text)
+        finally:
+            if hug_turn:
+                self._hug_tts_held = False
+
+    def _speak_queued_text_body(self, text: str) -> None:
         self._log(f"Sintetizando: {text}")
         _dlog = get_debug_logger()
         _t_synth = time.monotonic()
@@ -3958,9 +4112,20 @@ class SpeechWorker:
         cleaned = [s.strip() for s in sentences if (s or "").strip()]
         if not cleaned:
             return
+        gen = self._playback_generation
+        self._pipeline_active = True
+        try:
+            self._speak_sentence_pipeline_body(cleaned, gen)
+        finally:
+            self._pipeline_active = False
+
+    def _interrupted(self, gen: int) -> bool:
+        return self._stop_event.is_set() or self._playback_generation != gen
+
+    def _speak_sentence_pipeline_body(self, cleaned: list[str], gen: int) -> None:
         if self._cloud_mode and self._cloud_tts is not None:
             for text in cleaned:
-                if self._stop_event.is_set():
+                if self._interrupted(gen):
                     return
                 self._speak_queued_text(text)
             return
@@ -3978,14 +4143,14 @@ class SpeechWorker:
         current = _synth(cleaned[0])
         if current is None:
             for text in cleaned:
-                if self._stop_event.is_set():
+                if self._interrupted(gen):
                     return
                 self._speak_queued_text(text)
             return
 
         self._log(f"TTS por oración ({len(cleaned)})")
         for i in range(len(cleaned)):
-            if self._stop_event.is_set():
+            if self._interrupted(gen):
                 return
             audio_array, sample_rate = current
             play_error: list[BaseException] = []
@@ -4002,12 +4167,12 @@ class SpeechWorker:
             player = threading.Thread(target=_play, name="TtsSentencePlay", daemon=True)
             player.start()
             nxt: tuple[np.ndarray, int] | None = None
-            if i + 1 < len(cleaned) and not self._stop_event.is_set():
+            if i + 1 < len(cleaned) and not self._interrupted(gen):
                 nxt = _synth(cleaned[i + 1])
             player.join()
             if play_error:
                 raise play_error[0]
-            if nxt is None:
+            if self._interrupted(gen) or nxt is None:
                 return
             current = nxt
 
@@ -4085,6 +4250,60 @@ class SpeechWorker:
 
         return self.play_audio_file(file_path)
 
+    def play_canned_file(self, file_path: Path | str) -> bool:
+        """Reproduce un WAV/MP3 local sin marcarlo como música ni TTS."""
+        path = Path(file_path)
+        if not path.exists():
+            self._log(f"clip ausente: {path}")
+            return False
+        audio_array, sample_rate = self._decode_audio_file(path)
+        if audio_array is None or len(audio_array) == 0:
+            self._log(f"clip vacío: {path.name}")
+            return False
+        self._idle_event.clear()
+        try:
+            self._play_wav_via_output_stream(audio_array, sample_rate)
+        except Exception as exc:
+            self._log(f"clip falló: {exc}")
+            return False
+        finally:
+            self._idle_event.set()
+        return True
+
+    def _decode_audio_file(self, path: Path) -> tuple[np.ndarray | None, int]:
+        audio_array: np.ndarray | None = None
+        sample_rate = 44100
+        try:
+            import soundfile as sf
+            data, sr = sf.read(str(path), dtype="float32")
+            if data.ndim > 1:
+                data = data.mean(axis=1)
+            audio_array = data.astype(np.float32)
+            sample_rate = sr
+        except Exception:
+            pass
+        if audio_array is None:
+            try:
+                import av
+                container = av.open(str(path))
+                stream = container.streams.audio[0]
+                sample_rate = stream.rate
+                frames = []
+                for frame in container.decode(stream):
+                    arr = frame.to_ndarray()
+                    if arr.ndim > 1:
+                        arr = arr.mean(axis=0)
+                    frames.append(arr)
+                if frames:
+                    audio_array = np.concatenate(frames).astype(np.float32)
+                    max_abs = np.max(np.abs(audio_array))
+                    if max_abs > 1.0:
+                        audio_array = audio_array / max_abs
+            except Exception as exc:
+                self._log(f"Error decodificando audio {path.name}: {exc}")
+                return None, sample_rate
+        return audio_array, sample_rate
+
     def play_audio_file(self, file_path: Path | str) -> bool:
         """Carga y reproduce cualquier archivo de audio (mp3, m4a, wav, ogg, flac)."""
         path = Path(file_path)
@@ -4109,43 +4328,7 @@ class SpeechWorker:
         except Exception:
             pass
 
-        audio_array: np.ndarray | None = None
-        sample_rate: int = 44100
-
-        # 1. Intentar con soundfile (WAV, OGG, FLAC, MP3)
-        try:
-            import soundfile as sf
-            data, sr = sf.read(str(path), dtype="float32")
-            if data.ndim > 1:
-                data = data.mean(axis=1)
-            audio_array = data.astype(np.float32)
-            sample_rate = sr
-        except Exception:
-            pass
-
-        # 2. Fallback con PyAV (M4A, AAC, etc.)
-        if audio_array is None:
-            try:
-                import av
-                container = av.open(str(path))
-                stream = container.streams.audio[0]
-                sample_rate = stream.rate
-                frames = []
-                for frame in container.decode(stream):
-                    arr = frame.to_ndarray()
-                    if arr.ndim > 1:
-                        arr = arr.mean(axis=0)
-                    frames.append(arr)
-                if frames:
-                    audio_array = np.concatenate(frames).astype(np.float32)
-                    max_abs = np.max(np.abs(audio_array))
-                    if max_abs > 1.0:
-                        audio_array = audio_array / max_abs
-            except Exception as e:
-                self._log(f"Error decodificando audio {path.name}: {e}")
-                self._is_playing_music = False
-                return False
-
+        audio_array, sample_rate = self._decode_audio_file(path)
         if audio_array is None or len(audio_array) == 0:
             self._log(f"Audio vacío en {path.name}")
             self._is_playing_music = False

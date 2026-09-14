@@ -27,7 +27,8 @@ from urllib.parse import parse_qs, urlparse
 
 from debug_logger import log_action
 from pairing import load_or_create_token
-from session_policy import sanitize_notification_extra, telemetry_range_summary
+from session_policy import PlaytimeGuard, sanitize_notification_extra, telemetry_range_summary
+from sleep_state import SleepState
 
 APP_DIR = Path(__file__).resolve().parent
 MUSIC_DIR = APP_DIR / "music"
@@ -39,8 +40,11 @@ STORIES_DIR.mkdir(exist_ok=True)
 class RobotState:
     """Estado compartido entre el servidor API y la app principal."""
 
-    def __init__(self) -> None:
-        self.power_on: bool = True
+    def __init__(self, prefs_path: Path | None = None) -> None:
+        self.sleep = SleepState()
+        self.playtime_guard = PlaytimeGuard(limit_minutes=0)
+        self._prefs_path = prefs_path or (APP_DIR / "parental_prefs.json")
+        self.power_on: bool = False
         self.night_mode: bool = False
         self.volume_limit: int = 100       # 0-100
         self.brightness: float = 1.0       # 0.0-1.0
@@ -61,15 +65,18 @@ class RobotState:
         self.on_config_changed: Callable[[dict], None] | None = None
         self.on_night_mode_changed: Callable[[bool], None] | None = None
         self.on_power_changed: Callable[[bool], None] | None = None
+        self.on_not_ready_clip: Callable[[], None] | None = None
         self.on_play_music: Callable[[str | None], bool] | None = None
         self.on_stop_music: Callable[[], None] | None = None
         self.on_play_story: Callable[[str], bool] | None = None
         self.on_stop_story: Callable[[], None] | None = None
+        self._load_prefs()
 
         # Referencias a subsistemas (set from app.py)
         self.telemetry: Any = None
         self.routine_scheduler: Any = None
         self.speech_worker: Any = None
+        self.audio_worker: Any = None
 
     def to_dict(self) -> dict[str, Any]:
         playing = None
@@ -78,7 +85,10 @@ class RobotState:
             playing = getattr(sw, "_current_song_name", None)
         with self._lock:
             return {
-                "power_on": self.power_on,
+                "power_on": self.sleep.status_power_on(),
+                "models_ready": self.sleep.models_ready,
+                "pending_wake": self.sleep.pending_wake,
+                "belly_wake_enabled": self.sleep.belly_wake_enabled,
                 "night_mode": self.night_mode,
                 "volume_limit": self.volume_limit,
                 "brightness": self.brightness,
@@ -90,6 +100,30 @@ class RobotState:
                 "timestamp": datetime.now().isoformat(),
             }
 
+    def activity_allowed(self) -> bool:
+        return self.sleep.phase() == "awake"
+
+    def _load_prefs(self) -> None:
+        path = self._prefs_path
+        if not path.exists():
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
+        if "belly_wake_enabled" in data:
+            self.sleep.set_belly_wake_enabled(bool(data["belly_wake_enabled"]))
+
+    def _save_prefs(self) -> None:
+        payload = {"belly_wake_enabled": self.sleep.belly_wake_enabled}
+        try:
+            self._prefs_path.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except OSError as exc:
+            log_action("API", f"no pude guardar prefs: {exc}")
+
     def update_config(self, data: dict) -> None:
         with self._lock:
             if "volume_limit" in data:
@@ -98,11 +132,16 @@ class RobotState:
                 self.brightness = max(0.0, min(1.0, float(data["brightness"])))
             if "playtime_limit_minutes" in data:
                 self.playtime_limit_minutes = max(0, min(240, int(data["playtime_limit_minutes"])))
+                self.playtime_guard.limit_minutes = self.playtime_limit_minutes
+            if "belly_wake_enabled" in data:
+                self.sleep.set_belly_wake_enabled(bool(data["belly_wake_enabled"]))
+                self._save_prefs()
         if self.on_config_changed:
             self.on_config_changed({
                 "volume_limit": self.volume_limit,
                 "brightness": self.brightness,
                 "playtime_limit_minutes": self.playtime_limit_minutes,
+                "belly_wake_enabled": self.sleep.belly_wake_enabled,
             })
 
     def set_night_mode(self, enabled: bool) -> None:
@@ -111,11 +150,82 @@ class RobotState:
         if self.on_night_mode_changed:
             self.on_night_mode_changed(enabled)
 
-    def set_power(self, on: bool) -> None:
+    def set_power(self, on: bool) -> str:
+        if on:
+            self.sleep.note_parent_wake()
+            self.playtime_guard.reset_today()
+            result = self.sleep.request_wake("app")
+            if result == "queued" and self.on_not_ready_clip is not None:
+                self.on_not_ready_clip()
+        else:
+            self.sleep.request_sleep("app")
+            result = "asleep"
         with self._lock:
-            self.power_on = on
+            self.power_on = self.sleep.status_power_on()
         if self.on_power_changed:
-            self.on_power_changed(on)
+            self.on_power_changed(self.sleep.phase() == "awake")
+        return result
+
+    def notify_models_ready(self) -> bool:
+        woke = self.sleep.mark_models_ready()
+        with self._lock:
+            self.power_on = self.sleep.status_power_on()
+        if woke and self.on_power_changed:
+            self.on_power_changed(True)
+        return woke
+
+    def go_to_sleep(self, reason: str) -> None:
+        from sleep_state import SleepReason
+
+        typed: SleepReason = reason if reason in ("app", "playtime", "child") else "app"
+        self.sleep.request_sleep(typed)
+        with self._lock:
+            self.power_on = False
+        if self.on_power_changed:
+            self.on_power_changed(False)
+
+    def playback_busy(self) -> bool:
+        sw = self.speech_worker
+        if sw is not None:
+            if getattr(sw, "_is_playing_music", False):
+                return True
+            if getattr(sw, "_story_guard", False):
+                return True
+            if getattr(sw, "_pipeline_active", False):
+                return True
+        aw = self.audio_worker
+        if aw is not None:
+            if getattr(aw, "_story_pipeline_active", False):
+                return True
+            engine = getattr(aw, "story_engine", None)
+            if engine is not None and bool(getattr(engine, "is_active", False)):
+                return True
+        if self.currently_reading:
+            return True
+        return False
+
+    def stop_playback(self) -> None:
+        if self.on_stop_music is not None:
+            self.on_stop_music()
+            return
+        if self.on_stop_story is not None:
+            self.on_stop_story()
+        sw = self.speech_worker
+        if sw is not None and hasattr(sw, "stop_music"):
+            sw.stop_music()
+
+    def apply_belly(self) -> str:
+        action = self.sleep.on_belly()
+        with self._lock:
+            self.power_on = self.sleep.status_power_on()
+        if action == "queue" and self.on_not_ready_clip is not None:
+            self.on_not_ready_clip()
+        if action == "wake" and self.on_power_changed is not None:
+            self.on_power_changed(True)
+        if action == "hug" and self.playback_busy():
+            self.stop_playback()
+            return "stop"
+        return action
 
     def push_notification(
         self,
@@ -525,9 +635,13 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
             "volume_limit": robot_state.volume_limit,
             "brightness": robot_state.brightness,
             "playtime_limit_minutes": robot_state.playtime_limit_minutes,
+            "belly_wake_enabled": robot_state.sleep.belly_wake_enabled,
         })
 
     def _handle_post_celebrate(self) -> None:
+        if not robot_state.activity_allowed():
+            self._send_json({"status": "ok", "power_on": False, "message": "Teo está dormido"})
+            return
         callback = robot_state.on_celebrate
         if callback:
             log_action("API", "celebrar logro")
@@ -554,8 +668,14 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
             return
 
         power_on = bool(body.get("power_on", True))
-        robot_state.set_power(power_on)
-        self._send_json({"status": "ok", "power_on": power_on})
+        result = robot_state.set_power(power_on)
+        self._send_json({
+            "status": "ok",
+            "power_on": robot_state.sleep.status_power_on(),
+            "models_ready": robot_state.sleep.models_ready,
+            "pending_wake": robot_state.sleep.pending_wake,
+            "wake_result": result,
+        })
 
     def _handle_post_music_upload(self) -> None:
         """Recibe un archivo de música via streaming raw body con header X-Filename."""
@@ -597,6 +717,9 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
 
     def _handle_post_music_play(self) -> None:
         """Reproduce una canción específica o una al azar."""
+        if not robot_state.activity_allowed():
+            self._send_json({"status": "ok", "power_on": False, "message": "Teo está dormido"})
+            return
         body = self._parse_json_body() or {}
         filename = body.get("filename")
         if robot_state.on_play_music:
@@ -648,6 +771,9 @@ class ApiRequestHandler(BaseHTTPRequestHandler):
         self._send_json(result)
 
     def _handle_post_stories_play(self) -> None:
+        if not robot_state.activity_allowed():
+            self._send_json({"status": "ok", "power_on": False, "message": "Teo está dormido"})
+            return
         body = self._parse_json_body() or {}
         story_id = str(body.get("id") or "").strip()
         if not story_id:

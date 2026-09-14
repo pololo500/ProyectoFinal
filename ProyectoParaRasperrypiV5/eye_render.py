@@ -176,25 +176,48 @@ class EyeAnimator:
         self._bank = load_bank(sprites_dir)
         self._clip_started_at: float = time.monotonic()
 
+    _TRANSIENT_EXPRESSIONS = frozenset({"hablando", "escuchando", "neutral"})
+    _SLEEP_EXPRESSIONS = frozenset({"dormido", "zzz"})
+
     def has_sprite(self, expression: str | None = None) -> bool:
         name = self.expression if expression is None else expression
         return self._clip_for(name) is not None
 
-    def _clip_for(self, expression: str):
+    def _bank_clip(self, expression: str):
+        if not expression:
+            return None
         clip = self._bank.get(expression)
         if clip is not None:
             return clip
-        if expression in ("zzz", "pensando"):
+        lowered = expression.lower()
+        for key, found in self._bank.items():
+            if key.lower() == lowered:
+                return found
+        return None
+
+    def _clip_for(self, expression: str):
+        clip = self._bank_clip(expression)
+        if clip is not None:
+            return clip
+        if (expression or "").lower() in ("zzz", "pensando"):
             return None
-        return self._bank.get("Default") or self._bank.get("default")
+        return self._bank_clip("Default") or self._bank_clip("default")
 
     def set_expression(self, expression: str, transition_ms: int = 300) -> None:
         del transition_ms
-        self.expression = expression
-        self.is_pulsing = expression in ("escuchando", "hablando", "pensando", "zzz")
-        if expression in ("dormido", "zzz") or self.has_sprite():
+        incoming = (expression or "neutral").strip()
+        if (
+            incoming.lower() in self._TRANSIENT_EXPRESSIONS
+            and self._bank_clip(self.expression) is not None
+            and self.expression.lower() not in self._SLEEP_EXPRESSIONS
+        ):
+            self.is_pulsing = incoming.lower() in ("escuchando", "hablando")
+            return
+        self.expression = incoming
+        self.is_pulsing = incoming in ("escuchando", "hablando", "pensando", "zzz")
+        if incoming in ("dormido", "zzz") or self.has_sprite():
             self._blink_mode = "idle"
-        self.target_params.update(_expression_params(expression))
+        self.target_params.update(_expression_params(incoming))
         self._clip_started_at = time.monotonic()
 
     def get_expression(self) -> str:

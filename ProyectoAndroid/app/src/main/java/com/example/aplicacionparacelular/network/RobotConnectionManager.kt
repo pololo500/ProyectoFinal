@@ -200,6 +200,10 @@ object RobotConnectionManager {
         executeAsync({ RobotApiClient.postPower(powerOn) }, onResult)
     }
 
+    fun setBellyWake(enabled: Boolean, onResult: (ApiResult<JSONObject>) -> Unit) {
+        executeAsync({ RobotApiClient.postBellyWake(enabled) }, onResult)
+    }
+
     /**
      * Actualiza la configuración sensorial del robot.
      */

@@ -21,6 +21,7 @@
     <string name="dashboard_connection_status_offline">Desconectado</string>
     <string name="dashboard_power_on">Encendido</string>
     <string name="dashboard_power_off">Apagado</string>
+    <string name="dashboard_belly_wake">Prender con el botón</string>
     <string name="dashboard_connection_subtitle">Vinculación vía Wi-Fi</string>
     <string name="dashboard_today_summary">Resumen del Día</string>
     <string name="dashboard_interactions">Interacciones</string>

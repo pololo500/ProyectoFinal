@@ -27,8 +27,11 @@ class DashboardViewModel : ViewModel() {
     private val _alertMessages = MutableLiveData<List<String>>(emptyList())
     val alertMessages: LiveData<List<String>> = _alertMessages
 
-    private val _powerOn = MutableLiveData(true)
+    private val _powerOn = MutableLiveData(false)
     val powerOn: LiveData<Boolean> = _powerOn
+
+    private val _bellyWakeEnabled = MutableLiveData(true)
+    val bellyWakeEnabled: LiveData<Boolean> = _bellyWakeEnabled
 
     fun refreshTelemetry() {
         RobotConnectionManager.fetchTelemetryToday { result ->
@@ -103,12 +106,22 @@ class DashboardViewModel : ViewModel() {
     }
 
     fun togglePower() {
-        val currentPower = _powerOn.value ?: true
+        val currentPower = _powerOn.value ?: false
         val newPower = !currentPower
         RobotConnectionManager.setPower(newPower) { result ->
             when (result) {
                 is ApiResult.Success -> _powerOn.value = newPower
                 is ApiResult.Error -> { /* Revert, keep current state */ }
+            }
+        }
+    }
+
+    fun setBellyWakeEnabled(enabled: Boolean) {
+        if (enabled == (_bellyWakeEnabled.value ?: true)) return
+        RobotConnectionManager.setBellyWake(enabled) { result ->
+            when (result) {
+                is ApiResult.Success -> _bellyWakeEnabled.value = enabled
+                is ApiResult.Error -> { /* keep */ }
             }
         }
     }
@@ -128,6 +141,8 @@ class DashboardViewModel : ViewModel() {
     val musicMessage: LiveData<String?> = _musicMessage
 
     fun applyRobotStatus(status: JSONObject) {
+        _powerOn.value = status.optBoolean("power_on", false)
+        _bellyWakeEnabled.value = status.optBoolean("belly_wake_enabled", true)
         val reading = status.optJSONObject("currently_reading")
         val title = reading?.optString("title").orEmpty()
         val id = reading?.optString("id").orEmpty()

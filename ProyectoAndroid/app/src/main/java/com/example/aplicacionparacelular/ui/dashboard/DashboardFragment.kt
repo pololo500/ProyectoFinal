@@ -46,11 +46,17 @@ class DashboardFragment : Fragment() {
         // Observe robot status for power state and alerts
         RobotConnectionManager.robotStatus.observe(viewLifecycleOwner) { status ->
             if (status != null) {
-                val powerOn = status.optBoolean("power_on", true)
+                val powerOn = status.optBoolean("power_on", false)
                 updatePowerUI(powerOn)
                 viewModel.applyRobotStatus(status)
             }
             refreshAlerts()
+        }
+
+        viewModel.bellyWakeEnabled.observe(viewLifecycleOwner) { enabled ->
+            if (binding.chipBellyWake.isChecked != enabled) {
+                binding.chipBellyWake.isChecked = enabled
+            }
         }
 
         // Observe ViewModel data
@@ -118,6 +124,10 @@ class DashboardFragment : Fragment() {
         // Power toggle button
         binding.btnPowerToggle.setOnClickListener {
             viewModel.togglePower()
+        }
+
+        binding.chipBellyWake.setOnCheckedChangeListener { _, isChecked ->
+            viewModel.setBellyWakeEnabled(isChecked)
         }
 
         binding.btnMusicPlay.setOnClickListener {

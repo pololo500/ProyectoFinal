@@ -288,8 +288,30 @@ class PhysicalCompanion:
         self.hug_count = 0
         self._button_thread: threading.Thread | None = None
         self._stop = threading.Event()
+        self._hug_lock = threading.Lock()
+
+    def try_begin_hug(self) -> bool:
+        return self._hug_lock.acquire(blocking=False)
+
+    def end_hug(self) -> None:
+        try:
+            self._hug_lock.release()
+        except RuntimeError:
+            pass
+
+    def hug_in_progress(self) -> bool:
+        return self._hug_lock.locked()
 
     def hug(self) -> ActuatorResult:
+        if not self._hug_lock.acquire(blocking=False):
+            log_action("HW", "abrazo ignorado (ya hay uno)")
+            return ActuatorResult(ok=True, simulated=True, message="busy")
+        try:
+            return self._hug_body()
+        finally:
+            self._hug_lock.release()
+
+    def _hug_body(self) -> ActuatorResult:
         self.hug_count += 1
         if not self.pins.servos_ready:
             log_action("HW", "abrazo simulado (pines de servo pendientes)")
@@ -396,12 +418,21 @@ def perform_hug_ask(
     eyes: Any | None = None,
 ) -> None:
     """Pulsador: pide un abrazo en voz alta, ojos felices y levanta los brazos."""
-    if speak is not None:
-        speak(HUG_ASK_PHRASE)
-    if eyes is not None:
-        if hasattr(eyes, "set_pictogram"):
-            eyes.set_pictogram("abrazo")
-        if hasattr(eyes, "set_expression"):
-            eyes.set_expression("feliz")
-    if companion is not None:
-        companion.hug()
+    if companion is not None and not companion.try_begin_hug():
+        log_action("HW", "abrazo ignorado (ya hay uno)")
+        return
+    try:
+        if speak is not None:
+            accepted = speak(HUG_ASK_PHRASE)
+            if accepted is False:
+                return
+        if eyes is not None:
+            if hasattr(eyes, "set_pictogram"):
+                eyes.set_pictogram("abrazo")
+            if hasattr(eyes, "set_expression"):
+                eyes.set_expression("feliz")
+        if companion is not None:
+            companion._hug_body()
+    finally:
+        if companion is not None:
+            companion.end_hug()

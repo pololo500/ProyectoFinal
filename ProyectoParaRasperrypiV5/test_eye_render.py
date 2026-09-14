@@ -194,6 +194,41 @@ class TestEyeAnimatorSprites(unittest.TestCase):
             animator.set_expression("zzz")
             self.assertFalse(animator.has_sprite())
 
+    def test_hablando_no_pisa_el_sprite_de_triste(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            folder = Path(raw)
+            _write_sheet(folder, "triste", [(0, 0, 255), (0, 0, 200)])
+            _write_sheet(folder, "Default", [(255, 0, 0), (200, 0, 0)])
+            animator = EyeAnimator(sprites_dir=folder)
+            animator.set_expression("triste")
+            self.assertEqual(animator.render(320, 240).getpixel((0, 0)), (0, 0, 255))
+            animator.set_expression("hablando")
+            self.assertEqual(animator.get_expression(), "triste")
+            self.assertEqual(animator.render(320, 240).getpixel((0, 0)), (0, 0, 255))
+
+    def test_neutral_no_pisa_triste_en_seguida(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            folder = Path(raw)
+            _write_sheet(folder, "triste", [(0, 0, 255), (0, 0, 200)])
+            _write_sheet(folder, "Default", [(255, 0, 0), (200, 0, 0)])
+            animator = EyeAnimator(sprites_dir=folder)
+            animator.set_expression("triste")
+            animator.set_expression("neutral")
+            self.assertEqual(animator.get_expression(), "triste")
+            self.assertEqual(animator.render(320, 240).getpixel((0, 0)), (0, 0, 255))
+
+    def test_neutral_saca_los_ojos_de_dormido(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            folder = Path(raw)
+            _write_sheet(folder, "dormido", [(0, 255, 0), (0, 200, 0)])
+            _write_sheet(folder, "Default", [(255, 0, 0), (200, 0, 0)])
+            animator = EyeAnimator(sprites_dir=folder)
+            animator.set_expression("dormido")
+            self.assertEqual(animator.render(320, 240).getpixel((0, 0)), (0, 255, 0))
+            animator.set_expression("neutral")
+            self.assertEqual(animator.get_expression(), "neutral")
+            self.assertEqual(animator.render(320, 240).getpixel((0, 0)), (255, 0, 0))
+
 
 class TestEyeDisplayAnimate(unittest.TestCase):
     def test_canvas_blit_falla_lcd_y_loop_siguen(self) -> None:
