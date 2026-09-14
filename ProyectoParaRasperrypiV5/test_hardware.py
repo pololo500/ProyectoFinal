@@ -73,6 +73,7 @@ class TestCableadoRpi5(unittest.TestCase):
         self.assertEqual(pins.lcd_width, 240)
         self.assertEqual(pins.lcd_height, 320)
         self.assertEqual(pins.lcd_rotation, 90)
+        self.assertFalse(pins.lcd_invert)
 
     def test_json_con_lcd_queda_listo(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

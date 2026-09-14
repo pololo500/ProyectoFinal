@@ -52,6 +52,26 @@ class TestPrepareTtsText(unittest.TestCase):
         worker.speak("  [DALE]  ")
         self.assertTrue(worker._queue.empty())
 
+    def test_no_dice_tags_prosa(self) -> None:
+        raw = (
+            "Quiero que juguemos juntos, ¡me gusta mucho jugar! "
+            "Podemos jugar a veo veo o piedra papel tijera si querés. Tags: juego…"
+        )
+        cleaned = SpeechWorker._strip_tts_markup(raw)
+        self.assertNotIn("Tags", cleaned)
+        self.assertNotIn("juego…", cleaned)
+        self.assertIn("veo veo", cleaned)
+
+    def test_notify_incompleto_no_encola_corchete(self) -> None:
+        leftover = (
+            '[NOTIFY_PARENT:El nene quiere jugar a "mamá y papá solos", '
+            "puede ser un juego delicado."
+        )
+        worker = SpeechWorker()
+        worker.speak(leftover)
+        self.assertTrue(worker._queue.empty())
+        self.assertEqual(SpeechWorker._strip_tts_markup(leftover), "")
+
 
 class TestPiperVoiceConfig(unittest.TestCase):
     def test_modelo_es_daniela_ar_high(self) -> None:

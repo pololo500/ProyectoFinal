@@ -4,7 +4,11 @@ from __future__ import annotations
 import math
 import random
 import time
+from pathlib import Path
+
 from PIL import Image, ImageDraw, ImageFont
+
+from eye_sprites import load_bank
 
 _BG = (26, 26, 46)
 _EYE = (224, 247, 250)
@@ -51,6 +55,25 @@ def _scale_rgb(rgb: tuple[int, int, int], brightness: float) -> tuple[int, int, 
         int(rgb[1] * level),
         int(rgb[2] * level),
     )
+
+
+def _sprite_to_canvas(
+    frame: Image.Image,
+    width: int,
+    height: int,
+    brightness: float,
+) -> Image.Image:
+    image = frame.convert("RGB")
+    if image.size != (width, height):
+        try:
+            resample = Image.Resampling.NEAREST
+        except AttributeError:
+            resample = Image.NEAREST
+        image = image.resize((width, height), resample)
+    level = max(0.0, min(1.0, brightness))
+    if level < 1.0:
+        image = image.point(lambda channel: int(channel * level))
+    return image
 
 
 def _expression_params(expression: str) -> dict[str, float]:
@@ -132,7 +155,7 @@ def _expression_params(expression: str) -> dict[str, float]:
 class EyeAnimator:
     """Estado y dibujo de los ojos, sin tkinter."""
 
-    def __init__(self) -> None:
+    def __init__(self, sprites_dir: Path | str | None = None) -> None:
         self.params: dict[str, float] = {
             "eye_open": 1.0,
             "eye_curve": 0.0,
@@ -150,14 +173,29 @@ class EyeAnimator:
         self._blink_mode: str = "idle"
         self._blink_step: int = 0
         self._next_blink_at: float = time.monotonic() + random.uniform(3.0, 6.0)
+        self._bank = load_bank(sprites_dir)
+        self._clip_started_at: float = time.monotonic()
+
+    def has_sprite(self, expression: str | None = None) -> bool:
+        name = self.expression if expression is None else expression
+        return self._clip_for(name) is not None
+
+    def _clip_for(self, expression: str):
+        clip = self._bank.get(expression)
+        if clip is not None:
+            return clip
+        if expression in ("zzz", "pensando"):
+            return None
+        return self._bank.get("Default") or self._bank.get("default")
 
     def set_expression(self, expression: str, transition_ms: int = 300) -> None:
         del transition_ms
         self.expression = expression
         self.is_pulsing = expression in ("escuchando", "hablando", "pensando", "zzz")
-        if expression in ("dormido", "zzz"):
+        if expression in ("dormido", "zzz") or self.has_sprite():
             self._blink_mode = "idle"
         self.target_params.update(_expression_params(expression))
+        self._clip_started_at = time.monotonic()
 
     def get_expression(self) -> str:
         return self.expression
@@ -189,7 +227,7 @@ class EyeAnimator:
         self._tick_blink(now)
 
     def _tick_blink(self, now: float) -> None:
-        if self.expression in ("dormido", "pensando", "zzz"):
+        if self.has_sprite() or self.expression in ("dormido", "pensando", "zzz"):
             return
         if self._blink_mode == "idle":
             if now >= self._next_blink_at:
@@ -212,10 +250,30 @@ class EyeAnimator:
             self._next_blink_at = now + random.uniform(3.0, 6.0)
 
     def render(self, width: int, height: int) -> Image.Image:
+        clip = self._clip_for(self.expression)
+        if clip is not None:
+            elapsed = time.monotonic() - self._clip_started_at
+            frame = clip.frame_at(elapsed)
+            image = _sprite_to_canvas(frame, max(1, width), max(1, height), self.brightness)
+            if self.pictogram:
+                draw = ImageDraw.Draw(image)
+                self._draw_pictogram(draw, width, height)
+            return image
         image = Image.new("RGB", (max(1, width), max(1, height)), _BG)
         draw = ImageDraw.Draw(image)
         self._draw(draw, width, height)
         return image
+
+    def _draw_pictogram(self, draw: ImageDraw.ImageDraw, w: int, h: int) -> None:
+        if not self.pictogram:
+            return
+        label = _PICTOGRAM_LABELS.get(self.pictogram, self.pictogram.upper())
+        color = _scale_rgb(_HIGHLIGHT, self.brightness)
+        cx = w / 2
+        cy = h / 2
+        y = cy + min(h * 0.38, 160)
+        font = _pictogram_font(max(12, int(h * 0.08)))
+        draw.text((cx, y), label, fill=color, font=font, anchor="mm")
 
     def _draw(self, draw: ImageDraw.ImageDraw, w: int, h: int) -> None:
         if self.expression == "zzz":
@@ -327,12 +385,7 @@ class EyeAnimator:
                     ),
                     fill=_BG,
                 )
-        if self.pictogram:
-            label = _PICTOGRAM_LABELS.get(self.pictogram, self.pictogram.upper())
-            color = _scale_rgb(_HIGHLIGHT, self.brightness)
-            y = cy + min(h * 0.38, 160)
-            font = _pictogram_font(max(12, int(h * 0.08)))
-            draw.text((cx, y), label, fill=color, font=font, anchor="mm")
+        self._draw_pictogram(draw, w, h)
 
     def _draw_zzz(self, draw: ImageDraw.ImageDraw, w: int, h: int) -> None:
         cx = w / 2

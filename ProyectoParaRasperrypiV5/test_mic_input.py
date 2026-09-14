@@ -9,6 +9,7 @@ import numpy as np
 
 from workers import (
     AUDIO_QUEUE_MAXSIZE,
+    LISTEN_VOLUME_FLOOR_PCT,
     AudioWorker,
     EmotionReactor,
     apply_capture_drops,
@@ -23,6 +24,7 @@ from workers import (
     vad_circular_maxlen,
     vad_log_label,
     vad_pre_roll_blocks,
+    volume_counts_as_speech,
 )
 
 
@@ -271,8 +273,8 @@ class TestEndpointingYCola(unittest.TestCase):
         self.assertAlmostEqual(EmotionReactor.NORMAL_SILENCE, 1.2)
         self.assertAlmostEqual(EmotionReactor.EXTENDED_SILENCE, 3.0)
 
-    def test_max_listen_es_8(self) -> None:
-        self.assertAlmostEqual(AudioWorker.MAX_LISTEN_SECONDS, 8.0)
+    def test_max_listen_es_12(self) -> None:
+        self.assertAlmostEqual(AudioWorker.MAX_LISTEN_SECONDS, 12.0)
 
     def test_cola_de_captura_es_128(self) -> None:
         self.assertEqual(AUDIO_QUEUE_MAXSIZE, 128)
@@ -316,6 +318,51 @@ class TestEndpointingYCola(unittest.TestCase):
         self.assertIn("bloques descartados", src)
 
 
+class TestListenVolumeFloor(unittest.TestCase):
+    def test_piso_es_7(self) -> None:
+        self.assertEqual(LISTEN_VOLUME_FLOOR_PCT, 7)
+
+    def test_ruido_bajo_no_cuenta_como_voz(self) -> None:
+        self.assertFalse(volume_counts_as_speech(5))
+        self.assertFalse(volume_counts_as_speech(6))
+
+    def test_siete_o_mas_cuenta_como_voz(self) -> None:
+        self.assertTrue(volume_counts_as_speech(7))
+        self.assertTrue(volume_counts_as_speech(50))
+
+    def test_corte_exige_piso_y_vad(self) -> None:
+        src = _WORKERS.read_text(encoding="utf-8")
+        self.assertIn(
+            "speech_detected = volume_counts_as_speech(volume_pct) and vad.has_speech(audio_block)",
+            src,
+        )
+        self.assertNotIn(
+            "speech_detected = vad.has_speech(audio_block)",
+            src,
+        )
+
+    def test_piso_no_mutea_el_bloque_crudo(self) -> None:
+        src = _WORKERS.read_text(encoding="utf-8")
+        start = src.find("def listen_until_cut")
+        end = src.find("return None", start)
+        body = src[start:end]
+        self.assertGreater(start, 0)
+        self.assertIn("current_segment.append(audio_block)", body)
+        self.assertNotIn("audio_block = np.zeros", body)
+        self.assertNotIn("audio_block *= 0", body)
+        self.assertNotIn("_noise_gate(", body)
+
+    def test_medidor_ui_sigue_rms_por_300(self) -> None:
+        src = _WORKERS.read_text(encoding="utf-8")
+        self.assertIn("volume_pct = min(100, int(rms * 300))", src)
+        self.assertIn('{"mic": mic_label, "volume": volume_pct}', src)
+
+    def test_energy_vad_umbrales_no_cambian(self) -> None:
+        src = _WORKERS.read_text(encoding="utf-8")
+        self.assertIn("ENERGY_START = 0.012", src)
+        self.assertIn("ENERGY_CONTINUE = 0.006", src)
+
+
 class TestDocsArecord(unittest.TestCase):
     def test_agents_menciona_arecord(self) -> None:
         text = Path(__file__).resolve().parent.joinpath("Agents.md").read_text(
@@ -335,6 +382,13 @@ class TestDocsArecord(unittest.TestCase):
         self.assertIn("grupo audio", text.lower())
         self.assertNotIn("dwc_otg", text)
         self.assertNotIn("PA_ALSA_PLUGHW", text)
+
+    def test_latencia_documenta_tope_12(self) -> None:
+        text = Path(__file__).resolve().parent.joinpath(
+            "docs", "LATENCIA_AUDIO_CAMARA.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("MAX_LISTEN_SECONDS`: **12.0**", text)
+        self.assertNotIn("MAX_LISTEN_SECONDS`: **8.0**", text)
 
 
 if __name__ == "__main__":

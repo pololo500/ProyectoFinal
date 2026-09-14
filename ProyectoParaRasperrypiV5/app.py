@@ -70,7 +70,21 @@ from workers import (
     find_supported_input_config,
     mic_block_to_stt,
 )
-from display_env import has_gui_display, pick_default_devices, try_attach_local_display
+from display_env import (
+    PREFERRED_CAMERA_NEEDLES,
+    PREFERRED_MIC_NEEDLES,
+    PREFERRED_SPEAKER_NEEDLES,
+    choose_ui_mode,
+    pick_default_devices,
+    preferred_option_index,
+    try_attach_local_display,
+)
+
+
+def _select_preferred_combo(combo: ttk.Combobox, labels: list[str], needles: tuple[str, ...]) -> None:
+    if not labels:
+        return
+    combo.current(preferred_option_index(labels, needles))
 
 # Cloud services (modo nube)
 try:
@@ -283,7 +297,7 @@ class EyeModeApp(tk.Tk):
         )
         self._sel_camera_combo.grid(row=2, column=1, sticky="we", pady=8)
         if camera_values:
-            self._sel_camera_combo.current(0)
+            _select_preferred_combo(self._sel_camera_combo, camera_values, PREFERRED_CAMERA_NEEDLES)
 
         # Microphone
         tk.Label(self._setup_frame, text="🎤  Micrófono:", **label_style).grid(
@@ -297,7 +311,7 @@ class EyeModeApp(tk.Tk):
         )
         self._sel_mic_combo.grid(row=3, column=1, sticky="we", pady=8)
         if mic_values:
-            self._sel_mic_combo.current(0)
+            _select_preferred_combo(self._sel_mic_combo, mic_values, PREFERRED_MIC_NEEDLES)
 
         # Speaker
         tk.Label(self._setup_frame, text="🔊  Parlante:", **label_style).grid(
@@ -311,7 +325,7 @@ class EyeModeApp(tk.Tk):
         )
         self._sel_out_combo.grid(row=4, column=1, sticky="we", pady=8)
         if out_values:
-            self._sel_out_combo.current(0)
+            _select_preferred_combo(self._sel_out_combo, out_values, PREFERRED_SPEAKER_NEEDLES)
 
         # --- Processing mode selector (#CLOUD-001) ---
         tk.Label(self._setup_frame, text="⚙️  Procesamiento:", **label_style).grid(
@@ -557,12 +571,21 @@ class EyeModeApp(tk.Tk):
             cloud_tts = CloudTTS()
             print("[EyeMode] Modo NUBE activo — usando Groq + Google gTTS", flush=True)
 
+        pc_client = None
+        try:
+            from pc_server_client import PcServerClient
+
+            pc_client = PcServerClient.from_env()
+        except Exception:
+            pc_client = None
+
         self.speech_worker = SpeechWorker(
             output_device_index=out_idx,
             message_queue=self.message_queue,
             message_semaphore=self.message_queue_semaphore,
             cloud_mode=self._cloud_mode,
             cloud_tts=cloud_tts,
+            pc_client=pc_client,
         )
         self.speech_worker.set_volume_limit(self._volume_limit)
         self.speech_worker.set_night_mode(self._night_mode)
@@ -590,6 +613,7 @@ class EyeModeApp(tk.Tk):
             cloud_stt=cloud_stt,
             cloud_llm=cloud_llm,
             eye_display=self._eye_display,
+            pc_client=pc_client,
         )
 
         self.camera_worker.start()
@@ -1049,11 +1073,11 @@ class EdgeAiDesktopApp(tk.Tk):
         self.output_device_combo["values"] = output_values
 
         if camera_values:
-            self.camera_combo.current(0)
+            _select_preferred_combo(self.camera_combo, camera_values, PREFERRED_CAMERA_NEEDLES)
         if microphone_values:
-            self.microphone_combo.current(0)
+            _select_preferred_combo(self.microphone_combo, microphone_values, PREFERRED_MIC_NEEDLES)
         if output_values:
-            self.output_device_combo.current(0)
+            _select_preferred_combo(self.output_device_combo, output_values, PREFERRED_SPEAKER_NEEDLES)
 
     def _selected_camera(self) -> int:
         if not self.camera_options:
@@ -1221,12 +1245,21 @@ class EdgeAiDesktopApp(tk.Tk):
             cloud_tts = CloudTTS()
             self._append_log("Modo NUBE activo — usando Groq + Google gTTS")
 
+        pc_client = None
+        try:
+            from pc_server_client import PcServerClient
+
+            pc_client = PcServerClient.from_env()
+        except Exception:
+            pc_client = None
+
         self.speech_worker = SpeechWorker(
             output_device_index=output_device_index,
             message_queue=self.message_queue,
             message_semaphore=self.message_queue_semaphore,
             cloud_mode=self._cloud_mode,
             cloud_tts=cloud_tts,
+            pc_client=pc_client,
         )
         try:
             self.speech_worker.set_volume_limit(int(self._volume_var.get()))
@@ -1270,6 +1303,7 @@ class EdgeAiDesktopApp(tk.Tk):
             cloud_stt=cloud_stt,
             cloud_llm=cloud_llm,
             eye_display=self._eye_display,
+            pc_client=pc_client,
         )
 
         self.camera_worker.start()
@@ -1605,7 +1639,6 @@ class HeadlessEyeApp:
             self.camera_options,
             self.microphone_options,
             self.output_device_options,
-            skip_camera=True,
         )
         lcd_ok = getattr(self._eye_display, "lcd", None) is not None
         print(
@@ -1676,8 +1709,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--headless",
         action="store_true",
         default=False,
-        help="Sin ventana tkinter (SSH / peluche). Ojos en la LCD, "
-             "primer mic/cámara/parlante. Ctrl+C para salir.",
+        help="Sin ventana tkinter. Es el default sin --debug: ojos en LCD, "
+             "mic USB PnP, parlante MicroII, Cámara 0. Ctrl+C para salir.",
     )
     parser.add_argument(
         "--gui",
@@ -1697,29 +1730,32 @@ def main() -> None:
         prefix="debug" if args.debug else "sistema",
     )
     print(f"[LOG] Archivo: {logger.log_path}", flush=True)
-    log_action("APP", f"inicio ({'debug' if args.debug else 'ojos'})")
+    log_action("APP", f"inicio ({'debug' if args.debug else 'ojos-lcd'})")
 
-    if args.debug:
+    mode = choose_ui_mode(debug=args.debug, gui=args.gui)
+    if args.headless and mode != "debug":
+        mode = "headless"
+
+    if mode == "debug":
         app = EdgeAiDesktopApp()
         app.protocol("WM_DELETE_WINDOW", app.on_close)
         app.mainloop()
         return
 
-    ssh_without_display = not has_gui_display()
-    if args.gui:
+    if mode == "gui":
         try_attach_local_display()
-    if args.headless or (ssh_without_display and not args.gui):
-        print("[APP] Modo headless (sin $DISPLAY). Ojos en la LCD ST7789.", flush=True)
-        HeadlessEyeApp().run()
+        try:
+            app = EyeModeApp()
+        except tk.TclError as exc:
+            print(f"[APP] Sin ventana gráfica ({exc}). Paso a headless.", flush=True)
+            HeadlessEyeApp().run()
+            return
+        app.protocol("WM_DELETE_WINDOW", app.on_close)
+        app.mainloop()
         return
-    try:
-        app = EyeModeApp()
-    except tk.TclError as exc:
-        print(f"[APP] Sin ventana gráfica ({exc}). Paso a headless.", flush=True)
-        HeadlessEyeApp().run()
-        return
-    app.protocol("WM_DELETE_WINDOW", app.on_close)
-    app.mainloop()
+
+    print("[APP] Modo normal: ojos en la LCD ST7789 (sin HDMI).", flush=True)
+    HeadlessEyeApp().run()
 
 
 if __name__ == "__main__":

@@ -34,9 +34,9 @@ Si un cambio fue un error de concepto, revertí **solo ese punto** (valores ante
 - **Revertir emoción:** `self.infer_emotion = True`, `frame_rate = 3`, 640×480.
 
 ### 10. Tope de escucha
-- `AudioWorker.MAX_LISTEN_SECONDS`: **8.0** (el **15.0** dejaba turnos largos)
-- **Síntoma si 8 está mal:** corta cuentos o frases largas a mitad.
-- **Revertir (cuentos):** 15.0.
+- `AudioWorker.MAX_LISTEN_SECONDS`: **12.0** (el **8.0** cortaba si el ruido arrancaba el turno; 15.0 dejaba turnos largos)
+- **Síntoma si 12 está mal:** corta cuentos o frases largas a los 12 s, o el turno se alarga con voz real.
+- **Revertir:** 8.0.
 
 ### 11. Cola USB y downsample (2026-09-08)
 - Cola de captura `AUDIO_QUEUE_MAXSIZE = 128` (antes 32). `drop_hits` no loguea en el callback.

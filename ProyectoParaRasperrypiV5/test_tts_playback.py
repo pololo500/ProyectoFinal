@@ -127,6 +127,90 @@ class TestPlayRetriesInt16(unittest.TestCase):
         self.assertEqual(last["dtype"], "int16")
         self.assertEqual(last["channels"], 2)
 
+    def test_reintenta_int16_mono_si_estereo_falla(self) -> None:
+        worker = SpeechWorker(output_device_index=0)
+        audio = np.zeros(1000, dtype=np.float32)
+        opened: list[dict] = []
+
+        class _Stream:
+            def __init__(self, **kwargs):
+                opened.append(kwargs)
+                if kwargs.get("channels") == 2:
+                    raise RuntimeError(
+                        "Error opening OutputStream: Sample format not supported [PaErrorCode -9994]"
+                    )
+                self.callback = kwargs.get("callback")
+                self.channels = kwargs.get("channels", 1)
+                self.dtype = kwargs.get("dtype", "int16")
+
+            def __enter__(self):
+                frames = 512
+                dt = np.int16 if self.dtype == "int16" else np.float32
+                outdata = np.zeros((frames, self.channels), dtype=dt)
+                try:
+                    while True:
+                        self.callback(outdata, frames, None, None)
+                except Exception:
+                    pass
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        with patch.object(
+            worker, "_find_supported_output_config", return_value=(48000, "int16", 2)
+        ), patch("workers.sd.OutputStream", side_effect=_Stream), patch.object(
+            worker, "_log"
+        ):
+            worker._play_wav_via_output_stream(audio, 22050)
+
+        self.assertTrue(opened)
+        last = opened[-1]
+        self.assertEqual(last["dtype"], "int16")
+        self.assertEqual(last["channels"], 1)
+
+    def test_si_device_0_falla_prueba_salida_default(self) -> None:
+        worker = SpeechWorker(output_device_index=0)
+        audio = np.zeros(800, dtype=np.float32)
+        opened: list[dict] = []
+
+        class _Stream:
+            def __init__(self, **kwargs):
+                opened.append(kwargs)
+                if kwargs.get("device") == 0:
+                    raise RuntimeError(
+                        "Error opening OutputStream: Sample format not supported [PaErrorCode -9994]"
+                    )
+                self.callback = kwargs.get("callback")
+                self.channels = kwargs.get("channels", 2)
+                self.dtype = kwargs.get("dtype", "int16")
+
+            def __enter__(self):
+                frames = 512
+                dt = np.int16 if self.dtype == "int16" else np.float32
+                ch = int(self.channels)
+                outdata = np.zeros((frames, ch), dtype=dt)
+                try:
+                    while True:
+                        self.callback(outdata, frames, None, None)
+                except Exception:
+                    pass
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        with patch.object(
+            worker, "_find_supported_output_config", return_value=(48000, "int16", 2)
+        ), patch("workers.sd.OutputStream", side_effect=_Stream), patch.object(
+            worker, "_log"
+        ):
+            worker._play_wav_via_output_stream(audio, 22050)
+
+        devices = [cfg.get("device") for cfg in opened]
+        self.assertIn(0, devices)
+        self.assertIn(None, devices)
+
 
 class TestStorySentencePipeline(unittest.TestCase):
     def test_workers_pipeline_el_chunk_del_cuento(self) -> None:

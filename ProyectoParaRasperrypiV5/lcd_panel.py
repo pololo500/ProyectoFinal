@@ -15,6 +15,7 @@ _SWRESET = 0x01
 _SLPOUT = 0x11
 _NORON = 0x13
 _INVON = 0x21
+_INVOFF = 0x20
 _DISPON = 0x29
 _CASET = 0x2A
 _RASET = 0x2B
@@ -33,6 +34,11 @@ def _madctl_for_rotation(rotation: int) -> int:
         270: 0xA0,
     }
     return table.get(int(rotation) % 360, 0x60)
+
+
+def invert_command(invert: bool) -> int:
+    """INVON (0x21) o INVOFF (0x20). Este panel se ve negativo con INVON."""
+    return _INVON if invert else _INVOFF
 
 
 class St7789Panel:
@@ -129,7 +135,7 @@ class St7789Panel:
         time.sleep(0.12)
         self._command(_COLMOD, bytes([_COLMOD_16BIT]))
         self._command(_MADCTL, bytes([_madctl_for_rotation(self.rotation)]))
-        self._command(_INVON)
+        self._command(invert_command(self.pins.lcd_invert))
         self._command(_NORON)
         self._command(_DISPON)
         time.sleep(0.02)

@@ -6,7 +6,16 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from display_env import has_gui_display, pick_default_devices, try_attach_local_display
+from display_env import (
+    PREFERRED_CAMERA_NEEDLES,
+    PREFERRED_MIC_NEEDLES,
+    PREFERRED_SPEAKER_NEEDLES,
+    choose_ui_mode,
+    has_gui_display,
+    pick_default_devices,
+    preferred_option_index,
+    try_attach_local_display,
+)
 
 
 class TestHasGuiDisplay(unittest.TestCase):
@@ -63,7 +72,7 @@ class TestPickDefaultDevices(unittest.TestCase):
         self.assertIsNone(mic)
         self.assertIsNone(out)
 
-    def test_headless_no_abre_camara(self) -> None:
+    def test_headless_puede_saltar_camara(self) -> None:
         cam, mic, out = pick_default_devices(
             [(0, "Cámara 0")],
             [(-1, "Sin micrófono")],
@@ -81,6 +90,46 @@ class TestPickDefaultDevices(unittest.TestCase):
             [],
         )
         self.assertIsNone(mic)
+
+    def test_elige_usb_pnp_y_microii_por_nombre(self) -> None:
+        cam, mic, out = pick_default_devices(
+            [(0, "Cámara 0"), (1, "Cámara 1")],
+            [
+                (-1, "Sin micrófono"),
+                (4, "4: vc4hdmi0: MAI PCM (hw:0,0)"),
+                (1, "1: USB PnP Sound Device: Audio (hw:2,0)"),
+            ],
+            [
+                (0, "0: vc4hdmi0: HDMI"),
+                (2, "2: Audio Advantage MicroII: USB Audio (hw:3,0)"),
+            ],
+        )
+        self.assertEqual(cam, 0)
+        self.assertEqual(mic, 1)
+        self.assertEqual(out, 2)
+
+    def test_combo_preselecciona_microii(self) -> None:
+        labels = [
+            "0: vc4hdmi0: HDMI",
+            "2: Audio Advantage MicroII: USB Audio (hw:3,0)",
+        ]
+        self.assertEqual(preferred_option_index(labels, PREFERRED_SPEAKER_NEEDLES), 1)
+        self.assertEqual(preferred_option_index(labels, PREFERRED_MIC_NEEDLES), 0)
+
+    def test_camara_10_no_es_camara_0(self) -> None:
+        labels = ["Cámara 10", "Cámara 0"]
+        self.assertEqual(preferred_option_index(labels, PREFERRED_CAMERA_NEEDLES), 1)
+
+
+class TestChooseUiMode(unittest.TestCase):
+    def test_sin_flags_es_headless(self) -> None:
+        self.assertEqual(choose_ui_mode(debug=False, gui=False), "headless")
+
+    def test_debug_gana(self) -> None:
+        self.assertEqual(choose_ui_mode(debug=True, gui=True), "debug")
+
+    def test_gui_fuerza_ventana(self) -> None:
+        self.assertEqual(choose_ui_mode(debug=False, gui=True), "gui")
 
 
 if __name__ == "__main__":

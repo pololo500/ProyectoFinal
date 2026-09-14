@@ -65,6 +65,7 @@ class EyeDisplay:
         self._pulse_phase = self._anim.pulse_phase
         self._is_pulsing = self._anim.is_pulsing
         self._pictogram = self._anim.pictogram
+        self._tk_photo = None
 
         self._canvas_ids: dict[str, int] = {}
 
@@ -233,7 +234,13 @@ class EyeDisplay:
         self._anim.tick()
         self._sync_from_animator()
         if self.canvas is not None:
-            self._draw_eyes()
+            if self._anim.has_sprite():
+                try:
+                    self._blit_sprite_canvas()
+                except Exception:
+                    pass
+            else:
+                self._draw_eyes()
         self._blit_lcd()
         if self.canvas is not None:
             self.canvas.after(33, self._animate)
@@ -262,6 +269,19 @@ class EyeDisplay:
         try:
             frame = self._anim.render(lcd.display_width, lcd.display_height)
             lcd.display(frame)
+        except Exception:
+            pass
+
+    def _blit_sprite_canvas(self) -> None:
+        if self.canvas is None:
+            return
+        try:
+            from PIL import ImageTk
+
+            frame = self._anim.render(max(1, self.width), max(1, self.height))
+            self._tk_photo = ImageTk.PhotoImage(image=frame)
+            self.canvas.delete("all")
+            self.canvas.create_image(0, 0, image=self._tk_photo, anchor="nw")
         except Exception:
             pass
 
@@ -450,5 +470,5 @@ def create_eye_display(canvas: tk.Canvas | None = None) -> EyeDisplay:
         from debug_logger import log_action
 
         log_action("LCD", "ojos en pantalla ST7789")
-    display.set_expression("zzz")
+    display.set_expression("dormido")
     return display

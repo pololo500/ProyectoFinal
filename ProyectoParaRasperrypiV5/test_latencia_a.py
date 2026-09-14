@@ -73,25 +73,25 @@ class TestLlmNCtx(unittest.TestCase):
 
     def test_warmup_llm_despues_de_load_antes_del_mic(self) -> None:
         src = _WORKERS.read_text(encoding="utf-8")
+        self.assertIn("SKIP_FALLBACK_LLM_WARMUP = True", src)
         load_at = src.find("self.fallback_llm.load()")
-        warm_at = src.find("self.fallback_llm.warmup(")
         alsa_at = src.find("AlsaCapture(")
         stream_at = src.find("sd.InputStream(")
         listen_at = src.find('f"{vad_tag}: escuchando..."')
         eyes_at = src.find('_set_eyes("escuchando")')
         self.assertGreater(load_at, 0)
-        self.assertGreater(warm_at, load_at)
-        self.assertGreater(alsa_at, warm_at)
-        self.assertGreater(stream_at, warm_at)
-        self.assertGreater(listen_at, warm_at)
-        self.assertGreater(eyes_at, warm_at)
-        between = src[warm_at:alsa_at]
+        self.assertGreater(alsa_at, load_at)
+        self.assertGreater(stream_at, load_at)
+        self.assertGreater(listen_at, load_at)
+        self.assertGreater(eyes_at, load_at)
+        between = src[load_at:alsa_at]
         self.assertNotIn("speak_and_wait", between)
         self.assertNotIn(".speak(", between)
+        self.assertIn("if not SKIP_FALLBACK_LLM_WARMUP", between)
 
     def test_unknown_pregunta_al_llm_antes_de_cualquier_frase_de_rescate(self) -> None:
         src = _WORKERS.read_text(encoding="utf-8")
-        gen_at = src.find("self.fallback_llm.generate(")
+        gen_at = src.find("self._remote_or_local_llm(")
         rescue_at = src.find("unknown_fallback")
         self.assertGreater(gen_at, 0)
         self.assertGreater(rescue_at, gen_at)
@@ -100,20 +100,25 @@ class TestLlmNCtx(unittest.TestCase):
         src = _WORKERS.read_text(encoding="utf-8")
         self.assertIn('set_expression("pensando")', src)
 
-    def test_zzz_en_lcd_durante_boot_y_warmup(self) -> None:
+    def test_dormido_en_lcd_durante_boot_y_carga_llm(self) -> None:
         src = _WORKERS.read_text(encoding="utf-8")
+        display = Path(__file__).resolve().parent.joinpath("eye_display.py").read_text(
+            encoding="utf-8"
+        )
         run_at = src.find('log_action("AudioWorker", "tarea _run comenzada")')
-        zzz_at = src.find('_set_eyes("zzz")', run_at)
+        dormido_at = src.find('_set_eyes("dormido")', run_at)
         whisper_at = src.find("self._load_whisper_model()")
-        warm_at = src.find("self.fallback_llm.warmup(")
+        load_at = src.find("self.fallback_llm.load()")
         listen_eyes = src.find('_set_eyes("escuchando")')
         self.assertGreater(run_at, 0)
-        self.assertGreater(zzz_at, run_at)
-        self.assertGreater(whisper_at, zzz_at)
-        self.assertGreater(warm_at, zzz_at)
-        self.assertGreater(listen_eyes, warm_at)
-        boot = src[zzz_at:listen_eyes]
+        self.assertGreater(dormido_at, run_at)
+        self.assertGreater(whisper_at, dormido_at)
+        self.assertGreater(load_at, dormido_at)
+        self.assertGreater(listen_eyes, load_at)
+        boot = src[dormido_at:listen_eyes]
         self.assertNotIn('set_expression("pensando")', boot)
+        self.assertNotIn('_set_eyes("zzz")', src)
+        self.assertIn('set_expression("dormido")', display)
 
 
 class TestLlmWarmup(unittest.TestCase):

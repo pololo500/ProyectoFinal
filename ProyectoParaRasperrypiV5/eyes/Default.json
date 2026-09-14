@@ -1,0 +1,8 @@
+{
+  "columns": 5,
+  "rows": 2,
+  "fps": 15,
+  "loop": true,
+  "frame_count": 10,
+  "hold_first_s": 5
+}

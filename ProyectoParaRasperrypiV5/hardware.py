@@ -48,6 +48,7 @@ class HardwarePins:
     lcd_width: int = 240
     lcd_height: int = 320
     lcd_rotation: int = 90
+    lcd_invert: bool = False
 
     @property
     def button_ready(self) -> bool:
@@ -84,6 +85,20 @@ def load_pins(path: Path | None = None) -> HardwarePins:
         except (TypeError, ValueError):
             return None
 
+    def _bool(key: str, default: bool) -> bool:
+        value = data.get(key, default)
+        if isinstance(value, bool):
+            return value
+        if value in (0, 1):
+            return bool(value)
+        if isinstance(value, str):
+            lowered = value.strip().lower()
+            if lowered in ("true", "1", "yes"):
+                return True
+            if lowered in ("false", "0", "no"):
+                return False
+        return default
+
     def _int(key: str, default: int) -> int:
         value = data.get(key, default)
         if value is None or value == "":
@@ -104,6 +119,7 @@ def load_pins(path: Path | None = None) -> HardwarePins:
         lcd_width=_int("lcd_width", 240),
         lcd_height=_int("lcd_height", 320),
         lcd_rotation=_int("lcd_rotation", 90),
+        lcd_invert=_bool("lcd_invert", False),
     )
 
 

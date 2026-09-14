@@ -1,0 +1,5 @@
+# Wheel CUDA oficial abetlen, sin compilar (cmake hash flake en Windows).
+# Índice cu128 no existe. cu125 = CUDA 12 más nuevo con win_amd64 py3-none.
+--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu125
+--only-binary=:all:
+llama-cpp-python>=0.3.0

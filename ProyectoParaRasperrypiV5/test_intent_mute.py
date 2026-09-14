@@ -118,6 +118,33 @@ class TestActionTagRegex(unittest.TestCase):
         )]
         self.assertEqual(names, ["INTENTS_OFF", "INTENTS_ON"])
 
+    def test_notify_completo_se_extrae_y_no_se_dice(self) -> None:
+        from workers import AudioWorker
+
+        worker = AudioWorker.__new__(AudioWorker)
+        raw = (
+            '[NOTIFY_PARENT:El nene quiere jugar a "mamá y papá solos", '
+            "puede ser un juego delicado.] ¡Oh, eso es algo que mejor no."
+        )
+        actions, clean = worker._parse_action_tags(raw)
+        self.assertEqual(actions[0]["action"], "NOTIFY_PARENT")
+        self.assertIn("juego delicado", actions[0]["param"])
+        self.assertIn("mejor no", clean)
+        self.assertNotIn("NOTIFY_PARENT", clean)
+        self.assertNotIn("[", clean)
+
+    def test_notify_sin_cierre_no_deja_corchete(self) -> None:
+        from workers import AudioWorker
+
+        worker = AudioWorker.__new__(AudioWorker)
+        raw = (
+            '[NOTIFY_PARENT:El nene quiere jugar a "mamá y papá solos", '
+            "puede ser un juego delicado."
+        )
+        actions, clean = worker._parse_action_tags(raw)
+        self.assertEqual(actions, [])
+        self.assertEqual(clean, "")
+
 
 if __name__ == "__main__":
     unittest.main()

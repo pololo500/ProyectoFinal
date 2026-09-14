@@ -1,0 +1,11 @@
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+numpy>=1.26.0
+faster-whisper>=1.1.0
+huggingface_hub>=0.26.0
+
+# llama-cpp-python NO va acá: pip resuelve todo el -r antes de instalar.
+# Si el sdist de PyPI falla al compilar (cmake hash flake), aborta numpy/FastAPI.
+# Instalá el wheel CUDA aparte: requirements-llm.txt / run.ps1 (nunca from source).
+# No hay índice oficial cu128 (404). RTX 5080: probar cu125, luego cu124.
+# Si el wheel no offloadea (Blackwell sm_120 / CUDA 12.8+), plan B: llama-server.

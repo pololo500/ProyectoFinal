@@ -38,6 +38,8 @@ exe_stderr.txt
 # API keys and secrets
 .env
 pairing_token.txt
+pc_server_url.txt
+pc_server_token.txt
 
 # OS files
 .DS_Store

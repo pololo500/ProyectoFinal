@@ -256,13 +256,15 @@ ok("Limpia acciones (roleplay)",
    "(" not in cleaned2 and "Hola" in cleaned2,
    f"cleaned={cleaned2!r}")
 
-# 4.4 — Trunca a 25 palabras
-long_text = " ".join([f"palabra{i}" for i in range(40)])
+# 4.4 — Ya no trunca acá (los tags se parsean después; AudioWorker corta a 25)
+long_text = (
+    '[NOTIFY_PARENT:razón larga del aviso al padre] '
+    + " ".join([f"palabra{i}" for i in range(30)])
+)
 cleaned_long = llm._clean_response(long_text)
-word_count = len(cleaned_long.split())
-ok("Trunca a ≤25 palabras",
-   word_count <= 25,
-   f"word_count={word_count}")
+ok("Conserva el tag NOTIFY_PARENT antes de parsear",
+   "NOTIFY_PARENT" in cleaned_long and "]" in cleaned_long,
+   f"cleaned={cleaned_long[:80]!r}")
 
 # 4.5 — Cadena vacía
 ok("Cadena vacía retorna vacío", llm._clean_response("") == "")

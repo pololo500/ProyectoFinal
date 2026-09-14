@@ -55,6 +55,24 @@ class TestSystemPromptNoStoryTemplate(unittest.TestCase):
     def test_prompt_entra_en_n_ctx_1024(self) -> None:
         self.assertLessEqual(len(_SYSTEM_PROMPT), 1800)
 
+    def test_prompt_no_dice_la_palabra_tags(self) -> None:
+        folded = _SYSTEM_PROMPT.lower()
+        self.assertNotIn("tags al final", folded)
+        self.assertNotIn("tags:", folded)
+
+    def test_clean_no_corta_notify_antes_del_cierre(self) -> None:
+        from fallback_llm import FallbackLLM
+
+        raw = (
+            '[NOTIFY_PARENT:El nene quiere jugar a "mamá y papá solos", '
+            "puede ser un juego delicado.] ¡Oh, eso es algo que mejor no hagas. "
+            "Juguemos a veo veo."
+        )
+        cleaned = FallbackLLM._clean_response(raw)
+        self.assertIn("NOTIFY_PARENT", cleaned)
+        self.assertIn("]", cleaned)
+        self.assertIn("veo veo", cleaned)
+
     def test_pide_hechos_y_no_inventar(self) -> None:
         folded = _SYSTEM_PROMPT.lower()
         self.assertIn("no inventes", folded)
