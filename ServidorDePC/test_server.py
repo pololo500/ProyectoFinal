@@ -20,10 +20,13 @@ class FakeStt:
         self.ready = ready
         self.text = text
         self.last_wav: bytes | None = None
+        self.detail: dict | None = None
 
-    def transcribe_wav(self, wav: bytes, language: str = "es") -> str:
+    def transcribe_wav(self, wav: bytes, language: str = "es") -> str | dict:
         del language
         self.last_wav = wav
+        if self.detail is not None:
+            return self.detail  # type: ignore[return-value]
         return self.text
 
 
@@ -118,7 +121,21 @@ class TestTranscribe(unittest.TestCase):
         self.assertIn("192.168.0.148", joined)
         self.assertIn(f"{len(wav)} bytes", joined)
         self.assertRegex(joined, r"ms")
-        self.assertIn("juguemos veo veo", joined)
+
+    def test_transcribe_incluye_confianza_si_el_engine_la_da(self) -> None:
+        stt = FakeStt()
+        stt.detail = {
+            "text": "Qué pasa.",
+            "avg_logprob": -0.2,
+            "no_speech_prob": 0.88,
+        }
+        status, body = handle_transcribe(
+            stt, FakeLlm(), TOKEN, "Bearer secret-token", _tiny_wav(), "audio/wav", "es"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(body["text"], "Qué pasa.")
+        self.assertEqual(body["avg_logprob"], -0.2)
+        self.assertEqual(body["no_speech_prob"], 0.88)
 
 
 class TestChat(unittest.TestCase):

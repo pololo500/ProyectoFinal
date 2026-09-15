@@ -10,7 +10,7 @@ import threading
 import time
 import wave
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 import numpy as np
@@ -60,6 +60,15 @@ def _normalize_base_url(url: str) -> str:
 
 def _is_wav_body(raw: bytes) -> bool:
     return len(raw) >= 12 and raw[:4] == b"RIFF" and raw[8:12] == b"WAVE"
+
+
+def _opt_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 class PcServerClient:
@@ -171,7 +180,7 @@ class PcServerClient:
         self._on_success()
         return True
 
-    def transcribe(self, wav: bytes) -> str | None:
+    def transcribe(self, wav: bytes) -> dict[str, Any] | None:
         status, raw = self._call(
             "POST",
             "/v1/audio/transcriptions",
@@ -192,7 +201,13 @@ class PcServerClient:
             payload = json.loads(raw.decode("utf-8"))
         except json.JSONDecodeError:
             return None
-        return str(payload.get("text") or "")
+        if not isinstance(payload, dict):
+            return None
+        return {
+            "text": str(payload.get("text") or ""),
+            "avg_logprob": _opt_float(payload.get("avg_logprob")),
+            "no_speech_prob": _opt_float(payload.get("no_speech_prob")),
+        }
 
     def complete(self, messages: list[dict[str, str]]) -> str | None:
         body = json.dumps({

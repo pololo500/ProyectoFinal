@@ -122,7 +122,7 @@ class TestTranscribeAndChat(unittest.TestCase):
             return 200, json.dumps({"text": "juguemos veo veo"}).encode()
 
         client = PcServerClient("http://192.168.1.5:8090", "tok", request_fn=req)
-        self.assertEqual(client.transcribe(b"RIFF"), "juguemos veo veo")
+        self.assertEqual(client.transcribe(b"RIFF")["text"], "juguemos veo veo")
         self.assertEqual(client.fail_count, 0)
 
     def test_complete_200_devuelve_content(self) -> None:
@@ -419,7 +419,7 @@ class TestSynthesizeTts(unittest.TestCase):
         client.fail_count_tts = 2
         client.open_until_tts = time.monotonic() + 30.0
         self.assertTrue(client.circuit_tts_open)
-        self.assertEqual(client.transcribe(b"RIFF"), "ok")
+        self.assertEqual(client.transcribe(b"RIFF")["text"], "ok")
 
     def test_synthesize_sin_riff_cuenta_fallo_tts(self) -> None:
         def req(method: str, path: str, **kwargs: object) -> tuple[int, bytes]:

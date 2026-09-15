@@ -53,6 +53,17 @@ except ImportError:
     spacy = None  # type: ignore[assignment]
 
 from debug_logger import get_debug_logger, log_action, save_named_transcript_wav
+from rps_hand import (
+    RpsGestureGate,
+    RpsGuess,
+    boost_low_light_bgr,
+    classify_rps_landmarks,
+    hand_inference_size,
+    low_light_gamma,
+    merge_rps_guesses,
+    rps_hand_landmarker_config,
+    silhouette_rps_guess,
+)
 from stt_correct import polish_stt_text, spanish_vocab_checker
 
 APP_DIR = Path(__file__).resolve().parent
@@ -567,6 +578,33 @@ class EmotionReactor:
         return self.NORMAL_SILENCE
 
 
+CAMERA_CAPTURE_PROBE_WIDTH = 10000
+CAMERA_CAPTURE_PROBE_HEIGHT = 10000
+
+
+def apply_camera_capture_size(capture: Any) -> tuple[int, int]:
+    """Pide el máximo que acepte el driver (MJPG + probe grande). Devuelve el tamaño real."""
+    fourcc_fn = getattr(cv2, "VideoWriter_fourcc", None)
+    if callable(fourcc_fn):
+        try:
+            capture.set(cv2.CAP_PROP_FOURCC, fourcc_fn(*"MJPG"))
+        except Exception:
+            pass
+    capture.set(cv2.CAP_PROP_FRAME_WIDTH, CAMERA_CAPTURE_PROBE_WIDTH)
+    capture.set(cv2.CAP_PROP_FRAME_HEIGHT, CAMERA_CAPTURE_PROBE_HEIGHT)
+    # UVC: 3 = Aperture Priority (auto). 0.75 de OpenCV se trunca a 0 y esta
+    # cámara cae a Manual Mode (1) con exposición corta → imagen negra.
+    auto_prop = getattr(cv2, "CAP_PROP_AUTO_EXPOSURE", None)
+    if auto_prop is not None:
+        try:
+            capture.set(auto_prop, 3)
+        except Exception:
+            pass
+    actual_w = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+    actual_h = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+    return actual_w, actual_h
+
+
 class CameraWorker:
     EMOTION_FEATURE_WEIGHTS: dict[str, dict[str, float]] = {
         "feliz": {
@@ -617,6 +655,25 @@ class CameraWorker:
         # Peluche: 5 fps + MediaPipe. 1 fps / infer_emotion=False era el recorte de latencia.
         self.frame_rate = 5
         self.infer_emotion = True
+        self._rps_hands_enabled = threading.Event()
+        self.rps_gate = RpsGestureGate()
+        self._last_rps_desc = ""
+        self._last_rps_log_ts = 0.0
+        self._hands_unavailable = False
+
+    @property
+    def rps_hands_enabled(self) -> bool:
+        return self._rps_hands_enabled.is_set()
+
+    def set_rps_hands_enabled(self, on: bool) -> None:
+        was = self._rps_hands_enabled.is_set()
+        if on:
+            self._rps_hands_enabled.set()
+            return
+        self._rps_hands_enabled.clear()
+        self.rps_gate.reset_round()
+        if was:
+            self._publish_rps_status("")
 
     def start(self) -> None:
         log_action("CameraWorker", f"inicio (cámara={self.camera_index})")
@@ -634,6 +691,7 @@ class CameraWorker:
         capture = None
         face_mesh = None
         tasks_landmarker = None
+        hands_landmarker = None
         mp_drawing = None
         mp_face_mesh = None
         face_mesh_enabled = False
@@ -664,9 +722,14 @@ class CameraWorker:
             capture = cv2.VideoCapture(self.camera_index, capture_backend)
             if not capture.isOpened():
                 raise RuntimeError(f"No se pudo abrir la cámara {self.camera_index}")
-            # LATENCIA punto 7: resolución mínima. Antes 640x480.
-            capture.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-            capture.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+            actual_w, actual_h = apply_camera_capture_size(capture)
+            log_action("CameraWorker", f"captura {actual_w}x{actual_h}")
+            _queue_message_with_semaphore(
+                self.message_queue,
+                self.message_semaphore,
+                "log",
+                f"Cámara captura {actual_w}x{actual_h}",
+            )
 
             # LATENCIA punto 7: MediaPipe apagado por defecto (infer_emotion=False).
             if self.infer_emotion:
@@ -725,6 +788,8 @@ class CameraWorker:
             frame_interval = 1.0 / float(getattr(self, "frame_rate", 5))
             last_frame_ts = 0.0
 
+            hands_landmarker = None
+
             while not self._stop_event.is_set():
                 success, frame = capture.read()
                 if not success:
@@ -750,6 +815,28 @@ class CameraWorker:
                         continue
                 except Exception:
                     pass
+
+                if self.rps_hands_enabled:
+                    if hands_landmarker is None and not self._hands_unavailable:
+                        hands_landmarker = self._create_hand_landmarker()
+                        if hands_landmarker is None:
+                            self._hands_unavailable = True
+                            self._publish_rps_status("no disponible")
+                    if hands_landmarker is not None:
+                        try:
+                            annotated_hands, rps_guess = self._process_hands_frame(
+                                hands_landmarker, frame
+                            )
+                        except Exception as exc:
+                            log_action("CameraWorker", f"Hands frame: {exc}")
+                            self._push_frame(frame)
+                            time.sleep(0.05)
+                            continue
+                        self.rps_gate.observe(rps_guess.label, rps_guess.score)
+                        self._push_frame(annotated_hands)
+                        self._maybe_publish_rps(rps_guess)
+                        time.sleep(0.05)
+                        continue
 
                 if not self.infer_emotion:
                     self._push_frame(frame)
@@ -813,6 +900,8 @@ class CameraWorker:
                 face_mesh.close()
             if tasks_landmarker is not None:
                 tasks_landmarker.close()
+            if hands_landmarker is not None:
+                hands_landmarker.close()
             if capture is not None:
                 capture.release()
             log_action("CameraWorker", "tarea _run finalizada")
@@ -968,6 +1057,185 @@ class CameraWorker:
                 self.frame_semaphore.release()
             pass
 
+    _HAND_CONNECTIONS = (
+        (0, 1), (1, 2), (2, 3), (3, 4),
+        (0, 5), (5, 6), (6, 7), (7, 8),
+        (0, 9), (9, 10), (10, 11), (11, 12),
+        (0, 13), (13, 14), (14, 15), (15, 16),
+        (0, 17), (17, 18), (18, 19), (19, 20),
+        (5, 9), (9, 13), (13, 17),
+    )
+
+    def _create_hand_landmarker(self):
+        try:
+            from mediapipe.tasks import python as mp_python
+            from mediapipe.tasks.python import vision
+
+            model_path = self._ensure_hand_landmarker_model()
+            base_options = mp_python.BaseOptions(model_asset_path=str(model_path))
+            cfg = rps_hand_landmarker_config()
+            running_mode = getattr(vision.RunningMode, str(cfg["running_mode"]))
+            options = vision.HandLandmarkerOptions(
+                base_options=base_options,
+                running_mode=running_mode,
+                num_hands=int(cfg["num_hands"]),
+                min_hand_detection_confidence=float(cfg["min_hand_detection_confidence"]),
+            )
+            landmarker = vision.HandLandmarker.create_from_options(options)
+            _queue_message_with_semaphore(
+                self.message_queue,
+                self.message_semaphore,
+                "log",
+                "MediaPipe Tasks Hand Landmarker habilitado (IMAGE, det=0.20)",
+            )
+            return landmarker
+        except Exception as exc:
+            log_action("CameraWorker", f"Hand Landmarker no disponible: {exc}")
+            _queue_message_with_semaphore(
+                self.message_queue,
+                self.message_semaphore,
+                "log",
+                f"Error inicializando Hand Landmarker (Tasks): {exc}",
+            )
+            return None
+
+    def _ensure_hand_landmarker_model(self) -> Path:
+        candidates = [
+            Path(__file__).resolve().parent / "models" / "hand_landmarker.task",
+            Path.cwd() / "models" / "hand_landmarker.task",
+        ]
+        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+            candidates.append(Path(getattr(sys, "_MEIPASS")) / "models" / "hand_landmarker.task")
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+
+        cache_dir = Path.home() / ".edge_ai_models" / "mediapipe"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        target = cache_dir / "hand_landmarker.task"
+        if target.exists():
+            return target
+
+        model_url = (
+            "https://storage.googleapis.com/mediapipe-models/hand_landmarker/"
+            "hand_landmarker/float16/1/hand_landmarker.task"
+        )
+        _queue_message_with_semaphore(
+            self.message_queue,
+            self.message_semaphore,
+            "log",
+            "Descargando modelo hand_landmarker.task (solo primera vez)...",
+        )
+        urllib.request.urlretrieve(model_url, target)
+        return target
+
+    def _process_hands_frame(
+        self, hands_landmarker: Any, frame: np.ndarray
+    ) -> tuple[np.ndarray, RpsGuess]:
+        height, width = frame.shape[:2]
+        infer_w, infer_h = hand_inference_size(width, height)
+        infer = frame
+        if (width, height) != (infer_w, infer_h):
+            infer = cv2.resize(frame, (infer_w, infer_h))
+        infer_mean = float(np.asarray(infer).mean()) if getattr(infer, "size", 0) else 255.0
+        infer = boost_low_light_bgr(infer)
+        gamma = low_light_gamma(infer_mean)
+        if 1.0 < infer_mean and gamma < 0.999:
+            now = time.monotonic()
+            last = getattr(self, "_last_low_light_log", 0.0)
+            if now - last >= 8.0:
+                self._last_low_light_log = now
+                print(
+                    f"[CAM] luz baja media={infer_mean:.0f} gamma={gamma:.2f}",
+                    flush=True,
+                )
+        rgb_frame = cv2.cvtColor(infer, cv2.COLOR_BGR2RGB)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
+        result = hands_landmarker.detect(mp_image)
+        annotated = frame
+        hands = getattr(result, "hand_landmarks", None) or []
+        best = RpsGuess(label=None, score=0.0)
+        best_hand = None
+        for hand in hands:
+            points = [(float(p.x), float(p.y)) for p in hand]
+            guess = classify_rps_landmarks(points)
+            if best_hand is None or guess.score > best.score:
+                best = guess
+                best_hand = hand
+        if not best.label and best_hand is None:
+            best = merge_rps_guesses(best, silhouette_rps_guess(infer))
+        for hand in hands:
+            color = (0, 255, 0) if hand is best_hand else (180, 180, 180)
+            self._draw_hand_landmarks(annotated, hand, color)
+        if best.label:
+            tag = " sil" if best.source == "silueta" else ""
+            caption = f"Jugada: {best.label}{tag} ({best.score:.2f})"
+            color = (0, 255, 0)
+        else:
+            caption = "Jugada: ninguna"
+            color = (0, 165, 255)
+        cv2.putText(
+            annotated,
+            caption,
+            (12, 52),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            color,
+            2,
+            cv2.LINE_AA,
+        )
+        return annotated, best
+
+    @staticmethod
+    def _draw_hand_landmarks(frame: np.ndarray, landmarks: Any, color: tuple[int, int, int]) -> None:
+        h, w = frame.shape[:2]
+        pts: list[tuple[int, int]] = []
+        for point in landmarks:
+            x = max(0, min(w - 1, int(float(point.x) * w)))
+            y = max(0, min(h - 1, int(float(point.y) * h)))
+            pts.append((x, y))
+            cv2.circle(frame, (x, y), 2, color, -1, cv2.LINE_AA)
+        for a, b in CameraWorker._HAND_CONNECTIONS:
+            if a < len(pts) and b < len(pts):
+                cv2.line(frame, pts[a], pts[b], color, 1, cv2.LINE_AA)
+
+    def _maybe_publish_rps(self, guess: RpsGuess) -> None:
+        if self._hands_unavailable:
+            desc = "no disponible"
+        elif guess.label:
+            desc = f"{guess.label} ({guess.score:.2f})"
+        else:
+            desc = "ninguna"
+        now = time.monotonic()
+        if (now - self._last_rps_log_ts) < 3.0 and desc == self._last_rps_desc:
+            return
+        if desc != self._last_rps_desc:
+            log_action("CameraWorker", f"gesto={desc}")
+        self._publish_rps_status(desc)
+        _queue_message_with_semaphore(
+            self.message_queue,
+            self.message_semaphore,
+            "rps_gesture",
+            {
+                "label": guess.label,
+                "score": float(guess.score),
+                "confident": bool(self.rps_gate.saw_confident),
+            },
+        )
+        self._last_rps_log_ts = now
+        self._last_rps_desc = desc
+
+    def _publish_rps_status(self, desc: str) -> None:
+        payload: dict[str, Any] = {"rps_gesture": desc}
+        if desc:
+            payload["camera"] = f"{self.camera_index} activa"
+        _queue_message_with_semaphore(
+            self.message_queue,
+            self.message_semaphore,
+            "status",
+            payload,
+        )
+
 
 def whisper_beam_size() -> int:
     """Default 1. Rollback de calidad STT: WHISPER_BEAM=5."""
@@ -996,6 +1264,34 @@ def volume_counts_as_speech(
 ) -> bool:
     """True si el % del medidor UI cuenta como voz para arrancar/cortar."""
     return int(volume_pct) >= int(floor_pct)
+
+
+def hop_volume_pcts(
+    pcm: np.ndarray, sample_rate: int = STT_SAMPLE_RATE
+) -> np.ndarray:
+    """Medidor min(100, RMS×300) por hop de 20 ms (igual que el VAD)."""
+    hop = max(1, int(round(float(sample_rate) * 0.020)))
+    arr = np.asarray(pcm, dtype=np.float32).reshape(-1)
+    n = (arr.size // hop) * hop
+    if n <= 0:
+        return np.zeros(0, dtype=np.float32)
+    frames = arr[:n].reshape(-1, hop)
+    rms = np.sqrt(np.mean(frames * frames, axis=1))
+    return np.minimum(100.0, rms * 300.0).astype(np.float32)
+
+
+def active_speech_seconds(
+    pcm: np.ndarray,
+    sample_rate: int = STT_SAMPLE_RATE,
+    floor_pct: int = LISTEN_VOLUME_FLOOR_PCT,
+) -> float:
+    """Segundos de hops ≥ piso. El hangover de silencio no cuenta."""
+    pcts = hop_volume_pcts(pcm, sample_rate)
+    if pcts.size == 0:
+        return 0.0
+    hop = max(1, int(round(float(sample_rate) * 0.020)))
+    hop_s = hop / float(sample_rate)
+    return float(np.sum(pcts >= float(floor_pct))) * hop_s
 
 
 def enqueue_mic_block(
@@ -1155,6 +1451,7 @@ class AudioWorker:
         cloud_llm: Any = None,
         eye_display: Any = None,
         pc_client: Any = None,
+        camera_worker: Any = None,
     ) -> None:
         self.microphone_device_index = microphone_device_index
         self.message_queue = message_queue
@@ -1162,11 +1459,14 @@ class AudioWorker:
         self.intent_dispatcher = intent_dispatcher
         self.camera_ready_event = camera_ready_event
         self.speech_worker = speech_worker
+        self.camera_worker = camera_worker
         self.sanitizer = TextSanitizer()
         self.emotion_reactor = EmotionReactor()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._echo_mute_until = 0.0
+        self._capture_muted = True
+        self._kept_tts_mic_tail = False
         self._alsa_capture: Any = None
         self._input_stream: Any = None
 
@@ -1245,6 +1545,8 @@ class AudioWorker:
         self._story_speak_lock = threading.Lock()
         self._stt_in_flight = False
         self._story_pipeline_active = False
+        self._skip_next_stt = False
+        self._pending_rps_label: str | None = None
 
         from parent_alerts import VocabularyParentAlerter
         self._vocab_alerter = VocabularyParentAlerter()
@@ -1612,6 +1914,11 @@ class AudioWorker:
                 {"mic": "deshabilitado", "volume": 0},
             )
             while not self._stop_event.is_set():
+                if self._is_awake():
+                    self._sync_rps_hands()
+                    choice = self._take_rps_choice()
+                    if choice:
+                        self._apply_rps_choice(choice, audio_queue)
                 time.sleep(0.5)
             log_action("AudioWorker", "tarea _run finalizada (sin micrófono)")
             return
@@ -1622,6 +1929,11 @@ class AudioWorker:
                 drops_seen = 0
                 vad_tag = vad_log_label(getattr(vad, "_mode", "energy"))
                 while not self._stop_event.is_set():
+                    self._sync_rps_hands()
+                    rps_label = self._take_rps_choice()
+                    if rps_label:
+                        self._pending_rps_label = rps_label
+                        return None
                     try:
                         audio_block = audio_queue.get(timeout=0.5)
                     except queue.Empty:
@@ -1659,10 +1971,7 @@ class AudioWorker:
 
                     from session_policy import mic_open_for_listen
 
-                    speaker_on = (
-                        (self.speech_worker is not None and self.speech_worker.is_busy())
-                        or self._story_pipeline_active
-                    )
+                    speaker_on = self._speaker_blocks_mic()
                     if not mic_open_for_listen(speaker_on, time.monotonic(), self._echo_mute_until):
                         if speech_active:
                             speech_active = False
@@ -1738,10 +2047,7 @@ class AudioWorker:
             echo_until = [self._echo_mute_until]
 
             def _speaker_busy() -> bool:
-                return (
-                    (self.speech_worker is not None and self.speech_worker.is_busy())
-                    or self._story_pipeline_active
-                )
+                return self._speaker_blocks_mic()  # tts_blocks_mic
 
             def _sync_echo_until() -> None:
                 echo_until[0] = self._echo_mute_until
@@ -1813,12 +2119,12 @@ class AudioWorker:
                 def callback(indata, frames, time_info, status) -> None:  # noqa: ANN001
                     if status:
                         overflow_hits[0] += 1
-                    if capture_muted[0] or _speaker_busy() or time.monotonic() < echo_until[0]:
+                    if self._capture_muted or _speaker_busy() or time.monotonic() < echo_until[0]:
                         return
                     audio_block = indata[:, 0].copy() if indata.ndim > 1 else indata.copy()
                     enqueue_mic_block(audio_queue, audio_block, drop_hits)
 
-                capture_muted = [False]
+                self._capture_muted = False
                 input_stream = sd.InputStream(
                     device=self.microphone_device_index,
                     channels=1,
@@ -1834,10 +2140,7 @@ class AudioWorker:
                 while not self._stop_event.is_set():
                     if not self._is_awake():
                         self._drain_audio_queue(audio_queue)
-                        if capture is not None:
-                            capture.set_muted(True)
-                        else:
-                            capture_muted[0] = True
+                        self._set_capture_muted(True)
                         time.sleep(0.2)
                         continue
                     _queue_message_with_semaphore(
@@ -1858,10 +2161,7 @@ class AudioWorker:
                     overrun_before = capture.overrun_hits if capture is not None else 0
                     restart_before = capture.restarts if capture is not None else 0
                     busy_before = capture.busy_hits if capture is not None else 0
-                    if capture is not None:
-                        capture.set_muted(False)
-                    else:
-                        capture_muted[0] = False
+                    self._set_capture_muted(False)
                     _sync_echo_until()
                     segment = listen_until_cut()
                     if capture is not None:
@@ -1906,13 +2206,13 @@ class AudioWorker:
                             "log",
                             "AudioWorker: hw: busy (ver LATENCIA PipeWire; lsof /dev/snd/pcmC*D0c)",
                         )
-                    if capture is not None:
-                        capture.set_muted(True)
-                    else:
-                        capture_muted[0] = True
+                    self._set_capture_muted(True)
                     self._drain_audio_queue(audio_queue)
                     if self._stop_event.is_set():
                         break
+                    if self._apply_pending_rps(audio_queue):
+                        _sync_echo_until()
+                        continue
                     if segment is not None and segment.size:
                         self._handle_segment(segment, whisper_model, audio_queue)
                     _sync_echo_until()
@@ -1956,6 +2256,116 @@ class AudioWorker:
 
         self._drain_audio_queue(audio_queue)
         self._echo_mute_until = time.monotonic() + ECHO_MUTE_SECONDS
+
+    def _speaker_blocks_mic(self) -> bool:
+        if self._story_pipeline_active:
+            return True
+        sw = self.speech_worker
+        if sw is None:
+            return False
+        return bool(sw.tts_blocks_mic())
+
+    def _set_capture_muted(self, muted: bool) -> None:
+        self._capture_muted = bool(muted)
+        cap = self._alsa_capture
+        if cap is not None:
+            cap.set_muted(bool(muted))
+
+    def _speak_conversational_keep_mic(
+        self, text: str, audio_queue: queue.Queue, timeout: float = 60.0
+    ) -> None:
+        from session_policy import keep_audio_queue_after_tts
+
+        if self.speech_worker is None or not str(text).strip():
+            return
+        self._set_capture_muted(False)
+        self.speech_worker.speak_and_wait(text, timeout=timeout, story=False)
+        if keep_audio_queue_after_tts(is_music=False, is_story=False):
+            self._echo_mute_until = 0.0
+            self._kept_tts_mic_tail = True
+        else:
+            self._silence_mic_after_speaker(audio_queue)
+
+    def _sync_rps_hands(self) -> None:
+        camera = self.camera_worker
+        if camera is None:
+            return
+        want = bool(
+            self.game_engine is not None and self.game_engine.waiting_rps_choice
+        )
+        if want == camera.rps_hands_enabled:
+            return
+        if want:
+            camera.rps_gate.reset_round()
+        camera.set_rps_hands_enabled(want)
+
+    def _take_rps_choice(self) -> str | None:
+        if self.game_engine is None or not self.game_engine.waiting_rps_choice:
+            return None
+        camera = self.camera_worker
+        if camera is None:
+            return None
+        return camera.rps_gate.confident_choice()
+
+    def _apply_pending_rps(self, audio_queue: queue.Queue) -> bool:
+        label = self._pending_rps_label
+        self._pending_rps_label = None
+        if not label:
+            return False
+        self._apply_rps_choice(label, audio_queue)
+        return True
+
+    def _rps_saw_confident(self) -> bool:
+        camera = self.camera_worker
+        return bool(camera is not None and camera.rps_gate.saw_confident)
+
+    def _apply_rps_choice(self, label: str, audio_queue: queue.Queue) -> None:
+        if self.game_engine is None:
+            return
+        response = self.game_engine.commit_choice(label)
+        if response is None or not str(response.text).strip():
+            return
+        log_action("GAME", f"gesto={label}")
+        _queue_message_with_semaphore(
+            self.message_queue,
+            self.message_semaphore,
+            "log",
+            f"gesto={label}",
+        )
+        self._speak_rps_response(response.text, audio_queue)
+        self._finish_rps_committed_turn()
+
+    def _speak_rps_response(self, text: str, audio_queue: queue.Queue) -> None:
+        response_text = self._strip_unspeakable(text)
+        if not response_text or self.speech_worker is None:
+            return
+        self._speak_conversational_keep_mic(response_text, audio_queue)
+
+    def _finish_rps_committed_turn(self) -> None:
+        if self.game_engine is not None and self.game_engine.waiting_rps_choice:
+            self.game_engine.prepare_next_rps_round()
+        if self.camera_worker is not None:
+            self.camera_worker.rps_gate.reset_round()
+        self._sync_rps_hands()
+
+    def _handle_ppt_empty_stt(self, audio_queue: queue.Queue) -> bool:
+        if self.game_engine is None or not self.game_engine.waiting_rps_choice:
+            return False
+        if self._rps_saw_confident():
+            return False
+        dummy = {
+            "intent_name": "unknown",
+            "confidence": 0.0,
+            "response": "",
+            "pilar": "cognitivo",
+        }
+        payload = self.game_engine.process_or_passthrough("", dummy)
+        text = str(payload.get("response", "")).strip()
+        if not text:
+            return False
+        self._speak_rps_response(text, audio_queue)
+        self._sync_rps_hands()
+        return True
 
     def _sync_playtime_limit(self) -> None:
         state = self._robot_state
@@ -2034,15 +2444,34 @@ class AudioWorker:
                     f"[PC] enviando STT a {url} ({len(wav)} bytes, timeout {getattr(client, 'stt_timeout_s', 25):.0f}s)"
                 )
                 t0 = time.monotonic()
-                text = client.transcribe(wav)
+                raw = client.transcribe(wav)
                 ms = (time.monotonic() - t0) * 1000.0
             except Exception:
-                text = None
-            if text is not None:
+                raw = None
+            if raw is not None:
+                from session_policy import stt_is_low_confidence
+
+                if isinstance(raw, dict):
+                    text = str(raw.get("text") or "")
+                    avg = raw.get("avg_logprob")
+                    nsp = raw.get("no_speech_prob")
+                    avg_f = float(avg) if avg is not None else None
+                    nsp_f = float(nsp) if nsp is not None else None
+                else:
+                    text = str(raw)
+                    avg_f = None
+                    nsp_f = None
                 self._last_stt_source = "PC"
                 self._log_pc(f'[PC] STT ok {ms:.0f} ms: "{text}"')
                 save_named_transcript_wav(audio_segment, text, sample_rate=16000)
-                return TranscriptionResult(text=text)
+                return TranscriptionResult(
+                    text=text,
+                    low_confidence=stt_is_low_confidence(
+                        text, avg_logprob=avg_f, no_speech_prob=nsp_f
+                    ),
+                    avg_logprob=avg_f,
+                    no_speech_prob=nsp_f,
+                )
             self._log_pc(
                 f"[PC] STT falló en {ms:.0f} ms (timeout {getattr(client, 'stt_timeout_s', 25):.0f}s); uso Whisper local"
             )
@@ -2131,6 +2560,15 @@ class AudioWorker:
         if audio_segment.size == 0:
             return
 
+        self._sync_rps_hands()
+        rps_now = self._take_rps_choice()
+        if rps_now:
+            self._apply_rps_choice(rps_now, audio_queue)
+            return
+        if self._skip_next_stt:
+            self._skip_next_stt = False
+            return
+
         self._stt_in_flight = True
         if self._waiting_story_child():
             self._invalidate_story_timer()
@@ -2142,6 +2580,25 @@ class AudioWorker:
             _dlog.log_input("SEGMENT", f"Audio segment ({segment_duration_s:.1f}s, {len(audio_segment)} samples)")
 
         try:
+            from session_policy import skip_stt_for_weak_speech
+
+            active_s = active_speech_seconds(audio_segment)
+            if skip_stt_for_weak_speech(active_s):
+                _queue_message_with_semaphore(
+                    self.message_queue,
+                    self.message_semaphore,
+                    "log",
+                    f"[STT] ruido, sin transcribir ({active_s * 1000.0:.0f}ms activos)",
+                )
+                rps_now = self._take_rps_choice()
+                if rps_now:
+                    self._apply_rps_choice(rps_now, audio_queue)
+                    return
+                if self._handle_ppt_empty_stt(audio_queue):
+                    return
+                self._rearm_story_if_waiting()
+                return
+
             # 1. Transcribe (cloud, PC LAN, o local)
             _t_transcribe = time.monotonic()
             low_confidence = False
@@ -2233,10 +2690,6 @@ class AudioWorker:
                 if self.speech_worker is not None:
                     self.speech_worker.interrupt_playback()
 
-            story_busy = bool(
-                self._story_pipeline_active
-                or (self.story_engine is not None and self.story_engine.is_active)
-            )
             if low_confidence:
                 _queue_message_with_semaphore(
                     self.message_queue,
@@ -2244,15 +2697,17 @@ class AudioWorker:
                     "log",
                     f"[STT] Baja confianza ({elapsed_stt_ms:.0f}ms)"
                     f"{f' avg_logprob={avg_logprob:.3f}' if avg_logprob is not None else ''}"
+                    f"{f' no_speech={no_speech_prob:.3f}' if no_speech_prob is not None else ''}"
                     f' text="{raw_text}"',
                 )
-                if not story_busy and segment_duration_s > 1.5 and self.speech_worker is not None:
-                    self.speech_worker.speak_and_wait("No te escuché bien, ¿me lo decís de nuevo?")
-                    self._silence_mic_after_speaker(audio_queue)
+                rps_now = self._take_rps_choice()
+                if rps_now:
+                    self._apply_rps_choice(rps_now, audio_queue)
                     return
-                if not raw_text.strip():
-                    self._rearm_story_if_waiting()
+                if self._handle_ppt_empty_stt(audio_queue):
                     return
+                self._rearm_story_if_waiting()
+                return
             if raw_text.strip():
                 _queue_message_with_semaphore(
                     self.message_queue,
@@ -2272,6 +2727,12 @@ class AudioWorker:
                         elapsed_ms=elapsed_stt_ms,
                     ),
                 )
+                rps_now = self._take_rps_choice()
+                if rps_now:
+                    self._apply_rps_choice(rps_now, audio_queue)
+                    return
+                if self._handle_ppt_empty_stt(audio_queue):
+                    return
                 self._rearm_story_if_waiting()
                 return
 
@@ -2318,6 +2779,7 @@ class AudioWorker:
                 game_keyword_while_muted,
                 is_clear_keyword_intent,
                 should_run_intent_dispatcher,
+                spoken_text_or_unknown_fallback,
             )
 
             began_muted = self.intent_mute.is_muted
@@ -2389,9 +2851,30 @@ class AudioWorker:
                 gated = True
 
             # 7. Game / yoga / cuento — multi-turno
+            ppt_committed = False
             if not gated:
                 if self.game_engine is not None:
-                    intent_payload = self.game_engine.process_or_passthrough(sanitized_text, intent_payload)
+                    rps_now = self._take_rps_choice()
+                    if rps_now:
+                        self._apply_rps_choice(rps_now, audio_queue)
+                        return
+                    was_ppt = self.game_engine.game_type == "piedra_papel_tijera"
+                    rounds_before = 0
+                    if was_ppt and self.game_engine._session is not None:
+                        rounds_before = int(self.game_engine._session.rounds_played)
+                    intent_payload = self.game_engine.process_or_passthrough(
+                        sanitized_text,
+                        intent_payload,
+                        saw_confident=self._rps_saw_confident(),
+                    )
+                    if was_ppt:
+                        if not self.game_engine.is_active:
+                            ppt_committed = True
+                        elif (
+                            self.game_engine._session is not None
+                            and int(self.game_engine._session.rounds_played) > rounds_before
+                        ):
+                            ppt_committed = True
                 if self.yoga_engine is not None:
                     intent_payload = self.yoga_engine.process_or_passthrough(sanitized_text, intent_payload)
                 if self.story_engine is not None and self.story_engine.is_active:
@@ -2584,6 +3067,21 @@ class AudioWorker:
                     _dlog.log_output("LLM_ACTIONS", f"actions={[a['action'] for a in actions]}")
             if not clean_response and any(a["action"] == "NOTIFY_PARENT" for a in actions):
                 clean_response = "Listo, le aviso a mamá o papá."
+            if not clean_response:
+                clean_response = spoken_text_or_unknown_fallback(
+                    str(intent_payload.get("intent_name") or intent_name),
+                    clean_response,
+                    [str(a.get("action") or "") for a in actions],
+                    self.intent_dispatcher._pick_response(
+                        "unknown_fallback",
+                        [
+                            "¿Querés jugar al veo veo, escuchar música, un cuento o charlar un rato?",
+                            "Contame un poco más, te escucho.",
+                            "No te seguí del todo. ¿Me lo decís de otra forma?",
+                            "¿Seguimos charlando o preferís un juego?",
+                        ],
+                    ),
+                )
             intent_payload["response"] = clean_response
 
             if began_muted and self.intent_mute.is_muted:
@@ -2617,7 +3115,9 @@ class AudioWorker:
                 if intent_name != "playtime_rest" and self.speech_worker is not None:
                     from session_policy import PLAYTIME_DECLINE_PHRASE
 
-                    self.speech_worker.speak_and_wait(PLAYTIME_DECLINE_PHRASE, timeout=30.0)
+                    self._speak_conversational_keep_mic(
+                        PLAYTIME_DECLINE_PHRASE, audio_queue, timeout=30.0
+                    )
                 if self._robot_state is not None:
                     self._robot_state.go_to_sleep("playtime")
                 self._set_eyes("dormido")
@@ -2678,18 +3178,28 @@ class AudioWorker:
                     if _dlog:
                         _dlog.log_input("TTS", "cuento turno")
                     self._speak_story_payload(intent_payload, generation=None)
+                    self._silence_mic_after_speaker(audio_queue)
                 elif response_text:
                     if _dlog:
                         _dlog.log_input("TTS", f"text=\"{response_text}\"")
                     story_turn = bool(
                         self.story_engine is not None and self.story_engine.is_active
                     )
-                    self.speech_worker.speak_and_wait(
-                        response_text, timeout=60.0, story=story_turn
-                    )
-                self._silence_mic_after_speaker(audio_queue)
+                    if story_turn:
+                        self.speech_worker.speak_and_wait(
+                            response_text, timeout=60.0, story=True
+                        )
+                        self._silence_mic_after_speaker(audio_queue)
+                    else:
+                        self._speak_conversational_keep_mic(
+                            response_text, audio_queue, timeout=60.0
+                        )
                 if _dlog:
                     _dlog.log_output("TTS", "Reproducción completada", elapsed_ms=(time.monotonic() - _t_tts) * 1000)
+            if ppt_committed:
+                self._finish_rps_committed_turn()
+            else:
+                self._sync_rps_hands()
             self._sync_story_guard()
 
             self._remember_turn(sanitized_text, intent_payload, response_text)
@@ -2724,12 +3234,14 @@ class AudioWorker:
             _queue_message_with_semaphore(self.message_queue, self.message_semaphore, "log", f"Error en transcripción o NLU: {exc}")
         finally:
             self._stt_in_flight = False
-            # Flush stale audio accumulated during processing + playback
-            while True:
-                try:
-                    audio_queue.get_nowait()
-                except queue.Empty:
-                    break
+            # keep_audio_queue_after_tts: no vaciar si el TTS conversacional dejó cola.
+            if not self._kept_tts_mic_tail:
+                while True:
+                    try:
+                        audio_queue.get_nowait()
+                    except queue.Empty:
+                        break
+            self._kept_tts_mic_tail = False
 
     @staticmethod
     def _truncate_response(text: str, max_words: int = 25) -> str:
@@ -3336,9 +3848,6 @@ class AudioWorker:
             audio = self._pad_audio(audio, sample_rate=16000, min_duration_s=1.5)
         return audio
 
-    _LOW_LOGPROB_THRESHOLD: float = -0.9
-    _HIGH_NO_SPEECH_THRESHOLD: float = 0.75
-
     def _transcribe(self, whisper_model: Any, audio_segment: np.ndarray) -> TranscriptionResult:
         empty = TranscriptionResult(text="")
         if whisper_model is None:
@@ -3382,13 +3891,13 @@ class AudioWorker:
         transcript = self._filter_hallucinations(transcript)
         save_named_transcript_wav(audio_segment, transcript, sample_rate=16000)
 
+        from session_policy import stt_is_low_confidence
+
         avg_logprob = float(np.mean(logprobs)) if logprobs else None
         no_speech_prob = float(np.mean(no_speech_probs)) if no_speech_probs else None
-        low_confidence = False
-        if transcript and avg_logprob is not None and avg_logprob < self._LOW_LOGPROB_THRESHOLD:
-            low_confidence = True
-        if transcript and no_speech_prob is not None and no_speech_prob > self._HIGH_NO_SPEECH_THRESHOLD:
-            low_confidence = True
+        low_confidence = stt_is_low_confidence(
+            transcript, avg_logprob=avg_logprob, no_speech_prob=no_speech_prob
+        )
 
         if _dlog and raw_audio_copy is not None and processed_audio_copy is not None:
             _dlog.save_debug_audio(
@@ -3518,6 +4027,8 @@ class SpeechWorker:
         self._power_gate: Callable[[], bool] | None = None
         self._pipeline_active = False
         self._hug_tts_held = False
+        self._tts_playback_end: float | None = None
+        self._tts_is_story = False
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -3543,6 +4054,31 @@ class SpeechWorker:
             or self._is_playing_music
             or self._pipeline_active
         )
+
+    def tts_remaining_seconds(self) -> float | None:
+        from session_policy import tts_remaining_seconds as remaining_fn
+
+        speaking = (
+            not self._idle_event.is_set()
+            or self._pipeline_active
+            or self._is_playing_music
+        )
+        return remaining_fn(
+            time.monotonic(), self._tts_playback_end, speaking=speaking
+        )
+
+    def tts_blocks_mic(self) -> bool:
+        from session_policy import tts_blocks_mic as blocks_fn
+
+        return blocks_fn(
+            self.tts_remaining_seconds(),
+            is_music=self._is_playing_music,
+            is_story=self._tts_is_story or self._pipeline_active,
+        )
+
+    def _mark_tts_synthesizing(self) -> None:
+        """Sin end conocido el mic se cierra. Un end viejo (TTS anterior) abría la cola."""
+        self._tts_playback_end = None
 
     def set_volume_limit(self, value: int) -> None:
         self._volume_limit = max(0, min(100, int(value)))
@@ -3591,6 +4127,8 @@ class SpeechWorker:
             pass
         self._hug_tts_held = False
         self._idle_event.set()
+        self._tts_playback_end = time.monotonic()
+        self._tts_is_story = False
 
     @staticmethod
     def _strip_tts_markup(text: str) -> str:
@@ -3660,6 +4198,7 @@ class SpeechWorker:
             return
         if self._reject_non_story_tts(story):
             return
+        self._tts_is_story = bool(story)
         self._idle_event.clear()
         try:
             self._queue.put_nowait(speech_text)
@@ -3685,6 +4224,7 @@ class SpeechWorker:
         if len(sentences) == 1:
             self.speak_and_wait(sentences[0], timeout=timeout, story=story)
             return
+        self._tts_is_story = True
         self._idle_event.clear()
         try:
             self._queue.put_nowait(sentences)
@@ -3921,14 +4461,20 @@ class SpeechWorker:
                     _pos[0] = end
 
                 try:
-                    with sd.OutputStream(
-                        samplerate=play_sr,
-                        channels=channels,
-                        dtype=dtype,
-                        device=out_device,
-                        callback=_callback,
-                    ):
-                        finished.wait(timeout=len(play_audio) / play_sr + 5.0)
+                    n_frames = int(play_audio.shape[0])
+                    dur = (n_frames / float(play_sr)) if play_sr else 0.0
+                    self._tts_playback_end = time.monotonic() + dur
+                    try:
+                        with sd.OutputStream(
+                            samplerate=play_sr,
+                            channels=channels,
+                            dtype=dtype,
+                            device=out_device,
+                            callback=_callback,
+                        ):
+                            finished.wait(timeout=len(play_audio) / play_sr + 5.0)
+                    finally:
+                        self._tts_playback_end = time.monotonic()
                     return
                 except Exception as exc:
                     last_exc = exc
@@ -4063,6 +4609,7 @@ class SpeechWorker:
                 self._hug_tts_held = False
 
     def _speak_queued_text_body(self, text: str) -> None:
+        self._mark_tts_synthesizing()
         self._log(f"Sintetizando: {text}")
         _dlog = get_debug_logger()
         _t_synth = time.monotonic()

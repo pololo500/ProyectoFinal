@@ -95,6 +95,10 @@ class TestLlmNCtx(unittest.TestCase):
         rescue_at = src.find("unknown_fallback")
         self.assertGreater(gen_at, 0)
         self.assertGreater(rescue_at, gen_at)
+        parse_at = src.find("self._parse_action_tags(response_text_raw)")
+        spoken_at = src.find("spoken_text_or_unknown_fallback(")
+        self.assertGreater(parse_at, rescue_at)
+        self.assertGreater(spoken_at, parse_at)
 
     def test_mientras_piensa_pone_pensando_en_pantalla(self) -> None:
         src = _WORKERS.read_text(encoding="utf-8")

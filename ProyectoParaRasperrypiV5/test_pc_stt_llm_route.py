@@ -23,7 +23,7 @@ class FakePc:
         *,
         health_ok: bool = True,
         circuit_open: bool = False,
-        stt: str | None = "juguemos veo veo",
+        stt: str | dict | None = "juguemos veo veo",
         llm: str | None = "Hola desde la PC.",
     ) -> None:
         self._health_ok = health_ok
@@ -50,7 +50,7 @@ class FakePc:
                 return True
         return False
 
-    def transcribe(self, wav: bytes) -> str | None:
+    def transcribe(self, wav: bytes) -> str | dict | None:
         del wav
         self.transcribe_calls += 1
         return self.stt
@@ -142,6 +142,22 @@ class TestSttRoute(unittest.TestCase):
         out = worker._remote_or_local_stt(np.zeros(1600, dtype=np.float32), object(), pc_ready=True)
         self.assertEqual(out.text, "juguemos veo veo")
         self.assertEqual(pc.transcribe_calls, 1)
+
+    def test_pc_stt_marca_baja_confianza_con_no_speech(self) -> None:
+        pc = FakePc(
+            stt={  # type: ignore[arg-type]
+                "text": "Qué pasa.",
+                "avg_logprob": -0.2,
+                "no_speech_prob": 0.88,
+            }
+        )
+        worker = _worker(pc)
+        out = worker._remote_or_local_stt(
+            np.zeros(1600, dtype=np.float32), object(), pc_ready=True
+        )
+        self.assertEqual(out.text, "Qué pasa.")
+        self.assertTrue(out.low_confidence)
+        self.assertEqual(out.no_speech_prob, 0.88)
 
     def test_pc_fail_usa_local(self) -> None:
         pc = FakePc(stt=None)

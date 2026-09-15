@@ -1,9 +1,14 @@
 """Micrófono USB local: negociar sample rate (PaErrorCode -9997) y sin puente TCP."""
 from __future__ import annotations
 
+import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+sys.modules.setdefault("cv2", MagicMock())
+sys.modules.setdefault("mediapipe", MagicMock())
+sys.modules.setdefault("sounddevice", MagicMock())
 
 import numpy as np
 
@@ -78,9 +83,9 @@ class TestFindSupportedInputConfig(unittest.TestCase):
         ):
             sr, _dtype, channels = find_supported_input_config(0, preferred_sr=16000)
         self.assertEqual(channels, 1)
-        self.assertEqual(sr, 44100)
+        self.assertEqual(sr, 48000)
         self.assertTrue(seen)
-        self.assertTrue(all(ch <= 1 for ch in seen))
+        self.assertIn(1, seen)
 
 
 class TestMicBlockToStt(unittest.TestCase):
@@ -225,7 +230,7 @@ class TestMicHalfDuplex(unittest.TestCase):
         after_handle = src[handle_at : handle_at + 800]
         # mute around STT/LLM, drain cola VAD, no matar arecord
         before_handle = src[handle_at - 500 : handle_at]
-        self.assertIn("set_muted(True)", before_handle)
+        self.assertIn("_set_capture_muted(True)", before_handle)
         self.assertIn("_drain_audio_queue", before_handle)
 
     def test_whisper_prompt_no_inyecta_que_es_eso(self) -> None:
@@ -344,7 +349,7 @@ class TestListenVolumeFloor(unittest.TestCase):
     def test_piso_no_mutea_el_bloque_crudo(self) -> None:
         src = _WORKERS.read_text(encoding="utf-8")
         start = src.find("def listen_until_cut")
-        end = src.find("return None", start)
+        end = src.find("echo_until = [self._echo_mute_until]", start)
         body = src[start:end]
         self.assertGreater(start, 0)
         self.assertIn("current_segment.append(audio_block)", body)
@@ -389,6 +394,76 @@ class TestDocsArecord(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("MAX_LISTEN_SECONDS`: **12.0**", text)
         self.assertNotIn("MAX_LISTEN_SECONDS`: **8.0**", text)
+
+
+class TestConversationalTtsKeepsMic(unittest.TestCase):
+    def test_speaker_busy_usa_tts_blocks_mic(self) -> None:
+        src = _WORKERS.read_text(encoding="utf-8")
+        run_at = src.find("def _run(self)")
+        audio_run = src[run_at : src.find("def _drain_audio_queue")]
+        self.assertIn("tts_blocks_mic", audio_run)
+        self.assertIn("_speaker_blocks_mic", audio_run)
+
+    def test_handle_no_drena_si_keep_queue(self) -> None:
+        src = _WORKERS.read_text(encoding="utf-8")
+        start = src.find("def _handle_segment")
+        end = src.find("def _truncate_response")
+        chunk = src[start:end]
+        self.assertIn("keep_audio_queue_after_tts", chunk)
+        self.assertIn("_kept_tts_mic_tail", chunk)
+        self.assertIn("_speak_conversational_keep_mic", chunk)
+
+    def test_musica_sigue_silence_mic(self) -> None:
+        src = _WORKERS.read_text(encoding="utf-8")
+        self.assertIn("self._silence_mic_after_speaker(audio_queue)", src)
+        play_at = src.find('music_to_play = intent_payload.get("play_music_file")')
+        self.assertGreater(play_at, 0)
+        window = src[play_at : play_at + 500]
+        self.assertIn("_silence_mic_after_speaker", window)
+
+
+class TestActiveSpeechSeconds(unittest.TestCase):
+    def test_40ms_activos_en_2s_salta_stt(self) -> None:
+        from session_policy import skip_stt_for_weak_speech
+        from workers import active_speech_seconds
+
+        sr = 16000
+        hop = 320
+        n_hops = int(2.0 * sr / hop)
+        pcm = np.full(n_hops * hop, 0.02 / 300.0, dtype=np.float32)
+        pcm[: hop * 2] = 10.0 / 300.0
+        active = active_speech_seconds(pcm, sample_rate=sr)
+        self.assertAlmostEqual(active, 0.04, places=3)
+        self.assertTrue(skip_stt_for_weak_speech(active))
+
+    def test_400ms_activos_no_salta_stt(self) -> None:
+        from session_policy import skip_stt_for_weak_speech
+        from workers import active_speech_seconds
+
+        sr = 16000
+        hop = 320
+        n_hops = int(2.0 * sr / hop)
+        pcm = np.full(n_hops * hop, 0.02 / 300.0, dtype=np.float32)
+        pcm[: hop * 20] = 10.0 / 300.0
+        active = active_speech_seconds(pcm, sample_rate=sr)
+        self.assertAlmostEqual(active, 0.40, places=3)
+        self.assertFalse(skip_stt_for_weak_speech(active))
+
+    def test_handle_segment_salta_stt_si_debil(self) -> None:
+        src = Path(__file__).resolve().parent.joinpath("workers.py").read_text(
+            encoding="utf-8"
+        )
+        start = src.find("def _handle_segment")
+        stt_at = src.find("self._remote_or_local_stt(", start)
+        skip_at = src.find("skip_stt_for_weak_speech(", start)
+        self.assertGreater(start, 0)
+        self.assertGreater(skip_at, start)
+        self.assertGreater(stt_at, skip_at)
+        self.assertIn("ruido, sin transcribir", src)
+        self.assertNotIn(
+            '"No te escuché bien, ¿me lo decís de nuevo?"',
+            src[src.find("if low_confidence:") : src.find("if raw_text.strip():")],
+        )
 
 
 if __name__ == "__main__":

@@ -30,12 +30,17 @@ class SttEngine:
         self.ready = True
         print("[STT] listo", flush=True)
 
-    def transcribe_wav(self, wav: bytes, language: str = "es") -> str:
+    def transcribe_wav(self, wav: bytes, language: str = "es") -> dict[str, Any]:
+        empty: dict[str, Any] = {
+            "text": "",
+            "avg_logprob": None,
+            "no_speech_prob": None,
+        }
         if self._model is None:
-            return ""
+            return empty
         audio = _wav_to_float32(wav)
         if audio.size == 0:
-            return ""
+            return empty
         segments, _info = self._model.transcribe(
             audio,
             language=language or "es",
@@ -43,8 +48,23 @@ class SttEngine:
             beam_size=1,
             initial_prompt=WHISPER_INITIAL_PROMPT,
         )
-        parts = [str(getattr(seg, "text", "") or "").strip() for seg in segments]
-        return " ".join(p for p in parts if p).strip()
+        parts: list[str] = []
+        logprobs: list[float] = []
+        no_speech: list[float] = []
+        for seg in segments:
+            parts.append(str(getattr(seg, "text", "") or "").strip())
+            avg_lp = getattr(seg, "avg_logprob", None)
+            if avg_lp is not None:
+                logprobs.append(float(avg_lp))
+            nsp = getattr(seg, "no_speech_prob", None)
+            if nsp is not None:
+                no_speech.append(float(nsp))
+        text = " ".join(p for p in parts if p).strip()
+        return {
+            "text": text,
+            "avg_logprob": float(np.mean(logprobs)) if logprobs else None,
+            "no_speech_prob": float(np.mean(no_speech)) if no_speech else None,
+        }
 
 
 def _wav_to_float32(wav: bytes) -> np.ndarray:

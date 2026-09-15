@@ -179,6 +179,54 @@ def is_barge_in_text(text: str) -> bool:
 
 
 ECHO_MUTE_SECONDS = 0.40
+MIC_EARLY_OPEN_SECONDS = 0.20
+
+
+def tts_remaining_seconds(
+    now: float, playback_end: float | None, *, speaking: bool
+) -> float | None:
+    if not speaking:
+        return 0.0
+    if playback_end is None:
+        return None
+    return max(0.0, float(playback_end) - float(now))
+
+
+def tts_blocks_mic(
+    remaining_s: float | None, *, is_music: bool = False, is_story: bool = False
+) -> bool:
+    if is_music or is_story:
+        return remaining_s is None or remaining_s > 0.0
+    if remaining_s is None:
+        return True
+    return remaining_s > MIC_EARLY_OPEN_SECONDS
+
+
+def keep_audio_queue_after_tts(*, is_music: bool, is_story: bool) -> bool:
+    return not is_music and not is_story
+
+
+_SILENT_LLM_ACTIONS = frozenset(
+    {"LIST_STORIES", "LIST_MUSIC", "PLAY_MUSIC", "STOP_MUSIC", "PLAY_STORY"}
+)
+
+
+def spoken_text_or_unknown_fallback(
+    intent_name: str,
+    clean_text: str,
+    action_names: list[str] | tuple[str, ...],
+    fallback: str,
+) -> str:
+    """Si el LLM solo mandó tags (p. ej. [INTENTS_OFF]), hay que hablar igual."""
+    cleaned = str(clean_text or "").strip()
+    if cleaned:
+        return cleaned
+    if str(intent_name or "") != "unknown":
+        return ""
+    names = {str(name or "").upper() for name in action_names}
+    if names & _SILENT_LLM_ACTIONS:
+        return ""
+    return str(fallback or "").strip()
 
 
 def mic_open_for_listen(speaker_playing: bool, now: float, echo_mute_until: float) -> bool:
@@ -192,6 +240,37 @@ def stt_looks_like_garbage(text: str) -> bool:
     """Vosk a 8 s a veces suelta ensalada (west, miraflores, …). No va al LLM."""
     words = [w for w in (text or "").strip().split() if w]
     return len(words) >= 8
+
+
+MIN_ACTIVE_SPEECH_SECONDS = 0.30
+STT_LOW_LOGPROB = -0.9
+STT_HIGH_NO_SPEECH = 0.75
+
+
+def skip_stt_for_weak_speech(
+    active_seconds: float,
+    min_seconds: float = MIN_ACTIVE_SPEECH_SECONDS,
+) -> bool:
+    """True si hay tan poca energía de voz que no vale transcribir."""
+    return float(active_seconds) < float(min_seconds)
+
+
+def stt_is_low_confidence(
+    text: str,
+    *,
+    avg_logprob: float | None,
+    no_speech_prob: float | None,
+    low_logprob: float = STT_LOW_LOGPROB,
+    high_no_speech: float = STT_HIGH_NO_SPEECH,
+) -> bool:
+    """Alucinación probable de Whisper: no va al LLM."""
+    if not str(text or "").strip():
+        return False
+    if avg_logprob is not None and float(avg_logprob) < float(low_logprob):
+        return True
+    if no_speech_prob is not None and float(no_speech_prob) > float(high_no_speech):
+        return True
+    return False
 
 
 _LLM_INTENTS = frozenset(

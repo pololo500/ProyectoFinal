@@ -116,6 +116,13 @@ _TIE_PHRASES = [
     "¡Empate! ¡Qué coincidencia! Dale de nuevo.",
 ]
 
+_RPS_SHOW_HAND_PHRASE = (
+    "Mostrame la mano o decime piedra, papel o tijera. ¡Uno, dos, tres!"
+)
+_RPS_NOT_UNDERSTOOD_PHRASE = (
+    "No entendí tu elección. Decí piedra, papel o tijera. ¡Uno, dos, tres!"
+)
+
 
 # ---------------------------------------------------------------------------
 # Datos de respuesta de juego
@@ -246,19 +253,22 @@ class PiedraPapelTijeraSession:
     wins_child: int = 0
     wins_robot: int = 0
     state: str = "waiting_choice"
+    empty_tries: int = 0
+    round_committed: bool = False
 
-    def process_input(self, text: str) -> GameResponse:
-        """Procesa la elección del niño."""
+    def process_input(self, text: str, *, saw_confident: bool = False) -> GameResponse:
+        """Procesa la elección del niño (voz)."""
         normalized = correct_stt_text(
             text,
             extra_words=_PIEDRA_PAPEL_CHOICES,
         ).lower().strip()
 
-        # Detectar si quiere salir (BUG-1 fix: word boundary match)
         if _wants_to_exit(normalized):
             return self._end_game()
 
-        # Detectar elección del niño
+        if saw_confident:
+            return GameResponse(text="")
+
         child_choice = None
         for choice in _PIEDRA_PAPEL_CHOICES:
             if choice in normalized:
@@ -266,15 +276,24 @@ class PiedraPapelTijeraSession:
                 break
 
         if child_choice is None:
-            return GameResponse(
-                text="No entendí tu elección. Decí piedra, papel o tijera. "
-                     "¡Uno, dos, tres!",
-            )
+            return self._retry_empty()
+
+        self.round_committed = False
+        return self.process_choice(child_choice)
+
+    def process_choice(self, label: str) -> GameResponse:
+        """Cierra la ronda con una label ya parseada (gesto o voz)."""
+        if self.round_committed:
+            return GameResponse(text="")
+        if label not in _PIEDRA_PAPEL_CHOICES:
+            return self._retry_empty()
 
         robot_choice = random.choice(_PIEDRA_PAPEL_CHOICES)
         self.rounds_played += 1
+        self.empty_tries = 0
+        self.round_committed = True
 
-        result = self._resolve(child_choice, robot_choice)
+        result = self._resolve(label, robot_choice)
 
         if result == "tie":
             phrase = random.choice(_TIE_PHRASES)
@@ -285,15 +304,24 @@ class PiedraPapelTijeraSession:
             self.wins_robot += 1
             phrase = random.choice(_LOSE_PHRASES)
 
-        response_text = (
-            f"Yo elegí {robot_choice}. {phrase}"
-        )
+        response_text = f"Yo elegí {robot_choice}. {phrase}"
 
         if self.rounds_played >= self.max_rounds:
             return self._end_game(prefix=response_text)
 
         response_text += " ¡Uno, dos, tres!"
         return GameResponse(text=response_text)
+
+    def _retry_empty(self) -> GameResponse:
+        """Vacío/inseguro: 1.º pide mano; 2.º copy histórico. No suma ronda."""
+        if self.empty_tries == 0:
+            self.empty_tries = 1
+            return GameResponse(text=_RPS_SHOW_HAND_PHRASE)
+        return GameResponse(text=_RPS_NOT_UNDERSTOOD_PHRASE)
+
+    def prepare_next_round(self) -> None:
+        self.round_committed = False
+        self.state = "waiting_choice"
 
     def _resolve(self, child: str, robot: str) -> str:
         """Resuelve quién gana."""
@@ -349,6 +377,14 @@ class GameEngine:
             return "piedra_papel_tijera"
         return None
 
+    @property
+    def waiting_rps_choice(self) -> bool:
+        session = self._session
+        return (
+            isinstance(session, PiedraPapelTijeraSession)
+            and session.state == "waiting_choice"
+        )
+
     def start_game(self, game_type: str) -> str:
         """Inicia un juego nuevo y retorna el mensaje de bienvenida."""
         if game_type == "veo_veo":
@@ -367,7 +403,7 @@ class GameEngine:
         else:
             return ""
 
-    def process_input(self, text: str) -> GameResponse | None:
+    def process_input(self, text: str, *, saw_confident: bool = False) -> GameResponse | None:
         """Procesa input cuando hay juego activo.
 
         Retorna None si no hay juego activo (passthrough al dispatcher).
@@ -375,16 +411,39 @@ class GameEngine:
         if self._session is None:
             return None
 
-        response = self._session.process_input(text)
+        if isinstance(self._session, PiedraPapelTijeraSession):
+            response = self._session.process_input(text, saw_confident=saw_confident)
+        else:
+            response = self._session.process_input(text)
         if response.game_over:
             log_action("GAME", f"fin {self.game_type or 'juego'}")
             self._session = None
         return response
 
+    def commit_choice(self, label: str) -> GameResponse | None:
+        """Cierra la ronda PPT por gesto. None si no hay ronda abierta."""
+        session = self._session
+        if not isinstance(session, PiedraPapelTijeraSession):
+            return None
+        if session.round_committed:
+            return None
+        response = session.process_choice(label)
+        if response.game_over:
+            log_action("GAME", f"fin {self.game_type or 'juego'}")
+            self._session = None
+        return response
+
+    def prepare_next_rps_round(self) -> None:
+        session = self._session
+        if isinstance(session, PiedraPapelTijeraSession):
+            session.prepare_next_round()
+
     def process_or_passthrough(
         self,
         text: str,
         dispatcher_result: dict[str, Any],
+        *,
+        saw_confident: bool = False,
     ) -> dict[str, Any]:
         """Si hay juego activo, procesa y retorna resultado de juego.
         Si no, retorna el dispatcher_result sin modificar.
@@ -417,7 +476,7 @@ class GameEngine:
         current_game_type = self.game_type or "unknown"
 
         # Juego activo: procesar input
-        game_response = self.process_input(text)
+        game_response = self.process_input(text, saw_confident=saw_confident)
         if game_response is None:
             return dispatcher_result
 

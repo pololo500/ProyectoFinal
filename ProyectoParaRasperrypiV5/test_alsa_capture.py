@@ -3,11 +3,16 @@ from __future__ import annotations
 
 import os
 import queue
+import sys
 import threading
 import time
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+sys.modules.setdefault("cv2", MagicMock())
+sys.modules.setdefault("mediapipe", MagicMock())
+sys.modules.setdefault("sounddevice", MagicMock())
 
 import numpy as np
 

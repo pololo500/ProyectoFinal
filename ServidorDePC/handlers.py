@@ -23,6 +23,15 @@ def _clip(text: str, limit: int = 120) -> str:
     return t
 
 
+def _opt_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _wav_meta(wav: bytes) -> str:
     n = len(wav or b"")
     extra = ""
@@ -89,11 +98,23 @@ def handle_transcribe(
     who = peer or "?"
     _emit(log_fn, f"[STT] audio recibido de {who}: {_wav_meta(wav)}")
     t0 = time.perf_counter()
-    text = stt.transcribe_wav(wav, language=language or "es")
+    raw_out = stt.transcribe_wav(wav, language=language or "es")
     ms = (time.perf_counter() - t0) * 1000.0
-    shown = str(text or "")
+    avg_logprob: float | None = None
+    no_speech_prob: float | None = None
+    if isinstance(raw_out, dict):
+        shown = str(raw_out.get("text") or "")
+        avg_logprob = _opt_float(raw_out.get("avg_logprob"))
+        no_speech_prob = _opt_float(raw_out.get("no_speech_prob"))
+    else:
+        shown = str(raw_out or "")
     _emit(log_fn, f'[STT] transcripción {ms:.0f} ms: "{_clip(shown)}"')
-    return 200, {"text": shown}
+    body: dict[str, Any] = {"text": shown}
+    if avg_logprob is not None:
+        body["avg_logprob"] = avg_logprob
+    if no_speech_prob is not None:
+        body["no_speech_prob"] = no_speech_prob
+    return 200, body
 
 
 def handle_chat(

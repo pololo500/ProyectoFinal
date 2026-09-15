@@ -621,6 +621,7 @@ class EyeModeApp(tk.Tk):
             cloud_llm=cloud_llm,
             eye_display=self._eye_display,
             pc_client=pc_client,
+            camera_worker=self.camera_worker,
         )
 
         self.camera_worker.start()
@@ -959,6 +960,7 @@ class EdgeAiDesktopApp(tk.Tk):
         
         self._camera_desc = "inactiva"
         self._detected_state = "ninguno"
+        self._rps_desc = None
         self._mic_desc = "inactivo"
         self._mic_volume_pct = 0
 
@@ -1292,6 +1294,7 @@ class EdgeAiDesktopApp(tk.Tk):
 
         self._camera_desc = "inactiva"
         self._detected_state = "ninguno"
+        self._rps_desc = None
         self._mic_desc = "inactivo"
         self._mic_volume_pct = 0
 
@@ -1332,6 +1335,7 @@ class EdgeAiDesktopApp(tk.Tk):
             cloud_llm=cloud_llm,
             eye_display=self._eye_display,
             pc_client=pc_client,
+            camera_worker=self.camera_worker,
         )
 
         self.camera_worker.start()
@@ -1368,6 +1372,12 @@ class EdgeAiDesktopApp(tk.Tk):
 
     def _apply_sleep_ui(self, awake: bool) -> None:
         self._append_log("Teo despierto" if awake else "Teo dormido")
+        if self._eye_display is None:
+            return
+        try:
+            self._eye_display.set_expression("neutral" if awake else "dormido")
+        except Exception:
+            pass
 
     def _apply_power(self, on: bool) -> None:
         self._apply_sleep_ui(on)
@@ -1474,6 +1484,7 @@ class EdgeAiDesktopApp(tk.Tk):
         
         self._camera_desc = "inactiva"
         self._detected_state = "ninguno"
+        self._rps_desc = None
         self._mic_desc = "inactivo"
         self._mic_volume_pct = 0
         
@@ -1504,6 +1515,8 @@ class EdgeAiDesktopApp(tk.Tk):
         # Emotion/Detected state part
         if self._detected_state and self._detected_state != "ninguno":
             status_parts.append(f"Estado detectado: {self._detected_state}")
+        if self._rps_desc:
+            status_parts.append(f"Jugada: {self._rps_desc}")
             
         # Mic part
         if self._mic_desc != "inactivo" and self._mic_desc != "error":
@@ -1540,6 +1553,9 @@ class EdgeAiDesktopApp(tk.Tk):
                     self._camera_desc = payload["camera"]
                 if "emotion" in payload:
                     self._detected_state = payload["emotion"]
+                if "rps_gesture" in payload:
+                    desc = payload["rps_gesture"]
+                    self._rps_desc = desc if desc else None
                 if "mic" in payload:
                     self._mic_desc = payload["mic"]
                 if "volume" in payload:
@@ -1568,6 +1584,14 @@ class EdgeAiDesktopApp(tk.Tk):
                 pass
             if _dlog:
                 _dlog.log_output("EMOTION", f"Contexto emocional actualizado: {label}")
+        elif message.kind == "rps_gesture":
+            payload = message.payload or {}
+            label = payload.get("label")
+            score = float(payload.get("score", 0.0))
+            if label:
+                self._append_log(f"gesto={label} ({score:.2f})")
+            else:
+                self._append_log("gesto=ninguna")
         elif message.kind == "transcript":
             payload = message.payload
             raw_text = payload.get('raw_text', '')

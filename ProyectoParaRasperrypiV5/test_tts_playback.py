@@ -324,5 +324,63 @@ class TestStoryTtsGuard(unittest.TestCase):
         self.assertTrue(worker._queue.empty())
 
 
+class TestTtsBlocksMic(unittest.TestCase):
+    def test_is_busy_sigue_true_en_el_tail(self) -> None:
+        worker = SpeechWorker(output_device_index=0)
+        worker._idle_event.clear()
+        worker._tts_playback_end = __import__("time").monotonic() + 0.10
+        self.assertTrue(worker.is_busy())
+        self.assertFalse(worker.tts_blocks_mic())
+
+    def test_sintetizando_bloquea_el_mic(self) -> None:
+        worker = SpeechWorker(output_device_index=0)
+        worker._idle_event.clear()
+        worker._tts_playback_end = None
+        self.assertTrue(worker.tts_blocks_mic())
+
+    def test_musica_bloquea_en_el_tail(self) -> None:
+        worker = SpeechWorker(output_device_index=0)
+        worker._idle_event.clear()
+        worker._is_playing_music = True
+        worker._tts_playback_end = __import__("time").monotonic() + 0.10
+        self.assertTrue(worker.tts_blocks_mic())
+
+    def test_cuento_bloquea_en_el_tail(self) -> None:
+        worker = SpeechWorker(output_device_index=0)
+        worker._idle_event.clear()
+        worker._tts_is_story = True
+        worker._tts_playback_end = __import__("time").monotonic() + 0.10
+        self.assertTrue(worker.tts_blocks_mic())
+
+    def test_idle_no_bloquea(self) -> None:
+        worker = SpeechWorker(output_device_index=0)
+        self.assertTrue(worker._idle_event.is_set())
+        self.assertFalse(worker.tts_blocks_mic())
+        self.assertFalse(worker.is_busy())
+
+    def test_end_viejo_no_abre_el_mic_al_sintetizar(self) -> None:
+        """Tras un TTS, playback_end queda en el pasado. La síntesis nueva no debe abrir el mic."""
+        worker = SpeechWorker(output_device_index=0)
+        worker._idle_event.clear()
+        worker._tts_playback_end = __import__("time").monotonic()
+        self.assertFalse(worker.tts_blocks_mic())
+        worker._mark_tts_synthesizing()
+        self.assertIsNone(worker._tts_playback_end)
+        self.assertTrue(worker.tts_blocks_mic())
+
+    def test_sintesis_limpia_el_end_antes_de_pedir_pcm(self) -> None:
+        from pathlib import Path
+
+        src = Path(__file__).resolve().parent.joinpath("workers.py").read_text(
+            encoding="utf-8"
+        )
+        body_at = src.find("def _speak_queued_text_body")
+        synth_at = src.find("pc_pcm = self._synthesize_pc_pcm", body_at)
+        mark_at = src.find("self._mark_tts_synthesizing()", body_at)
+        self.assertGreater(body_at, 0)
+        self.assertGreater(mark_at, body_at)
+        self.assertGreater(synth_at, mark_at)
+
+
 if __name__ == "__main__":
     unittest.main()

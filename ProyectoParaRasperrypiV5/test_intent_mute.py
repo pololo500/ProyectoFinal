@@ -187,6 +187,34 @@ class TestActionTagRegex(unittest.TestCase):
         self.assertEqual(actions[0]["param"], "El sapo valiente")
         self.assertEqual(clean, "Dale.")
 
+    def test_intents_off_solo_no_tiene_texto_hablable(self) -> None:
+        from session_policy import spoken_text_or_unknown_fallback
+        from workers import AudioWorker
+
+        worker = AudioWorker.__new__(AudioWorker)
+        raw = "[INTENTS_OFF]"
+        actions, clean = worker._parse_action_tags(raw)
+        self.assertEqual([a["action"] for a in actions], ["INTENTS_OFF"])
+        self.assertEqual(clean, "")
+        spoken = spoken_text_or_unknown_fallback(
+            "unknown",
+            clean,
+            [a["action"] for a in actions],
+            "No te seguí del todo. ¿Me lo decís de otra forma?",
+        )
+        self.assertEqual(spoken, "No te seguí del todo. ¿Me lo decís de otra forma?")
+
+    def test_list_stories_solo_no_rellena_frase(self) -> None:
+        from session_policy import spoken_text_or_unknown_fallback
+
+        spoken = spoken_text_or_unknown_fallback(
+            "unknown",
+            "",
+            ["LIST_STORIES"],
+            "¿Me lo decís de otra forma?",
+        )
+        self.assertEqual(spoken, "")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -15,10 +15,13 @@ from session_policy import (
     gain_from_limit,
     is_barge_in_text,
     is_clear_keyword_intent,
+    keep_audio_queue_after_tts,
     mic_open_for_listen,
     night_should_engage,
     sanitize_notification_extra,
     telemetry_range_summary,
+    tts_blocks_mic,
+    tts_remaining_seconds,
 )
 
 
@@ -151,6 +154,90 @@ class TestMicHalfDuplex(unittest.TestCase):
         )
         self.assertIsNone(is_clear_keyword_intent("no quiero comer"))
         self.assertIsNone(is_clear_keyword_intent("no tengo hambre"))
+
+
+class TestTtsEarlyMic(unittest.TestCase):
+    def test_sintetizando_bloquea(self) -> None:
+        self.assertIsNone(tts_remaining_seconds(10.0, None, speaking=True))
+        self.assertTrue(tts_blocks_mic(None, is_music=False, is_story=False))
+
+    def test_idle_remaining_cero(self) -> None:
+        self.assertEqual(tts_remaining_seconds(10.0, 12.0, speaking=False), 0.0)
+        self.assertFalse(tts_blocks_mic(0.0, is_music=False, is_story=False))
+
+    def test_abre_en_punto_dos(self) -> None:
+        self.assertTrue(tts_blocks_mic(0.21, is_music=False, is_story=False))
+        self.assertFalse(tts_blocks_mic(0.20, is_music=False, is_story=False))
+        self.assertFalse(tts_blocks_mic(0.10, is_music=False, is_story=False))
+
+    def test_musica_y_cuento_bloquean_el_tail(self) -> None:
+        self.assertTrue(tts_blocks_mic(0.10, is_music=True, is_story=False))
+        self.assertTrue(tts_blocks_mic(0.10, is_music=False, is_story=True))
+
+    def test_keep_queue_solo_conversacional(self) -> None:
+        self.assertTrue(keep_audio_queue_after_tts(is_music=False, is_story=False))
+        self.assertFalse(keep_audio_queue_after_tts(is_music=True, is_story=False))
+        self.assertFalse(keep_audio_queue_after_tts(is_music=False, is_story=True))
+
+    def test_tag_solo_usa_fallback_unknown(self) -> None:
+        from session_policy import spoken_text_or_unknown_fallback
+
+        self.assertEqual(
+            spoken_text_or_unknown_fallback(
+                "unknown", "", ["INTENTS_OFF"], "¿Me lo decís de otra forma?"
+            ),
+            "¿Me lo decís de otra forma?",
+        )
+        self.assertEqual(
+            spoken_text_or_unknown_fallback(
+                "unknown", "¿En qué pensás?", ["INTENTS_OFF"], "rescate"
+            ),
+            "¿En qué pensás?",
+        )
+        self.assertEqual(
+            spoken_text_or_unknown_fallback("greeting", "", ["INTENTS_OFF"], "rescate"),
+            "",
+        )
+
+
+class TestWeakSpeechSttGate(unittest.TestCase):
+    def test_menos_de_300ms_salta_stt(self) -> None:
+        from session_policy import skip_stt_for_weak_speech
+
+        self.assertTrue(skip_stt_for_weak_speech(0.29))
+        self.assertFalse(skip_stt_for_weak_speech(0.30))
+        self.assertFalse(skip_stt_for_weak_speech(0.40))
+
+    def test_no_speech_alto_es_baja_confianza(self) -> None:
+        from session_policy import stt_is_low_confidence
+
+        self.assertTrue(
+            stt_is_low_confidence(
+                "Qué pasa.", avg_logprob=-0.2, no_speech_prob=0.76
+            )
+        )
+        self.assertFalse(
+            stt_is_low_confidence(
+                "Qué pasa.", avg_logprob=-0.2, no_speech_prob=0.75
+            )
+        )
+
+    def test_logprob_bajo_es_baja_confianza(self) -> None:
+        from session_policy import stt_is_low_confidence
+
+        self.assertTrue(
+            stt_is_low_confidence("Hola.", avg_logprob=-0.91, no_speech_prob=0.1)
+        )
+        self.assertFalse(
+            stt_is_low_confidence("Hola.", avg_logprob=-0.90, no_speech_prob=0.1)
+        )
+
+    def test_texto_vacio_no_marca_confianza(self) -> None:
+        from session_policy import stt_is_low_confidence
+
+        self.assertFalse(
+            stt_is_low_confidence("", avg_logprob=-2.0, no_speech_prob=0.99)
+        )
 
 
 class TestGreetingFarewellExact(unittest.TestCase):

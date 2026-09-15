@@ -170,7 +170,7 @@ ok("Empate", ppt._resolve("piedra", "piedra") == "tie")
 ppt2 = PiedraPapelTijeraSession()
 resp_ppt = ppt2.process_input("banana")
 ok("Elección inválida pide reintentar",
-   "No entendí" in resp_ppt.text,
+   "Mostrame la mano" in resp_ppt.text,
    f"resp={resp_ppt.text!r}")
 ok("Rondas no aumentan con elección inválida",
    ppt2.rounds_played == 0)
